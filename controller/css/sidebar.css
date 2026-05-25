@@ -1,0 +1,249 @@
+/* sidebar.css - Styles for admin sidebar - NO FLASHING */
+
+/* Sidebar Styles */
+.sidebar {
+    background-color: var(--primary-color);
+    min-height: calc(100vh - 60px);
+    box-shadow: 3px 0 10px rgba(0, 0, 0, 0.1);
+    padding: 20px 0;
+    position: fixed;
+    top: 60px;
+    width: 250px;
+    z-index: 999;
+    overflow-y: auto;
+    max-height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
+    transition: left 0.3s ease;
+}
+
+/* Desktop styles */
+@media (min-width: 992px) {
+    .sidebar {
+        left: 0;
+    }
+    
+    .sidebar.desktop-visible {
+        left: 0;
+    }
+}
+
+/* Mobile styles */
+@media (max-width: 991px) {
+    .sidebar {
+        left: -250px;
+    }
+    
+    .sidebar.active {
+        left: 0;
+    }
+}
+
+/* Sidebar Menu */
+.sidebar-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.sidebar-menu li {
+    padding: 0;
+}
+
+.sidebar-menu a {
+    color: white;
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    border-left: 4px solid transparent;
+    min-height: 45px;
+}
+
+.sidebar-menu a:hover,
+.sidebar-menu a.active {
+    background-color: var(--primary-dark);
+    border-left: 4px solid white;
+}
+
+.sidebar-menu i {
+    width: 30px;
+    text-align: center;
+    font-size: 16px;
+}
+
+/* Dropdown Styles */
+.sidebar-dropdown {
+    position: relative;
+}
+
+.sidebar-dropdown > a {
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.dropdown-arrow {
+    font-size: 12px;
+    margin-left: auto;
+    opacity: 0.7;
+}
+
+.sidebar-dropdown.active > a .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+/* Sub-menu - No transition to prevent flashing */
+.sub-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: none;
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.sidebar-dropdown.active .sub-menu {
+    display: block;
+}
+
+.sub-menu li {
+    margin: 0;
+}
+
+.sub-menu a {
+    display: flex;
+    align-items: center;
+    padding: 8px 15px 8px 45px;
+    color: rgba(255, 255, 255, 0.9);
+    text-decoration: none;
+    font-size: 13px;
+    border-left: 3px solid transparent;
+    min-height: 35px;
+}
+
+.sub-menu a:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border-left-color: rgba(255, 255, 255, 0.5);
+}
+
+.sub-menu a.active {
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-weight: 500;
+    border-left-color: white;
+}
+
+.sub-menu i {
+    width: 20px;
+    text-align: center;
+    margin-right: 10px;
+    font-size: 12px;
+}
+
+/* Section Titles */
+.sidebar-section {
+    margin-top: 15px;
+}
+
+.sidebar-section-title {
+    padding: 8px 15px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    margin: 5px 10px;
+}
+
+.sidebar-section-title small {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+/* Mobile User Profile */
+.mobile-user-profile {
+    display: none;
+    padding: 15px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 10px;
+    border-radius: 8px;
+}
+
+.mobile-user-profile .user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.mobile-user-profile .user-avatar {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background-color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-color);
+    font-weight: bold;
+    font-size: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    overflow: hidden;
+}
+
+.mobile-user-profile .user-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.mobile-user-profile .user-details {
+    flex: 1;
+}
+
+.mobile-user-profile .user-name {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 2px;
+    color: white;
+}
+
+.mobile-user-profile .user-role {
+    font-size: 12px;
+    opacity: 0.8;
+    color: white;
+}
+
+/* Scrollbar styling */
+.sidebar::-webkit-scrollbar {
+    width: 5px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 10px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* Responsive */
+@media (max-width: 991.98px) {
+    .mobile-user-profile {
+        display: block;
+    }
+}
+
+/* Menu Text - ensure consistent width */
+.menu-text {
+    flex: 1;
+}

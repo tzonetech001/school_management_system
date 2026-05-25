@@ -1,0 +1,630 @@
+/* calendar.css - Academic Calendar Page */
+
+/* ===== HERO SECTION ===== */
+.calendar-hero {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    padding: 60px 0;
+    text-align: center;
+    color: white;
+    position: relative;
+    overflow: hidden;
+    margin-bottom: 40px;
+}
+
+.calendar-hero::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 1px, transparent 1px);
+    background-size: 50px 50px;
+    animation: moveBackground 30s linear infinite;
+}
+
+@keyframes moveBackground {
+    0% { transform: rotate(45deg) translate(0, 0); }
+    100% { transform: rotate(45deg) translate(50px, 50px); }
+}
+
+.hero-content {
+    position: relative;
+    z-index: 1;
+}
+
+.hero-badge {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    padding: 10px 25px;
+    border-radius: 50px;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.hero-content h1 {
+    font-size: 48px;
+    font-weight: 800;
+    margin-bottom: 15px;
+}
+
+.hero-content p {
+    font-size: 18px;
+    max-width: 600px;
+    margin: 0 auto;
+    opacity: 0.95;
+}
+
+/* ===== CALENDAR NAVIGATION ===== */
+.calendar-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: white;
+    padding: 15px 25px;
+    border-radius: 60px;
+    margin-bottom: 30px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+}
+
+.nav-btn {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: white;
+    padding: 10px 25px;
+    border-radius: 50px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(59, 157, 179, 0.3);
+    color: white;
+}
+
+.current-month {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--dark-color);
+}
+
+.current-month i {
+    color: var(--primary-color);
+    margin-right: 10px;
+}
+
+/* ===== CALENDAR CONTAINER ===== */
+.calendar-container {
+    background: white;
+    border-radius: 24px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    margin-bottom: 30px;
+}
+
+.calendar-header {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: white;
+}
+
+.calendar-day-header {
+    padding: 15px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    background: white;
+}
+
+.calendar-day {
+    min-height: 100px;
+    padding: 10px;
+    border: 1px solid #e9ecef;
+    position: relative;
+    transition: all 0.3s ease;
+}
+
+.calendar-day:hover {
+    background: #f8f9fa;
+}
+
+.calendar-day.empty {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+}
+
+.day-number {
+    display: inline-block;
+    width: 32px;
+    height: 32px;
+    line-height: 32px;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 500;
+    color: #555;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+}
+
+.calendar-day.today .day-number {
+    background: linear-gradient(135deg, var(--accent-color), #e0a800);
+    color: white;
+    font-weight: 700;
+}
+
+.calendar-day.has-event .day-number {
+    font-weight: 700;
+    color: var(--primary-color);
+}
+
+/* Event Dots */
+.event-dot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 8px;
+}
+
+.event-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 8px;
+    cursor: pointer;
+}
+
+.event-badge i {
+    font-size: 8px;
+}
+
+.event-holiday i { color: #dc3545; }
+.event-exam i { color: #fd7e14; }
+.event-meeting i { color: #17a2b8; }
+.event-event i { color: #28a745; }
+.event-academic i { color: var(--primary-color); }
+
+/* ===== LEGEND SECTION ===== */
+.legend-section {
+    background: white;
+    border-radius: 20px;
+    padding: 25px;
+    margin-bottom: 30px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+}
+
+.legend-section h3 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: var(--dark-color);
+}
+
+.legend-section h3 i {
+    color: var(--primary-color);
+    margin-right: 10px;
+}
+
+.legend-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 25px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    color: #555;
+}
+
+.legend-color {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+}
+
+.legend-color.academic { background: var(--primary-color); }
+.legend-color.exam { background: #fd7e14; }
+.legend-color.meeting { background: #17a2b8; }
+.legend-color.holiday { background: #dc3545; }
+.legend-color.event { background: #28a745; }
+.legend-color.today { background: var(--accent-color); }
+
+/* ===== UPCOMING EVENTS SECTION ===== */
+.upcoming-section {
+    background: white;
+    border-radius: 24px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+}
+
+.upcoming-section h3 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 25px;
+    color: var(--dark-color);
+}
+
+.upcoming-section h3 i {
+    color: var(--primary-color);
+    margin-right: 10px;
+}
+
+.upcoming-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.upcoming-item {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    border-radius: 16px;
+    background: #f8f9fa;
+    transition: all 0.3s ease;
+    border-left: 4px solid;
+}
+
+.upcoming-item:hover {
+    transform: translateX(5px);
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.upcoming-holiday { border-left-color: #dc3545; }
+.upcoming-exam { border-left-color: #fd7e14; }
+.upcoming-meeting { border-left-color: #17a2b8; }
+.upcoming-event { border-left-color: #28a745; }
+.upcoming-academic { border-left-color: var(--primary-color); }
+
+.upcoming-date {
+    text-align: center;
+    min-width: 70px;
+}
+
+.upcoming-day {
+    font-size: 28px;
+    font-weight: 800;
+    color: var(--dark-color);
+    display: block;
+    line-height: 1;
+}
+
+.upcoming-month {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+}
+
+.upcoming-info {
+    flex: 1;
+}
+
+.upcoming-info h4 {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    color: var(--dark-color);
+}
+
+.upcoming-info p {
+    font-size: 13px;
+    color: #666;
+    margin: 0;
+}
+
+.type-badge {
+    padding: 6px 15px;
+    border-radius: 30px;
+    font-size: 12px;
+    font-weight: 600;
+    color: white;
+}
+
+.type-badge.holiday { background: #dc3545; }
+.type-badge.exam { background: #fd7e14; }
+.type-badge.meeting { background: #17a2b8; }
+.type-badge.event { background: #28a745; }
+.type-badge.academic { background: var(--primary-color); }
+
+/* ===== IMPORTANT DATES ===== */
+.important-dates {
+    background: linear-gradient(135deg, #f8f9fa, white);
+    border-radius: 24px;
+    padding: 30px;
+    margin-bottom: 30px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+}
+
+.important-dates h3 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 25px;
+    color: var(--dark-color);
+}
+
+.important-dates h3 i {
+    color: var(--primary-color);
+    margin-right: 10px;
+}
+
+.dates-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 20px;
+}
+
+.date-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    background: white;
+    border-radius: 16px;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+}
+
+.date-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(59, 157, 179, 0.15);
+}
+
+.date-icon {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+}
+
+.date-info h4 {
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 5px;
+    color: var(--dark-color);
+}
+
+.date-info p {
+    font-size: 13px;
+    color: #666;
+    margin: 0;
+}
+
+/* ===== DOWNLOAD SECTION ===== */
+.download-section {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin: 40px 0 60px;
+}
+
+.download-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 14px 30px;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    color: white;
+    text-decoration: none;
+    border-radius: 50px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.download-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 25px rgba(59, 157, 179, 0.3);
+    color: white;
+}
+
+.download-btn.secondary {
+    background: white;
+    color: var(--primary-color);
+    border: 2px solid var(--primary-color);
+}
+
+.download-btn.secondary:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
+/* ===== NO UPCOMING ===== */
+.no-upcoming {
+    text-align: center;
+    padding: 50px;
+    color: #999;
+}
+
+.no-upcoming i {
+    font-size: 50px;
+    margin-bottom: 15px;
+    opacity: 0.5;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 992px) {
+    .hero-content h1 {
+        font-size: 38px;
+    }
+    
+    .calendar-day {
+        min-height: 80px;
+    }
+}
+
+@media (max-width: 768px) {
+    .calendar-hero {
+        padding: 50px 0;
+    }
+    
+    .hero-content h1 {
+        font-size: 32px;
+    }
+    
+    .hero-content p {
+        font-size: 16px;
+    }
+    
+    .calendar-navigation {
+        padding: 12px 20px;
+    }
+    
+    .current-month {
+        font-size: 18px;
+    }
+    
+    .nav-btn {
+        padding: 8px 18px;
+        font-size: 12px;
+    }
+    
+    .calendar-day-header {
+        padding: 10px;
+        font-size: 12px;
+    }
+    
+    .calendar-day {
+        min-height: 70px;
+        padding: 5px;
+    }
+    
+    .day-number {
+        width: 28px;
+        height: 28px;
+        line-height: 28px;
+        font-size: 12px;
+    }
+    
+    .legend-items {
+        gap: 15px;
+    }
+    
+    .legend-item {
+        font-size: 12px;
+    }
+    
+    .upcoming-item {
+        flex-wrap: wrap;
+        gap: 15px;
+    }
+    
+    .upcoming-date {
+        min-width: 60px;
+    }
+    
+    .upcoming-day {
+        font-size: 24px;
+    }
+    
+    .upcoming-type {
+        width: 100%;
+    }
+    
+    .type-badge {
+        width: 100%;
+        text-align: center;
+    }
+    
+    .dates-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .download-section {
+        flex-direction: column;
+        align-items: center;
+    }
+    
+    .download-btn {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 576px) {
+    .hero-content h1 {
+        font-size: 28px;
+    }
+    
+    .hero-badge {
+        font-size: 12px;
+        padding: 8px 18px;
+    }
+    
+    .calendar-navigation {
+        flex-direction: column;
+        gap: 15px;
+        border-radius: 20px;
+    }
+    
+    .calendar-day-header {
+        font-size: 10px;
+        padding: 8px 5px;
+    }
+    
+    .calendar-day {
+        min-height: 60px;
+    }
+    
+    .event-dot {
+        margin-top: 4px;
+    }
+}
+
+/* ===== PRINT STYLES ===== */
+@media print {
+    .calendar-hero,
+    .calendar-navigation,
+    .legend-section,
+    .download-section,
+    .main-header,
+    .footer,
+    .upcoming-section {
+        display: none;
+    }
+    
+    .calendar-container {
+        box-shadow: none;
+        border: 1px solid #ddd;
+    }
+    
+    .calendar-day {
+        border: 1px solid #ddd;
+    }
+    
+    .calendar-day.today .day-number {
+        background: #f0f0f0;
+        color: black;
+        border: 1px solid #000;
+    }
+    
+    .important-dates {
+        background: white;
+        box-shadow: none;
+    }
+}

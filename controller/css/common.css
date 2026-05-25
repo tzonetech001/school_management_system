@@ -1,0 +1,179 @@
+/* common.css - Common styles for both header and sidebar */
+
+/* Reset transitions for sidebar to prevent flashing */
+.sidebar,
+.sidebar *,
+.sidebar a,
+.sidebar-menu,
+.sub-menu,
+.sidebar-dropdown .sub-menu {
+    transition: none !important;
+}
+
+/* Only allow transitions on specific elements that need it */
+.sidebar,
+.sidebar a,
+.sidebar a i,
+.main-content {
+    transition: all 0.3s ease;
+}
+
+/* Animation speed control - NO FLASHING */
+.no-animation {
+    transition: none !important;
+}
+
+/* Fast animations for sidebar toggle only */
+.sidebar.active,
+.sidebar.desktop-visible {
+    transition: left 0.3s ease;
+}
+
+/* Disable transitions on page load to prevent flash */
+body.preload * {
+    transition: none !important;
+}
+
+/* Fix for dropdown arrows */
+.dropdown-arrow i {
+    transition: transform 0.2s ease;
+}
+
+/* Ensure consistent box sizing */
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+/* Utility classes */
+.text-center {
+    text-align: center;
+}
+
+.d-none {
+    display: none;
+}
+
+.d-sm-none {
+    display: none;
+}
+
+@media (min-width: 576px) {
+    .d-sm-block {
+        display: block;
+    }
+    
+    .d-sm-none {
+        display: none;
+    }
+}
+
+/* Flex utilities */
+.d-flex {
+    display: flex;
+}
+
+.align-items-center {
+    align-items: center;
+}
+
+.justify-content-center {
+    justify-content: center;
+}
+
+.justify-content-end {
+    justify-content: flex-end;
+}
+
+.gap-1 {
+    gap: 0.25rem;
+}
+
+.gap-2 {
+    gap: 0.5rem;
+}
+
+.gap-3 {
+    gap: 1rem;
+}
+
+/* Container */
+.container-fluid {
+    width: 100%;
+    padding-right: 15px;
+    padding-left: 15px;
+    margin-right: auto;
+    margin-left: auto;
+}
+
+/* Row */
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    margin-right: -15px;
+    margin-left: -15px;
+}
+
+.row > [class*="col-"] {
+    padding-right: 15px;
+    padding-left: 15px;
+}
+
+/* Columns */
+.col-4 {
+    flex: 0 0 33.333333%;
+    max-width: 33.333333%;
+}
+
+.col-8 {
+    flex: 0 0 66.666667%;
+    max-width: 66.666667%;
+}
+
+@media (min-width: 768px) {
+    .col-md-3 {
+        flex: 0 0 25%;
+        max-width: 25%;
+    }
+    
+    .col-md-6 {
+        flex: 0 0 50%;
+        max-width: 50%;
+    }
+}
+
+/* Height utilities */
+.h-100 {
+    height: 100%;
+}
+
+/* Margin utilities */
+.m-0 {
+    margin: 0;
+}
+
+.mt-2 {
+    margin-top: 0.5rem;
+}
+
+.mb-2 {
+    margin-bottom: 0.5rem;
+}
+
+.ml-2 {
+    margin-left: 0.5rem;
+}
+
+.mr-2 {
+    margin-right: 0.5rem;
+}
+
+/* Gutter removal */
+.g-0 {
+    margin: 0;
+}
+
+.g-0 > [class*="col-"] {
+    padding: 0;
+}
