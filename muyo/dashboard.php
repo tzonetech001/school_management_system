@@ -63,7 +63,7 @@ if ($admin_id > 0) {
 $colors = [];
 $preferences = [];
 $bg_style = '';
-$bg_size = 'cover';
+$bg_size = 'cover'; 
 
 if (isset($_SESSION['admin_id'])) {
     $admin_id = $_SESSION['admin_id'];

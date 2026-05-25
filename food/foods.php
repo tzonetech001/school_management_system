@@ -135,7 +135,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $new_qty = $current_qty + $adjust_qty;
             } else {
                 $new_qty = $current_qty - $adjust_qty;
-                if ($new_qty < 0) $new_qty = 0;
+                if ($new_qty < 0) $new_qty = 0; 
             }
             
             // Update quantity
