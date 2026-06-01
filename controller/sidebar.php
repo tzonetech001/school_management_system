@@ -474,12 +474,7 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                         <span>Assign to Staff</span>
                     </a>
                 </li>
-                <li>
-                    <a href="../maintenance/maintenance_logs" class="<?php echo ($current_page == 'maintenance_logs.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-history"></i>
-                        <span>Logs</span>
-                    </a>
-                </li>
+                
                 <li>
                     <a href="../maintenance/report_maintenance" class="<?php echo ($current_page == 'report_maintenance.php') ? 'active' : ''; ?>">
                         <i class="fas fa-download"></i>
