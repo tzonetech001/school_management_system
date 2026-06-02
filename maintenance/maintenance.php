@@ -23,7 +23,7 @@ while ($row = $user_roles_result->fetch_assoc()) {
 // Check if user has Head Master (1) or Second Master (2) role
 $has_permission = false;
 foreach ($user_role_ids as $role_id) {
-    if ($role_id == 1 || $role_id == 2 || $role_id == 3 || $role_id == 16) { // Head Master or Second Master
+    if ($role_id == 1 || $role_id == 2 || $role_id == 3 || $role_id == 16) { // Head Master or Second Master or maintance
         $has_permission = true;
         break;
     }
