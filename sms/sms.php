@@ -1,18 +1,35 @@
 <?php
-// edit_admin.php
+// sms.php - SMS Messaging Center WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
 $error = '';
 $success = '';
 
-// Check if user has permission (Head Master or Second Master only)
-$admin_id = $_SESSION['admin_id'] ?? 0;
+// Check if user is logged in
+if (!isset($_SESSION['admin_id'])) {
+    header("Location: ../mhs/login.php");
+    exit();
+}
 
-// Get current user's roles
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
-$stmt = $conn->prepare($user_roles_sql);
+$admin_id = $_SESSION['admin_id'];
+
+// ========== GET CURRENT SCHOOL ID ==========
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
 $stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+
+// Get current user's roles (with school_id)
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
+$stmt = $conn->prepare($user_roles_sql);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -20,24 +37,18 @@ while ($row = $user_roles_result->fetch_assoc()) {
     $user_role_ids[] = $row['role_id'];
 }
 
-// Check if user has Head Master (1) or Second Master (2) role
+// Check if user has permission
 $has_permission = false;
 foreach ($user_role_ids as $role_id) {
-    if ($role_id == 1 || $role_id == 2 || $role_id == 3) { // Head Master or Second Master
+    if ($role_id == 1 || $role_id == 2 || $role_id == 3) {
         $has_permission = true;
         break;
     }
 }
 
 if (!$has_permission) {
-    $_SESSION['error'] = "You don't have permission to view staff members.";
-    header("Location:  ../404.php");
-    exit();
-}
-
-// Check if user is logged in
-if (!isset($_SESSION['admin_id'])) {
-    header("Location: ../mhs/login.php");
+    $_SESSION['error'] = "You don't have permission to send SMS.";
+    header("Location: ../404.php");
     exit();
 }
 
@@ -51,68 +62,43 @@ define('BEEM_SOURCE_ADDR', 'MUYOVOZI HS');
 define('SMS_MAX_CHARS', 160);
 define('SMS_WARNING_LIMIT', 140);
 
-$admin_id = $_SESSION['admin_id'];
-$message = '';
-$message_type = '';
-
 // Function to format phone number
 function formatPhoneNumber($phone) {
-    // Remove all non-numeric characters
     $phone = preg_replace('/[^0-9]/', '', $phone);
-    
-    // If already starts with 255, return as is (max 12 digits)
     if (substr($phone, 0, 3) === '255') {
         return substr($phone, 0, 12);
     }
-    
-    // If starts with 0, replace with 255
     if (substr($phone, 0, 1) === '0') {
         return '255' . substr($phone, 1, 9);
     }
-    
-    // If starts with 7 or 6, add 255
     if (substr($phone, 0, 1) === '7' || substr($phone, 0, 1) === '6') {
         return '255' . $phone;
     }
-    
-    // Default: add 255
     return '255' . $phone;
 }
 
-// Function to validate phone number
 function validatePhoneNumber($phone) {
     $phone = formatPhoneNumber($phone);
     return preg_match('/^255[67][0-9]{8}$/', $phone);
 }
 
-// Function to send SMS via Beem Africa
 function sendSMS($phone_number, $message) {
     $api_key = BEEM_API_KEY;
     $secret_key = BEEM_SECRET_KEY;
-    
     $phone_number = formatPhoneNumber($phone_number);
     
     if (!preg_match('/^255[67][0-9]{8}$/', $phone_number)) {
-        return [
-            'success' => false,
-            'message' => "Invalid phone number format: $phone_number"
-        ];
+        return ['success' => false, 'message' => "Invalid phone number format: $phone_number"];
     }
     
     $postData = [
         "source_addr" => BEEM_SOURCE_ADDR,
         "encoding" => 0,
         "message" => $message,
-        "recipients" => [
-            [
-                "recipient_id" => "1",
-                "dest_addr" => $phone_number
-            ]
-        ]
+        "recipients" => [["recipient_id" => "1", "dest_addr" => $phone_number]]
     ];
 
     $Url = 'https://apisms.beem.africa/v1/send';
-
     $ch = curl_init($Url);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
@@ -133,35 +119,23 @@ function sendSMS($phone_number, $message) {
     curl_close($ch);
     
     if ($response === FALSE) {
-        return [
-            'success' => false,
-            'message' => "CURL Error: " . $curl_error
-        ];
+        return ['success' => false, 'message' => "CURL Error: " . $curl_error];
     }
     
     $response_data = json_decode($response, true);
     
     if ($http_code == 200 && isset($response_data['successful']) && $response_data['successful'] === true) {
-        return [
-            'success' => true,
-            'message' => "SMS sent successfully"
-        ];
+        return ['success' => true, 'message' => "SMS sent successfully"];
     } else {
         $error_msg = isset($response_data['message']) ? $response_data['message'] : 'Unknown error';
-        return [
-            'success' => false,
-            'message' => "Failed: $error_msg"
-        ];
+        return ['success' => false, 'message' => "Failed: $error_msg"];
     }
 }
 
-// Function to check balance
 function checkBalance() {
     $api_key = BEEM_API_KEY;
     $secret_key = BEEM_SECRET_KEY;
-    
     $Url = 'https://apisms.beem.africa/public/v1/vendors/balance';
-
     $ch = curl_init($Url);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
@@ -188,32 +162,31 @@ function checkBalance() {
     return '0';
 }
 
-// Function to log SMS
-function logSMS($conn, $admin_id, $recipient_type, $recipient_count, $message, $status, $notes = '', $cost = 0) {
-    // Get admin name
+// Function to log SMS (with school_id)
+function logSMS($conn, $admin_id, $recipient_type, $recipient_count, $message, $status, $notes = '', $cost = 0, $school_id) {
     $admin_name = '';
-    $admin_query = "SELECT first_name, last_name FROM admins WHERE id = ?";
+    $admin_query = "SELECT first_name, last_name FROM admins WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($admin_query);
-    $stmt->bind_param("i", $admin_id);
+    $stmt->bind_param("ii", $admin_id, $school_id);
     $stmt->execute();
     $admin_result = $stmt->get_result();
     if ($admin_row = $admin_result->fetch_assoc()) {
         $admin_name = $admin_row['first_name'] . ' ' . $admin_row['last_name'];
     }
     
-    $sql = "INSERT INTO sms_logs (admin_id, recipient_type, recipient_count, message, status, notes, sender_name, cost) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+    $sql = "INSERT INTO sms_logs (admin_id, recipient_type, recipient_count, message, status, notes, sender_name, cost, school_id) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("isissds", $admin_id, $recipient_type, $recipient_count, $message, $status, $notes, $admin_name, $cost);
+    $stmt->bind_param("isissdsdi", $admin_id, $recipient_type, $recipient_count, $message, $status, $notes, $admin_name, $cost, $school_id);
     return $stmt->execute();
 }
 
-// Handle delete log
+// Handle delete log (with school_id)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_log'])) {
     $log_id = intval($_POST['log_id']);
-    $delete_sql = "DELETE FROM sms_logs WHERE id = ?";
+    $delete_sql = "DELETE FROM sms_logs WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($delete_sql);
-    $stmt->bind_param("i", $log_id);
+    $stmt->bind_param("ii", $log_id, $current_school_id);
     if ($stmt->execute()) {
         $_SESSION['message'] = "Log deleted successfully";
         $_SESSION['message_type'] = "success";
@@ -221,17 +194,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_log'])) {
         $_SESSION['message'] = "Failed to delete log";
         $_SESSION['message_type'] = "error";
     }
-    header("Location: chat.php");
+    header("Location: sms.php");
     exit();
 }
 
-// Handle bulk delete
+// Handle bulk delete (with school_id)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_delete'])) {
     if (!empty($_POST['log_ids'])) {
         $log_ids = array_map('intval', $_POST['log_ids']);
-        $ids_string = implode(',', $log_ids);
-        $delete_sql = "DELETE FROM sms_logs WHERE id IN ($ids_string)";
-        if ($conn->query($delete_sql)) {
+        $placeholders = implode(',', array_fill(0, count($log_ids), '?'));
+        $types = str_repeat('i', count($log_ids));
+        $delete_sql = "DELETE FROM sms_logs WHERE id IN ($placeholders) AND school_id = ?";
+        $stmt = $conn->prepare($delete_sql);
+        $params = array_merge($log_ids, [$current_school_id]);
+        $types .= 'i';
+        $stmt->bind_param($types, ...$params);
+        if ($stmt->execute()) {
             $_SESSION['message'] = "Selected logs deleted successfully";
             $_SESSION['message_type'] = "success";
         } else {
@@ -239,69 +217,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['bulk_delete'])) {
             $_SESSION['message_type'] = "error";
         }
     }
-    header("Location: chat.php");
+    header("Location: sms.php");
     exit();
 }
 
-// Get all staff with phone numbers
+// Get all staff with phone numbers (from current school)
 $staff_sql = "SELECT id, first_name, last_name, email, phone_number, sex 
               FROM admins 
               WHERE phone_number IS NOT NULL 
               AND phone_number != '' 
               AND status = 1
+              AND school_id = ?
               ORDER BY first_name, last_name";
-$staff_result = mysqli_query($conn, $staff_sql);
+$stmt = $conn->prepare($staff_sql);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$staff_result = $stmt->get_result();
 $staff_list = [];
-if ($staff_result && mysqli_num_rows($staff_result) > 0) {
-    while ($row = mysqli_fetch_assoc($staff_result)) {
+if ($staff_result && $staff_result->num_rows > 0) {
+    while ($row = $staff_result->fetch_assoc()) {
         $staff_list[] = $row;
     }
 }
 
-// Get all students with parent phone numbers
+// Get all students with parent phone numbers (from current school)
 $parent_sql = "SELECT id, first_name, last_name, admission_number, parent_phone, class, combination, sex 
                FROM students 
                WHERE parent_phone IS NOT NULL 
                AND parent_phone != '' 
                AND is_leaver = FALSE
                AND status = 1
+               AND school_id = ?
                ORDER BY class, combination, first_name, last_name";
-$parent_result = mysqli_query($conn, $parent_sql);
+$stmt = $conn->prepare($parent_sql);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$parent_result = $stmt->get_result();
 $parent_list = [];
-if ($parent_result && mysqli_num_rows($parent_result) > 0) {
-    while ($row = mysqli_fetch_assoc($parent_result)) {
+if ($parent_result && $parent_result->num_rows > 0) {
+    while ($row = $parent_result->fetch_assoc()) {
         $parent_list[] = $row;
     }
 }
 
-// Get paginated SMS logs with enhanced info
+// Get paginated SMS logs (with school_id)
 $page = isset($_GET['page']) ? intval($_GET['page']) : 1;
 $logs_per_page = 20;
 $offset = ($page - 1) * $logs_per_page;
 
-// Get total logs count
-$count_sql = "SELECT COUNT(*) as total FROM sms_logs";
-$count_result = $conn->query($count_sql);
+$count_sql = "SELECT COUNT(*) as total FROM sms_logs WHERE school_id = ?";
+$stmt = $conn->prepare($count_sql);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$count_result = $stmt->get_result();
 $total_logs = $count_result->fetch_assoc()['total'];
 $total_pages = ceil($total_logs / $logs_per_page);
 
 $logs_sql = "SELECT sl.*, a.first_name as admin_first, a.last_name as admin_last 
              FROM sms_logs sl
              LEFT JOIN admins a ON sl.admin_id = a.id
+             WHERE sl.school_id = ?
              ORDER BY sl.sent_at DESC
              LIMIT ? OFFSET ?";
 $stmt = $conn->prepare($logs_sql);
-$stmt->bind_param("ii", $logs_per_page, $offset);
+$stmt->bind_param("iii", $current_school_id, $logs_per_page, $offset);
 $stmt->execute();
 $logs_result = $stmt->get_result();
 $sms_logs = [];
-if ($logs_result && mysqli_num_rows($logs_result) > 0) {
-    while ($row = mysqli_fetch_assoc($logs_result)) {
+if ($logs_result && $logs_result->num_rows > 0) {
+    while ($row = $logs_result->fetch_assoc()) {
         $sms_logs[] = $row;
     }
 }
 
-// Get statistics with daily breakdown
+// Get statistics (with school_id)
 $stats_sql = "SELECT 
     COUNT(*) as total_messages,
     SUM(CASE WHEN status = 'Success' THEN 1 ELSE 0 END) as successful,
@@ -310,15 +299,21 @@ $stats_sql = "SELECT
     COUNT(DISTINCT DATE(sent_at)) as active_days,
     SUM(recipient_count) as total_recipients,
     SUM(cost) as total_cost
-    FROM sms_logs";
-$stats_result = $conn->query($stats_sql);
+    FROM sms_logs WHERE school_id = ?";
+$stmt = $conn->prepare($stats_sql);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$stats_result = $stmt->get_result();
 $stats = $stats_result->fetch_assoc();
 
-// Get today's stats
+// Get today's stats (with school_id)
 $today_sql = "SELECT COUNT(*) as today_messages, SUM(recipient_count) as today_recipients 
               FROM sms_logs 
-              WHERE DATE(sent_at) = CURDATE()";
-$today_result = $conn->query($today_sql);
+              WHERE DATE(sent_at) = CURDATE() AND school_id = ?";
+$stmt = $conn->prepare($today_sql);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$today_result = $stmt->get_result();
 $today_stats = $today_result->fetch_assoc();
 
 $staff_count = count($staff_list);
@@ -361,7 +356,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_sms'])) {
         $fail_count = 0;
         $details = [];
         $total_cost = 0;
-        $cost_per_sms = 50; // Approximate cost per SMS in sms
+        $cost_per_sms = 50;
         
         foreach ($selected as $item) {
             $parts = explode('_', $item);
@@ -391,7 +386,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_sms'])) {
             
             if (!empty($phone)) {
                 $result = sendSMS($phone, $sms_message);
-                
                 if ($result['success']) {
                     $success_count++;
                     $total_cost += $cost_per_sms;
@@ -402,11 +396,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_sms'])) {
             }
         }
         
-        // Log the batch
         $status = ($fail_count == 0) ? 'Success' : (($success_count > 0) ? 'Partial' : 'Failed');
         $notes = ($fail_count > 0) ? "Failed: " . implode("; ", $details) : "All sent successfully";
         
-        logSMS($conn, $admin_id, 'batch', count($selected), $sms_message, $status, $notes, $total_cost);
+        logSMS($conn, $admin_id, 'batch', count($selected), $sms_message, $status, $notes, $total_cost, $current_school_id);
         
         if ($success_count > 0) {
             $sms_result = [
@@ -414,23 +407,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_sms'])) {
                 'message' => "✅ SMS sent to $success_count recipients" . 
                             ($fail_count > 0 ? ", $fail_count failed" : "")
             ];
-            
             if (!empty($details)) {
                 $_SESSION['sms_details'] = $details;
             }
         } else {
-            $sms_result = [
-                'success' => false,
-                'message' => "❌ Failed to send any SMS. Check logs for details."
-            ];
+            $sms_result = ['success' => false, 'message' => "❌ Failed to send any SMS. Check logs for details."];
         }
         
         // Refresh logs
+        $stmt = $conn->prepare($logs_sql);
+        $stmt->bind_param("iii", $current_school_id, $logs_per_page, $offset);
         $stmt->execute();
         $logs_result = $stmt->get_result();
         $sms_logs = [];
-        if ($logs_result && mysqli_num_rows($logs_result) > 0) {
-            while ($row = mysqli_fetch_assoc($logs_result)) {
+        if ($logs_result && $logs_result->num_rows > 0) {
+            while ($row = $logs_result->fetch_assoc()) {
                 $sms_logs[] = $row;
             }
         }
@@ -451,7 +442,6 @@ $balance = checkBalance();
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 
 <style>
-
 .main-content {
     padding: 20px;
     min-height: 100vh;
@@ -494,14 +484,8 @@ $balance = checkBalance();
 }
 
 @keyframes slideIn {
-    from {
-        transform: translateY(-20px);
-        opacity: 0;
-    }
-    to {
-        transform: translateY(0);
-        opacity: 1;
-    }
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
 }
 
 .loader {
@@ -1439,8 +1423,8 @@ $balance = checkBalance();
                         <i class="fas fa-wallet" style="color: #28a745;"></i>
                     </div>
                     <h3 style="color: #28a745;"><?php echo $balance; ?> sms</h3>
-                   <p>Sms balance remains</p>
-                   <small>1 sms cost ~30 TZS</small>
+                    <p>Sms balance remains</p>
+                    <small>1 sms cost ~30 TZS</small>
                 </div>
             </div>
         </div>
@@ -1611,180 +1595,163 @@ $balance = checkBalance();
                 </div>
             </div>
 
-           <!-- Right Column - Enhanced SMS Logs -->
-<div class="col-lg-4">
-    <div class="logs-card">
-        <div class="logs-header">
-            <h5><i class="fas fa-history me-2"></i>SMS History</h5>
-            <div class="logs-actions">
-                <button class="btn btn-sm btn-light" onclick="toggleBulkDelete()" title="Bulk Delete">
-                    <i class="fas fa-trash-alt"></i>
-                </button>
-                <button class="btn btn-sm btn-light" onclick="refreshLogs()" title="Refresh">
-                    <i class="fas fa-sync-alt"></i>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Bulk Delete Bar -->
-        <div class="bulk-delete-bar hidden" id="bulkDeleteBar">
-            <input type="checkbox" id="selectAllLogs" onchange="toggleAllLogs(this)">
-            <span>Select All</span>
-            <button class="btn btn-sm btn-danger ms-auto" onclick="bulkDelete()">
-                <i class="fas fa-trash"></i> Delete Selected
-            </button>
-            <button class="btn btn-sm btn-secondary" onclick="cancelBulkDelete()">
-                <i class="fas fa-times"></i>
-            </button>
-        </div>
-        
-        <form id="bulkDeleteForm" method="POST" style="display: none;">
-            <input type="hidden" name="bulk_delete" value="1">
-            <div id="selectedLogsContainer"></div>
-        </form>
-        
-        <div class="logs-table-container">
-            <table class="logs-table">
-                <thead>
-                    <tr>
-                        <th style="width: 30px;" class="bulk-checkbox hidden">
-                            <input type="checkbox" id="selectAllLogsHeader" onchange="toggleAllLogs(this)">
-                        </th>
-                        <th>Time</th>
-                        <th>Type</th>
-                        <th>Message</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php 
-                    // Debug: Check if logs exist
-                    $debug_sql = "SELECT COUNT(*) as total FROM sms_logs";
-                    $debug_result = $conn->query($debug_sql);
-                    $debug_count = $debug_result->fetch_assoc()['total'];
-                    ?>
-                    <?php if ($debug_count == 0): ?>
-                        <tr>
-                            <td colspan="6" class="text-center py-4 text-muted">
-                                <i class="fas fa-inbox fa-3x mb-3 d-block" style="color: var(--primary-light);"></i>
-                                No SMS history yet. Send your first SMS to see logs here.
-                            </td>
-                        </tr>
-                    <?php elseif (empty($sms_logs)): ?>
-                        <tr>
-                            <td colspan="6" class="text-center py-4">
-                                <i class="fas fa-exclamation-triangle fa-3x mb-3 d-block" style="color: var(--warning-color);"></i>
-                                <p>Error loading logs. Debug info: Total logs in DB: <?php echo $debug_count; ?></p>
-                                <p class="text-muted small">Page: <?php echo $page; ?>, Per page: <?php echo $logs_per_page; ?></p>
-                                <button class="btn btn-sm btn-primary mt-2" onclick="location.reload()">
-                                    <i class="fas fa-sync-alt"></i> Refresh Page
-                                </button>
-                            </td>
-                        </tr>
-                    <?php else: ?>
-                        <?php foreach ($sms_logs as $log): ?>
-                            <tr>
-                                <td class="bulk-checkbox hidden">
-                                    <input type="checkbox" class="log-checkbox" value="<?php echo $log['id']; ?>">
-                                </td>
-                                <td>
-                                    <div><strong><?php echo date('H:i', strtotime($log['sent_at'])); ?></strong></div>
-                                    <small class="text-muted"><?php echo date('d/m/Y', strtotime($log['sent_at'])); ?></small>
-                                </td>
-                                <td>
-                                    <div><strong><?php echo ucfirst($log['recipient_type']); ?></strong></div>
-                                    <small class="text-muted"><?php echo $log['recipient_count']; ?> recipient(s)</small>
-                                    <?php if (isset($log['cost']) && $log['cost'] > 0): ?>
-                                        <br><small class="text-success"><?php echo number_format($log['cost']); ?> TZS</small>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <div class="message-preview">
-                                        <span class="message-text" onclick="showFullMessage('<?php echo addslashes(htmlspecialchars($log['message'])); ?>')">
-                                            <?php 
-                                            $message_display = htmlspecialchars($log['message']);
-                                            echo strlen($message_display) > 30 ? substr($message_display, 0, 30) . '...' : $message_display;
-                                            ?>
-                                        </span>
-                                        <div class="full-message">
-                                            <?php echo nl2br(htmlspecialchars($log['message'])); ?>
-                                        </div>
-                                    </div>
-                                    <small class="text-muted d-block">
-                                        <i class="fas fa-user"></i> 
-                                        <?php 
-                                        $sender = !empty($log['sender_name']) ? $log['sender_name'] : 
-                                                 (isset($log['admin_first']) ? $log['admin_first'] . ' ' . $log['admin_last'] : 'Unknown');
-                                        echo htmlspecialchars($sender);
-                                        ?>
-                                    </small>
-                                </td>
-                                <td>
-                                    <span class="status-badge status-<?php echo strtolower($log['status']); ?>">
-                                        <?php echo $log['status']; ?>
-                                    </span>
-                                    <?php if (!empty($log['notes'])): ?>
-                                        <i class="fas fa-info-circle text-muted ms-1" 
-                                           title="<?php echo htmlspecialchars($log['notes']); ?>"></i>
-                                    <?php endif; ?>
-                                </td>
-                                <td>
-                                    <form method="POST" style="display: inline;" onsubmit="return confirmDelete(event, this)">
-                                        <input type="hidden" name="delete_log" value="1">
-                                        <input type="hidden" name="log_id" value="<?php echo $log['id']; ?>">
-                                        <button type="submit" class="delete-btn" title="Delete">
-                                            <i class="fas fa-trash"></i>
-                                        </button>
-                                    </form>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
+            <!-- Right Column - Enhanced SMS Logs -->
+            <div class="col-lg-4">
+                <div class="logs-card">
+                    <div class="logs-header">
+                        <h5><i class="fas fa-history me-2"></i>SMS History</h5>
+                        <div class="logs-actions">
+                            <button class="btn btn-sm btn-light" onclick="toggleBulkDelete()" title="Bulk Delete">
+                                <i class="fas fa-trash-alt"></i>
+                            </button>
+                            <button class="btn btn-sm btn-light" onclick="refreshLogs()" title="Refresh">
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Bulk Delete Bar -->
+                    <div class="bulk-delete-bar hidden" id="bulkDeleteBar">
+                        <input type="checkbox" id="selectAllLogs" onchange="toggleAllLogs(this)">
+                        <span>Select All</span>
+                        <button class="btn btn-sm btn-danger ms-auto" onclick="bulkDelete()">
+                            <i class="fas fa-trash"></i> Delete Selected
+                        </button>
+                        <button class="btn btn-sm btn-secondary" onclick="cancelBulkDelete()">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                    
+                    <form id="bulkDeleteForm" method="POST" style="display: none;">
+                        <input type="hidden" name="bulk_delete" value="1">
+                        <div id="selectedLogsContainer"></div>
+                    </form>
+                    
+                    <div class="logs-table-container">
+                        <table class="logs-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 30px;" class="bulk-checkbox hidden">
+                                        <input type="checkbox" id="selectAllLogsHeader" onchange="toggleAllLogs(this)">
+                                    </th>
+                                    <th>Time</th>
+                                    <th>Type</th>
+                                    <th>Message</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($sms_logs)): ?>
+                                    <tr>
+                                        <td colspan="6" class="text-center py-4 text-muted">
+                                            <i class="fas fa-inbox fa-3x mb-3 d-block" style="color: var(--primary-light);"></i>
+                                            No SMS history yet. Send your first SMS to see logs here.
+                                        </td>
+                                    </tr>
+                                <?php else: ?>
+                                    <?php foreach ($sms_logs as $log): ?>
+                                        <tr>
+                                            <td class="bulk-checkbox hidden">
+                                                <input type="checkbox" class="log-checkbox" value="<?php echo $log['id']; ?>">
+                                            </td>
+                                            <td>
+                                                <div><strong><?php echo date('H:i', strtotime($log['sent_at'])); ?></strong></div>
+                                                <small class="text-muted"><?php echo date('d/m/Y', strtotime($log['sent_at'])); ?></small>
+                                            </td>
+                                            <td>
+                                                <div><strong><?php echo ucfirst($log['recipient_type']); ?></strong></div>
+                                                <small class="text-muted"><?php echo $log['recipient_count']; ?> recipient(s)</small>
+                                                <?php if (isset($log['cost']) && $log['cost'] > 0): ?>
+                                                    <br><small class="text-success"><?php echo number_format($log['cost']); ?> TZS</small>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <div class="message-preview">
+                                                    <span class="message-text" onclick="showFullMessage('<?php echo addslashes(htmlspecialchars($log['message'])); ?>')">
+                                                        <?php 
+                                                        $message_display = htmlspecialchars($log['message']);
+                                                        echo strlen($message_display) > 30 ? substr($message_display, 0, 30) . '...' : $message_display;
+                                                        ?>
+                                                    </span>
+                                                    <div class="full-message">
+                                                        <?php echo nl2br(htmlspecialchars($log['message'])); ?>
+                                                    </div>
+                                                </div>
+                                                <small class="text-muted d-block">
+                                                    <i class="fas fa-user"></i> 
+                                                    <?php 
+                                                    $sender = !empty($log['sender_name']) ? $log['sender_name'] : 
+                                                             (isset($log['admin_first']) ? $log['admin_first'] . ' ' . $log['admin_last'] : 'Unknown');
+                                                    echo htmlspecialchars($sender);
+                                                    ?>
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <span class="status-badge status-<?php echo strtolower($log['status']); ?>">
+                                                    <?php echo $log['status']; ?>
+                                                </span>
+                                                <?php if (!empty($log['notes'])): ?>
+                                                    <i class="fas fa-info-circle text-muted ms-1" 
+                                                       title="<?php echo htmlspecialchars($log['notes']); ?>"></i>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <form method="POST" style="display: inline;" onsubmit="return confirmDelete(event, this)">
+                                                    <input type="hidden" name="delete_log" value="1">
+                                                    <input type="hidden" name="log_id" value="<?php echo $log['id']; ?>">
+                                                    <button type="submit" class="delete-btn" title="Delete">
+                                                        <i class="fas fa-trash"></i>
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    <?php if (isset($total_pages) && $total_pages > 1): ?>
+                    <div class="pagination">
+                        <?php if ($page > 1): ?>
+                            <a href="?page=<?php echo $page-1; ?>">&laquo; Previous</a>
+                        <?php endif; ?>
+                        
+                        <?php 
+                        $start_page = max(1, $page - 2);
+                        $end_page = min($total_pages, $page + 2);
+                        
+                        if ($start_page > 1): ?>
+                            <a href="?page=1">1</a>
+                            <?php if ($start_page > 2): ?>
+                                <span>...</span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                        
+                        <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
+                            <?php if ($i == $page): ?>
+                                <span class="active"><?php echo $i; ?></span>
+                            <?php else: ?>
+                                <a href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
+                            <?php endif; ?>
+                        <?php endfor; ?>
+                        
+                        <?php if ($end_page < $total_pages): ?>
+                            <?php if ($end_page < $total_pages - 1): ?>
+                                <span>...</span>
+                            <?php endif; ?>
+                            <a href="?page=<?php echo $total_pages; ?>"><?php echo $total_pages; ?></a>
+                        <?php endif; ?>
+                        
+                        <?php if ($page < $total_pages): ?>
+                            <a href="?page=<?php echo $page+1; ?>">Next &raquo;</a>
+                        <?php endif; ?>
+                    </div>
                     <?php endif; ?>
-                </tbody>
-            </table>
-        </div>
-        
-        <!-- Pagination -->
-        <?php if (isset($total_pages) && $total_pages > 1): ?>
-        <div class="pagination">
-            <?php if ($page > 1): ?>
-                <a href="?page=<?php echo $page-1; ?>">&laquo; Previous</a>
-            <?php endif; ?>
-            
-            <?php 
-            $start_page = max(1, $page - 2);
-            $end_page = min($total_pages, $page + 2);
-            
-            if ($start_page > 1): ?>
-                <a href="?page=1">1</a>
-                <?php if ($start_page > 2): ?>
-                    <span>...</span>
-                <?php endif; ?>
-            <?php endif; ?>
-            
-            <?php for ($i = $start_page; $i <= $end_page; $i++): ?>
-                <?php if ($i == $page): ?>
-                    <span class="active"><?php echo $i; ?></span>
-                <?php else: ?>
-                    <a href="?page=<?php echo $i; ?>"><?php echo $i; ?></a>
-                <?php endif; ?>
-            <?php endfor; ?>
-            
-            <?php if ($end_page < $total_pages): ?>
-                <?php if ($end_page < $total_pages - 1): ?>
-                    <span>...</span>
-                <?php endif; ?>
-                <a href="?page=<?php echo $total_pages; ?>"><?php echo $total_pages; ?></a>
-            <?php endif; ?>
-            
-            <?php if ($page < $total_pages): ?>
-                <a href="?page=<?php echo $page+1; ?>">Next &raquo;</a>
-            <?php endif; ?>
-        </div>
-        <?php endif; ?>
-    </div>
-</div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -2129,7 +2096,6 @@ function sendMessage() {
         return;
     }
     
-    // Show loading overlay
     showLoading('Sending Messages...', `Sending to ${selectedRecipients.length} recipients`);
     
     sendBtn.disabled = true;
@@ -2143,7 +2109,6 @@ function sendMessage() {
         formData.append('selected_recipients[]', recipient.value);
     });
     
-    // Simulate loading for at least 1.5 seconds for better UX
     const minLoadingTime = new Promise(resolve => setTimeout(resolve, 1500));
     
     const fetchPromise = fetch(window.location.href, {
@@ -2215,8 +2180,9 @@ function showFullMessage(message) {
     });
 }
 
-function confirmDelete() {
-    return Swal.fire({
+function confirmDelete(event, form) {
+    event.preventDefault();
+    Swal.fire({
         title: 'Are you sure?',
         text: "You won't be able to revert this!",
         icon: 'warning',
@@ -2225,8 +2191,11 @@ function confirmDelete() {
         cancelButtonColor: '#d33',
         confirmButtonText: 'Yes, delete it!'
     }).then((result) => {
-        return result.isConfirmed;
+        if (result.isConfirmed) {
+            form.submit();
+        }
     });
+    return false;
 }
 
 function toggleBulkDelete() {
@@ -2353,7 +2322,6 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ========== AUTO REFRESH LOGS (OPTIONAL) ==========
-// Refresh every 5 minutes if not in modal
 setInterval(function() {
     if (!document.getElementById('messageModal').classList.contains('show') && !bulkDeleteMode) {
         refreshLogs();

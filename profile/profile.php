@@ -1,5 +1,5 @@
 <?php
-// profile.php
+// profile.php - WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -11,18 +11,30 @@ if (!isset($_SESSION['admin_id'])) {
 
 $admin_id = $_SESSION['admin_id'];
 
-// Fetch admin details
+// ========== GET CURRENT SCHOOL ID ==========
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
+$stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+
+// Fetch admin details (with school_id)
 $sql = "SELECT a.*, 
         GROUP_CONCAT(DISTINCT ar.role_name ORDER BY ara.is_primary DESC, ar.role_name SEPARATOR ', ') as roles,
         GROUP_CONCAT(DISTINCT CASE WHEN ara.is_primary = 1 THEN ar.role_name END) as primary_role
         FROM admins a
         LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
         LEFT JOIN admin_roles ar ON ara.role_id = ar.id
-        WHERE a.id = $admin_id
+        WHERE a.id = ? AND a.school_id = ?
         GROUP BY a.id";
-        
-$result = mysqli_query($conn, $sql);
-$admin = mysqli_fetch_assoc($result);
+
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$result = $stmt->get_result();
+$admin = $result->fetch_assoc();
 
 if (!$admin) {
     header("Location: ../controller/login.php");
@@ -98,49 +110,98 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
+    // Check if email already exists for another admin in same school
+    if (empty($error)) {
+        $check_email_sql = "SELECT id FROM admins WHERE email = ? AND id != ? AND school_id = ?";
+        $stmt = $conn->prepare($check_email_sql);
+        $stmt->bind_param("sii", $email, $admin_id, $current_school_id);
+        $stmt->execute();
+        $email_check_result = $stmt->get_result();
+        if ($email_check_result->num_rows > 0) {
+            $error = 'Email already exists. Please use a different email.';
+        }
+    }
+    
+    // Check if phone number already exists for another admin in same school
+    if (empty($error)) {
+        $check_phone_sql = "SELECT id FROM admins WHERE phone_number = ? AND id != ? AND school_id = ?";
+        $stmt = $conn->prepare($check_phone_sql);
+        $stmt->bind_param("sii", $phone_number, $admin_id, $current_school_id);
+        $stmt->execute();
+        $phone_check_result = $stmt->get_result();
+        if ($phone_check_result->num_rows > 0) {
+            $error = 'Phone number already exists. Please use a different phone number.';
+        }
+    }
+    
+    // Check if NIDA already exists for another admin in same school
+    if (empty($error) && !empty($nida)) {
+        $check_nida_sql = "SELECT id FROM admins WHERE nida = ? AND nida IS NOT NULL AND nida != '' AND id != ? AND school_id = ?";
+        $stmt = $conn->prepare($check_nida_sql);
+        $stmt->bind_param("sii", $nida, $admin_id, $current_school_id);
+        $stmt->execute();
+        $nida_check_result = $stmt->get_result();
+        if ($nida_check_result->num_rows > 0) {
+            $error = 'NIDA number already exists. Please use a different NIDA number.';
+        }
+    }
+    
     // Update database if no errors
     if (empty($error)) {
         if ($password_changed) {
             $update_sql = "UPDATE admins SET 
-                          first_name = '$first_name',
-                          middle_name = '$middle_name',
-                          last_name = '$last_name',
-                          email = '$email',
-                          phone_number = '$phone_number',
-                          sex = '$sex',
-                          nida = '$nida',
-                          address = '$address',
-                          profile_image = '$profile_image',
-                          password = '$hashed_password',
+                          first_name = ?,
+                          middle_name = ?,
+                          last_name = ?,
+                          email = ?,
+                          phone_number = ?,
+                          sex = ?,
+                          nida = ?,
+                          address = ?,
+                          profile_image = ?,
+                          password = ?,
                           updated_at = NOW()
-                          WHERE id = $admin_id";
+                          WHERE id = ? AND school_id = ?";
+            $stmt = $conn->prepare($update_sql);
+            $stmt->bind_param("ssssssssssii", 
+                $first_name, $middle_name, $last_name, $email, 
+                $phone_number, $sex, $nida, $address, 
+                $profile_image, $hashed_password, $admin_id, $current_school_id);
         } else {
             $update_sql = "UPDATE admins SET 
-                          first_name = '$first_name',
-                          middle_name = '$middle_name',
-                          last_name = '$last_name',
-                          email = '$email',
-                          phone_number = '$phone_number',
-                          sex = '$sex',
-                          nida = '$nida',
-                          address = '$address',
-                          profile_image = '$profile_image',
+                          first_name = ?,
+                          middle_name = ?,
+                          last_name = ?,
+                          email = ?,
+                          phone_number = ?,
+                          sex = ?,
+                          nida = ?,
+                          address = ?,
+                          profile_image = ?,
                           updated_at = NOW()
-                          WHERE id = $admin_id";
+                          WHERE id = ? AND school_id = ?";
+            $stmt = $conn->prepare($update_sql);
+            $stmt->bind_param("sssssssssii", 
+                $first_name, $middle_name, $last_name, $email, 
+                $phone_number, $sex, $nida, $address, 
+                $profile_image, $admin_id, $current_school_id);
         }
         
-        if (mysqli_query($conn, $update_sql)) {
+        if ($stmt->execute()) {
             $success = 'Profile updated successfully!';
             
             // Refresh admin data
-            $result = mysqli_query($conn, $sql);
-            $admin = mysqli_fetch_assoc($result);
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("ii", $admin_id, $current_school_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $admin = $result->fetch_assoc();
             
             // Update session
             $_SESSION['admin_name'] = $admin['first_name'] . ' ' . $admin['last_name'];
             $_SESSION['admin_email'] = $admin['email'];
         } else {
-            $error = 'Error updating profile: ' . mysqli_error($conn);
+            $error = 'Error updating profile: ' . $stmt->error;
         }
     }
 }
@@ -282,8 +343,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label required-field">Phone Number</label>
-                                    <input type="tel" class="form-control" name="phone_number" 
-                                           value="<?php echo htmlspecialchars($admin['phone_number']); ?>" required>
+                                    <div class="input-group">
+                                        <span class="input-group-text">+255</span>
+                                        <input type="tel" class="form-control" name="phone_number" 
+                                               value="<?php 
+                                                   $phone = preg_replace('/^255/', '', $admin['phone_number']);
+                                                   echo htmlspecialchars($phone);
+                                               ?>" 
+                                               placeholder="712345678" required
+                                               pattern="[0-9]{9}" maxlength="9">
+                                    </div>
+                                    <small class="text-muted">Format: 255 followed by 9 digits</small>
                                 </div>
                             </div>
 
@@ -298,7 +368,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <div class="col-md-6">
                                     <label class="form-label">NIDA Number</label>
                                     <input type="text" class="form-control" name="nida" 
-                                           value="<?php echo htmlspecialchars($admin['nida'] ?? ''); ?>">
+                                           value="<?php echo htmlspecialchars($admin['nida'] ?? ''); ?>"
+                                           maxlength="20" pattern="[0-9]{0,20}">
+                                    <small class="text-muted">Enter exactly 20 digits if available</small>
                                 </div>
                             </div>
 
@@ -337,7 +409,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     </div>
                                 </div>
                             </div>
-
 
                             <!-- Password Change Section -->
                             <div class="row mb-4">
@@ -415,6 +486,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <!-- JavaScript for Profile Management -->
 <script>
+// Phone number formatting
+document.querySelector('input[name="phone_number"]').addEventListener('input', function(e) {
+    // Remove non-digit characters
+    this.value = this.value.replace(/\D/g, '');
+    // Limit to 9 digits
+    if (this.value.length > 9) {
+        this.value = this.value.slice(0, 9);
+    }
+});
+
 // Image Preview
 document.getElementById('profileImageInput').addEventListener('change', function(e) {
     const file = e.target.files[0];
@@ -528,11 +609,49 @@ document.getElementById('confirmPassword').addEventListener('input', function() 
     }
 });
 
+// NIDA validation
+document.querySelector('input[name="nida"]').addEventListener('input', function(e) {
+    this.value = this.value.replace(/\D/g, '');
+    if (this.value.length > 0 && this.value.length !== 20) {
+        this.style.borderColor = '#dc3545';
+    } else {
+        this.style.borderColor = '';
+    }
+});
+
 // Form validation
 document.getElementById('profileForm').addEventListener('submit', function(e) {
     const currentPassword = document.getElementById('currentPassword').value;
     const newPassword = document.getElementById('newPassword').value;
     const confirmPassword = document.getElementById('confirmPassword').value;
+    const phoneInput = document.querySelector('input[name="phone_number"]');
+    const nidaInput = document.querySelector('input[name="nida"]');
+    const emailInput = document.querySelector('input[name="email"]');
+    
+    // Phone validation
+    if (phoneInput.value.length !== 9) {
+        e.preventDefault();
+        alert('Phone number must be exactly 9 digits after 255');
+        phoneInput.focus();
+        return;
+    }
+    
+    // NIDA validation
+    if (nidaInput.value && nidaInput.value.length !== 20) {
+        e.preventDefault();
+        alert('NIDA number must be exactly 20 digits or left blank');
+        nidaInput.focus();
+        return;
+    }
+    
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailInput.value)) {
+        e.preventDefault();
+        alert('Please enter a valid email address');
+        emailInput.focus();
+        return;
+    }
     
     // If any password field is filled, all must be filled
     if (currentPassword || newPassword || confirmPassword) {
@@ -566,7 +685,27 @@ document.getElementById('profileForm').addEventListener('submit', function(e) {
             alert('Profile image must be less than 300KB.');
             return;
         }
+        
+        // Check file type
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+            e.preventDefault();
+            alert('Only JPG, JPEG, PNG, and GIF files are allowed.');
+            return;
+        }
     }
+    
+    // Show loading state on submit button
+    const submitBtn = this.querySelector('button[type="submit"]');
+    const originalText = submitBtn.innerHTML;
+    submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Saving...';
+    submitBtn.disabled = true;
+    
+    // Re-enable after 10 seconds (fallback)
+    setTimeout(() => {
+        submitBtn.innerHTML = originalText;
+        submitBtn.disabled = false;
+    }, 10000);
 });
 
 // Auto-hide alerts after 5 seconds
@@ -574,7 +713,9 @@ setTimeout(function() {
     const alerts = document.querySelectorAll('.alert');
     alerts.forEach(alert => {
         const bsAlert = new bootstrap.Alert(alert);
-        bsAlert.close();
+        setTimeout(() => {
+            bsAlert.close();
+        }, 500);
     });
 }, 5000);
 </script>
@@ -595,8 +736,8 @@ setTimeout(function() {
     box-shadow: 0 6px 20px rgba(0,0,0,0.12);
 }
 .card-header{
-     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    color: var(--white);
+    background: linear-gradient(135deg, #3B9DB3, #2d7c8f);
+    color: white;
 }
 
 .form-control:focus, .form-select:focus {
@@ -618,6 +759,12 @@ setTimeout(function() {
     background-color: #e9ecef;
 }
 
+.input-group-text {
+    background-color: #e9ecef;
+    color: #495057;
+    font-weight: 500;
+}
+
 @media (max-width: 768px) {
     .row .col-md-4, .row .col-md-6 {
         margin-bottom: 1rem;
@@ -630,6 +777,21 @@ setTimeout(function() {
     
     .btn-group .btn {
         margin-bottom: 0.5rem;
+        width: 100%;
+    }
+    
+    .d-flex.justify-content-between {
+        flex-direction: column;
+        gap: 15px;
+    }
+    
+    .d-flex.justify-content-between > div:last-child {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .d-flex.justify-content-between .btn {
         width: 100%;
     }
 }

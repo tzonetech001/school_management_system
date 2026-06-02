@@ -525,9 +525,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             </a>
                         </div>
                         
-                        <div class="user-type-hint" id="userTypeHint">
-                            <i class="fas fa-shield-alt"></i> System auto-detects your user type <i class="fas fa-graduation-cap"></i>
-                        </div>
+                       
                     </form>
                 </div>
             </div>
@@ -543,11 +541,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
-                    <h6 class="text-danger"><i class="fas fa-crown me-2"></i>Super Admin Login:</h6>
-                    <ul>
-                        <li><strong>Email:</strong> tzone@gmail.com</li>
-                        <li><strong>Password:</strong> (Your Super Admin password)</li>
-                    </ul>
+                    
                     
                     <h6 class="text-primary"><i class="fas fa-user-shield me-2"></i>Staff Login:</h6>
                     <ul>
@@ -724,9 +718,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const username = e.target.value;
             const hint = document.getElementById('userTypeHint');
             
-            if (username === 'tzone@gmail.com') {
-                hint.innerHTML = '<i class="fas fa-crown text-danger"></i> Super Admin login detected <i class="fas fa-shield-alt"></i> <span class="super-badge">SUPER</span>';
-            } else if (username.includes('@')) {
+            if (username === 'email')  {
                 hint.innerHTML = '<i class="fas fa-shield-alt text-primary"></i> Staff login detected <i class="fas fa-user-shield"></i>';
             } else if (username.toUpperCase().startsWith('ADM') || username.match(/^[0-9]+$/)) {
                 hint.innerHTML = '<i class="fas fa-graduation-cap text-success"></i> Student login detected <i class="fas fa-user-graduate"></i>';

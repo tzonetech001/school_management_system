@@ -1,4 +1,5 @@
 <?php
+// help.php - Help & Support Center WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -11,6 +12,7 @@ if (!isset($_SESSION['admin_id']) && !isset($_SESSION['student_id'])) {
 $is_admin = isset($_SESSION['admin_id']);
 $user_id = $is_admin ? $_SESSION['admin_id'] : $_SESSION['student_id'];
 $user_type = $is_admin ? 'Teacher' : 'student';
+$current_school_id = null;
 
 // Load user's theme settings (for admins)
 $colors = [];
@@ -19,23 +21,47 @@ $preferences = [];
 if ($is_admin) {
     $admin_id = $user_id;
     
-    // Get theme colors
-    $color_query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $admin_id";
-    $color_result = mysqli_query($conn, $color_query);
+    // ========== GET CURRENT SCHOOL ID ==========
+    $school_query = "SELECT school_id FROM admins WHERE id = ?";
+    $stmt = $conn->prepare($school_query);
+    $stmt->bind_param("i", $admin_id);
+    $stmt->execute();
+    $school_result = $stmt->get_result();
+    $current_admin_data = $school_result->fetch_assoc();
+    $current_school_id = $current_admin_data['school_id'] ?? 1;
+    
+    // Get theme colors (with school_id)
+    $color_query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = ? AND school_id = ?";
+    $stmt = $conn->prepare($color_query);
+    $stmt->bind_param("ii", $admin_id, $current_school_id);
+    $stmt->execute();
+    $color_result = $stmt->get_result();
     if ($color_result) {
-        while ($row = mysqli_fetch_assoc($color_result)) {
+        while ($row = $color_result->fetch_assoc()) {
             $colors[$row['setting_key']] = $row['setting_value'];
         }
     }
     
-    // Get preferences
-    $pref_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = $admin_id";
-    $pref_result = mysqli_query($conn, $pref_query);
+    // Get preferences (with school_id)
+    $pref_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = ? AND school_id = ?";
+    $stmt = $conn->prepare($pref_query);
+    $stmt->bind_param("ii", $admin_id, $current_school_id);
+    $stmt->execute();
+    $pref_result = $stmt->get_result();
     if ($pref_result) {
-        while ($row = mysqli_fetch_assoc($pref_result)) {
+        while ($row = $pref_result->fetch_assoc()) {
             $preferences[$row['preference_key']] = $row['preference_value'];
         }
     }
+} else {
+    // For students, get school_id from students table
+    $student_sql = "SELECT school_id FROM students WHERE id = ?";
+    $stmt = $conn->prepare($student_sql);
+    $stmt->bind_param("i", $user_id);
+    $stmt->execute();
+    $student_result = $stmt->get_result();
+    $current_student_data = $student_result->fetch_assoc();
+    $current_school_id = $current_student_data['school_id'] ?? 1;
 }
 
 // Default theme colors
@@ -55,19 +81,22 @@ foreach ($default_colors as $key => $value) {
     }
 }
 
-// Get current user info
+// Get current user info (with school_id)
 if ($is_admin) {
-    // Get admin info with roles
+    // Get admin info with roles (with school_id)
     $user_sql = "SELECT a.*, 
                 GROUP_CONCAT(DISTINCT ar.role_name ORDER BY ara.is_primary DESC, ar.role_name SEPARATOR ', ') as roles,
                 GROUP_CONCAT(DISTINCT CASE WHEN ara.is_primary = 1 THEN ar.role_name END) as primary_role
                 FROM admins a
                 LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
                 LEFT JOIN admin_roles ar ON ara.role_id = ar.id
-                WHERE a.id = $user_id
+                WHERE a.id = ? AND a.school_id = ?
                 GROUP BY a.id";
-    $user_result = mysqli_query($conn, $user_sql);
-    $current_user = mysqli_fetch_assoc($user_result);
+    $stmt = $conn->prepare($user_sql);
+    $stmt->bind_param("ii", $user_id, $current_school_id);
+    $stmt->execute();
+    $user_result = $stmt->get_result();
+    $current_user = $user_result->fetch_assoc();
     $user_name = $current_user['first_name'] . ' ' . $current_user['last_name'];
     $user_role = $current_user['primary_role'] ?: 'Staff';
     
@@ -77,20 +106,23 @@ if ($is_admin) {
     $is_academic_master = strpos($current_user['roles'], 'Academic Master') !== false;
     $is_second_master = strpos($current_user['roles'], 'Second Master') !== false;
     
-    // Users who can see all messages
+    // Users who can see all messages in their school
     $can_see_all = $is_super_admin || $is_head_master || $is_academic_master || $is_second_master;
     
 } else {
-    // Get student info
-    $student_sql = "SELECT * FROM students WHERE id = $user_id";
-    $student_result = mysqli_query($conn, $student_sql);
-    $current_user = mysqli_fetch_assoc($student_result);
+    // Get student info (with school_id)
+    $student_sql = "SELECT * FROM students WHERE id = ? AND school_id = ?";
+    $stmt = $conn->prepare($student_sql);
+    $stmt->bind_param("ii", $user_id, $current_school_id);
+    $stmt->execute();
+    $student_result = $stmt->get_result();
+    $current_user = $student_result->fetch_assoc();
     $user_name = $current_user['first_name'] . ' ' . $current_user['last_name'];
     $user_role = 'Student';
     $can_see_all = false;
 }
 
-// Handle form submission for new message
+// Handle form submission for new message (with school_id)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
     $subject = mysqli_real_escape_string($conn, $_POST['subject']);
     $message = mysqli_real_escape_string($conn, $_POST['message']);
@@ -98,11 +130,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
     
     if (!empty($subject) && !empty($message)) {
         $insert_sql = "INSERT INTO support_messages 
-                      (user_id, user_type, user_name, user_role, subject, message, priority, status) 
-                      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')";
+                      (user_id, user_type, user_name, user_role, subject, message, priority, status, school_id) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)";
         
         $stmt = $conn->prepare($insert_sql);
-        $stmt->bind_param("issssss", $user_id, $user_type, $user_name, $user_role, $subject, $message, $priority);
+        $stmt->bind_param("issssssi", $user_id, $user_type, $user_name, $user_role, $subject, $message, $priority, $current_school_id);
         
         if ($stmt->execute()) {
             $_SESSION['success'] = "Your message has been sent successfully! Support team will respond shortly.";
@@ -118,26 +150,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_message'])) {
     exit();
 }
 
-// Handle reply submission (for admins only)
+// Handle reply submission (for admins only, with school_id)
 if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_reply'])) {
     $message_id = intval($_POST['message_id']);
     $reply_message = mysqli_real_escape_string($conn, $_POST['reply_message']);
     $is_private = isset($_POST['is_private']) ? 1 : 0;
     
-    if (!empty($reply_message)) {
-        // Insert reply
+    // Verify message belongs to current school
+    $verify_sql = "SELECT id FROM support_messages WHERE id = ? AND school_id = ?";
+    $stmt = $conn->prepare($verify_sql);
+    $stmt->bind_param("ii", $message_id, $current_school_id);
+    $stmt->execute();
+    $verify_result = $stmt->get_result();
+    
+    if ($verify_result->num_rows > 0 && !empty($reply_message)) {
+        // Insert reply (with school_id)
         $insert_sql = "INSERT INTO support_replies 
-                      (message_id, reply_by, reply_by_name, reply_by_role, reply_message, is_private) 
-                      VALUES (?, ?, ?, ?, ?, ?)";
+                      (message_id, reply_by, reply_by_name, reply_by_role, reply_message, is_private, school_id) 
+                      VALUES (?, ?, ?, ?, ?, ?, ?)";
         
         $stmt = $conn->prepare($insert_sql);
-        $stmt->bind_param("iisssi", $message_id, $user_id, $user_name, $user_role, $reply_message, $is_private);
+        $stmt->bind_param("iisssii", $message_id, $user_id, $user_name, $user_role, $reply_message, $is_private, $current_school_id);
         
         if ($stmt->execute()) {
             // Update message status
-            $update_sql = "UPDATE support_messages SET status = 'replied', updated_at = NOW() WHERE id = ?";
+            $update_sql = "UPDATE support_messages SET status = 'replied', updated_at = NOW() WHERE id = ? AND school_id = ?";
             $update_stmt = $conn->prepare($update_sql);
-            $update_stmt->bind_param("i", $message_id);
+            $update_stmt->bind_param("ii", $message_id, $current_school_id);
             $update_stmt->execute();
             
             $_SESSION['success'] = "Reply sent successfully!";
@@ -145,21 +184,23 @@ if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_rep
             $_SESSION['error'] = "Failed to send reply.";
         }
         $stmt->close();
+    } else {
+        $_SESSION['error'] = "Message not found or you don't have permission.";
     }
     
     header("Location: help.php");
     exit();
 }
 
-// Handle status update (for admins only)
+// Handle status update (for admins only, with school_id)
 if ($is_admin && isset($_GET['update_status']) && isset($_GET['id'])) {
     $message_id = intval($_GET['id']);
     $new_status = mysqli_real_escape_string($conn, $_GET['update_status']);
     
     if (in_array($new_status, ['pending', 'replied', 'closed'])) {
-        $update_sql = "UPDATE support_messages SET status = ?, updated_at = NOW() WHERE id = ?";
+        $update_sql = "UPDATE support_messages SET status = ?, updated_at = NOW() WHERE id = ? AND school_id = ?";
         $stmt = $conn->prepare($update_sql);
-        $stmt->bind_param("si", $new_status, $message_id);
+        $stmt->bind_param("sii", $new_status, $message_id, $current_school_id);
         
         if ($stmt->execute()) {
             $_SESSION['success'] = "Message status updated successfully!";
@@ -171,14 +212,14 @@ if ($is_admin && isset($_GET['update_status']) && isset($_GET['id'])) {
     exit();
 }
 
-// Handle assignment (for admins only)
+// Handle assignment (for admins only, with school_id)
 if ($is_admin && isset($_GET['assign_to']) && isset($_GET['id'])) {
     $message_id = intval($_GET['id']);
     $assigned_to = intval($_GET['assign_to']);
     
-    $update_sql = "UPDATE support_messages SET assigned_to = ?, updated_at = NOW() WHERE id = ?";
+    $update_sql = "UPDATE support_messages SET assigned_to = ?, updated_at = NOW() WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($update_sql);
-    $stmt->bind_param("ii", $assigned_to, $message_id);
+    $stmt->bind_param("iii", $assigned_to, $message_id, $current_school_id);
     
     if ($stmt->execute()) {
         $_SESSION['success'] = "Message assigned successfully!";
@@ -189,12 +230,13 @@ if ($is_admin && isset($_GET['assign_to']) && isset($_GET['id'])) {
     exit();
 }
 
-// Get user's messages
+// Get user's messages (with school_id)
 if ($is_admin && $can_see_all) {
-    // Admins with permission can see all messages
+    // Admins with permission can see all messages from their school
     $messages_sql = "SELECT m.*, 
-                    (SELECT COUNT(*) FROM support_replies WHERE message_id = m.id) as reply_count
+                    (SELECT COUNT(*) FROM support_replies WHERE message_id = m.id AND school_id = ?) as reply_count
                     FROM support_messages m 
+                    WHERE m.school_id = ?
                     ORDER BY 
                         CASE 
                             WHEN m.status = 'pending' THEN 1 
@@ -202,47 +244,62 @@ if ($is_admin && $can_see_all) {
                             ELSE 3 
                         END,
                         m.created_at DESC";
+    $stmt = $conn->prepare($messages_sql);
+    $stmt->bind_param("ii", $current_school_id, $current_school_id);
+    $stmt->execute();
+    $messages_result = $stmt->get_result();
 } else if ($is_admin) {
-    // Regular admins can only see messages they created or are assigned to
+    // Regular admins can only see messages they created or are assigned to (from their school)
     $messages_sql = "SELECT m.*, 
-                    (SELECT COUNT(*) FROM support_replies WHERE message_id = m.id) as reply_count
+                    (SELECT COUNT(*) FROM support_replies WHERE message_id = m.id AND school_id = ?) as reply_count
                     FROM support_messages m 
-                    WHERE m.user_id = $user_id OR m.assigned_to = $user_id
+                    WHERE (m.user_id = ? OR m.assigned_to = ?) AND m.school_id = ?
                     ORDER BY m.created_at DESC";
+    $stmt = $conn->prepare($messages_sql);
+    $stmt->bind_param("iiii", $current_school_id, $user_id, $user_id, $current_school_id);
+    $stmt->execute();
+    $messages_result = $stmt->get_result();
 } else {
-    // Students can only see their own messages
+    // Students can only see their own messages (from their school)
     $messages_sql = "SELECT m.*, 
-                    (SELECT COUNT(*) FROM support_replies WHERE message_id = m.id) as reply_count
+                    (SELECT COUNT(*) FROM support_replies WHERE message_id = m.id AND school_id = ?) as reply_count
                     FROM support_messages m 
-                    WHERE m.user_id = $user_id AND m.user_type = 'student'
+                    WHERE m.user_id = ? AND m.user_type = 'student' AND m.school_id = ?
                     ORDER BY m.created_at DESC";
+    $stmt = $conn->prepare($messages_sql);
+    $stmt->bind_param("iii", $current_school_id, $user_id, $current_school_id);
+    $stmt->execute();
+    $messages_result = $stmt->get_result();
 }
 
-$messages_result = mysqli_query($conn, $messages_sql);
 $messages = [];
-if ($messages_result && mysqli_num_rows($messages_result) > 0) {
-    while ($row = mysqli_fetch_assoc($messages_result)) {
+if ($messages_result && $messages_result->num_rows > 0) {
+    while ($row = $messages_result->fetch_assoc()) {
         $messages[] = $row;
     }
 }
 
-// Get all admins for assignment (for super admin)
+// Get all admins for assignment (for super admin, from same school)
 $admins_list = [];
-if ($is_super_admin) {
+if ($is_super_admin && $current_school_id) {
     $admins_sql = "SELECT a.id, a.first_name, a.last_name, 
                   GROUP_CONCAT(DISTINCT ar.role_name SEPARATOR ', ') as roles
                   FROM admins a
                   LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
                   LEFT JOIN admin_roles ar ON ara.role_id = ar.id
+                  WHERE a.school_id = ?
                   GROUP BY a.id
                   ORDER BY a.first_name";
-    $admins_result = mysqli_query($conn, $admins_sql);
-    while ($row = mysqli_fetch_assoc($admins_result)) {
+    $stmt = $conn->prepare($admins_sql);
+    $stmt->bind_param("i", $current_school_id);
+    $stmt->execute();
+    $admins_result = $stmt->get_result();
+    while ($row = $admins_result->fetch_assoc()) {
         $admins_list[] = $row;
     }
 }
 
-// Get statistics
+// Get statistics (with school_id)
 $stats_sql = "";
 if ($is_admin && $can_see_all) {
     $stats_sql = "SELECT 
@@ -250,7 +307,11 @@ if ($is_admin && $can_see_all) {
                   SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending,
                   SUM(CASE WHEN status = 'replied' THEN 1 ELSE 0 END) as replied,
                   SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) as closed
-                  FROM support_messages";
+                  FROM support_messages WHERE school_id = ?";
+    $stmt = $conn->prepare($stats_sql);
+    $stmt->bind_param("i", $current_school_id);
+    $stmt->execute();
+    $stats_result = $stmt->get_result();
 } else if ($is_admin) {
     $stats_sql = "SELECT 
                   COUNT(*) as total,
@@ -258,7 +319,11 @@ if ($is_admin && $can_see_all) {
                   SUM(CASE WHEN status = 'replied' THEN 1 ELSE 0 END) as replied,
                   SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) as closed
                   FROM support_messages 
-                  WHERE user_id = $user_id OR assigned_to = $user_id";
+                  WHERE (user_id = ? OR assigned_to = ?) AND school_id = ?";
+    $stmt = $conn->prepare($stats_sql);
+    $stmt->bind_param("iii", $user_id, $user_id, $current_school_id);
+    $stmt->execute();
+    $stats_result = $stmt->get_result();
 } else {
     $stats_sql = "SELECT 
                   COUNT(*) as total,
@@ -266,11 +331,14 @@ if ($is_admin && $can_see_all) {
                   SUM(CASE WHEN status = 'replied' THEN 1 ELSE 0 END) as replied,
                   SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) as closed
                   FROM support_messages 
-                  WHERE user_id = $user_id AND user_type = 'student'";
+                  WHERE user_id = ? AND user_type = 'student' AND school_id = ?";
+    $stmt = $conn->prepare($stats_sql);
+    $stmt->bind_param("ii", $user_id, $current_school_id);
+    $stmt->execute();
+    $stats_result = $stmt->get_result();
 }
 
-$stats_result = mysqli_query($conn, $stats_sql);
-$stats = $stats_result ? mysqli_fetch_assoc($stats_result) : ['total' => 0, 'pending' => 0, 'replied' => 0, 'closed' => 0];
+$stats = $stats_result ? $stats_result->fetch_assoc() : ['total' => 0, 'pending' => 0, 'replied' => 0, 'closed' => 0];
 ?>
 
 <?php 
@@ -920,33 +988,6 @@ if ($is_admin) {
         padding-left: 20px;
     }
 
-    /* Contact Card */
-    .contact-card {
-        background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-        color: white;
-        border-radius: 16px;
-        padding: 25px;
-        box-shadow: 0 10px 30px rgba(59, 157, 179, 0.3);
-    }
-
-    .contact-item {
-        display: flex;
-        align-items: center;
-        gap: 15px;
-        margin-bottom: 15px;
-    }
-
-    .contact-item i {
-        width: 40px;
-        height: 40px;
-        background: rgba(255,255,255,0.2);
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 18px;
-    }
-
     /* Admin Controls */
     .admin-controls {
         display: flex;
@@ -1142,7 +1183,7 @@ if ($is_admin) {
             
             <div class="faq-item">
                 <div class="faq-question">5. Who can see my support messages?</div>
-                <div class="faq-answer">Your messages are visible to school administrators including Head Master, Academic Master, and Second Master. It can see all messages and assign them to specific staff members.</div>
+                <div class="faq-answer">Your messages are visible to school administrators including Head Master, Academic Master, and Second Master. They can see all messages and assign them to specific staff members.</div>
             </div>
         </div>
 
@@ -1158,15 +1199,18 @@ if ($is_admin) {
         <?php else: ?>
             <?php foreach ($messages as $msg): ?>
                 <?php
-                // Get replies for this message
+                // Get replies for this message (with school_id)
                 $replies_sql = "SELECT r.*, a.first_name, a.last_name 
                                FROM support_replies r
                                LEFT JOIN admins a ON r.reply_by = a.id
-                               WHERE r.message_id = {$msg['id']}
+                               WHERE r.message_id = ? AND r.school_id = ?
                                ORDER BY r.created_at ASC";
-                $replies_result = mysqli_query($conn, $replies_sql);
+                $stmt = $conn->prepare($replies_sql);
+                $stmt->bind_param("ii", $msg['id'], $current_school_id);
+                $stmt->execute();
+                $replies_result = $stmt->get_result();
                 $replies = [];
-                while ($reply = mysqli_fetch_assoc($replies_result)) {
+                while ($reply = $replies_result->fetch_assoc()) {
                     $replies[] = $reply;
                 }
                 ?>
@@ -1181,7 +1225,6 @@ if ($is_admin) {
                                 <h5><?php echo htmlspecialchars($msg['user_name']); ?></h5>
                                 <small>
                                     <i class="fas fa-user-tag me-1"></i><?php echo htmlspecialchars($msg['user_role']); ?>
-                                    
                                 </small>
                             </div>
                         </div>
@@ -1328,7 +1371,7 @@ if ($is_admin) {
         <div class="contact-group">
             <div class="group-header">
                 <i class="fas fa-laptop-code"></i>
-                <h6>IT Support (Tzonetech)</h6>
+                <h6>IT Support</h6>
             </div>
             <div class="group-content">
                 <div class="contact-row">
@@ -1336,20 +1379,9 @@ if ($is_admin) {
                         <i class="fas fa-phone"></i>
                     </div>
                     <div class="contact-details">
-                        <span class="contact-label">Phone 1</span>
+                        <span class="contact-label">Phone</span>
                         <a href="tel:+255714343162" class="contact-number">
                             <strong>+255 714 343 162</strong>
-                        </a>
-                    </div>
-                </div>
-                <div class="contact-row">
-                    <div class="contact-icon">
-                        <i class="fas fa-phone"></i>
-                    </div>
-                    <div class="contact-details">
-                        <span class="contact-label">Phone 2</span>
-                        <a href="tel:+255619844080" class="contact-number">
-                            <strong>+255 619 844 080</strong>
                         </a>
                     </div>
                 </div>
@@ -1359,8 +1391,8 @@ if ($is_admin) {
                     </div>
                     <div class="contact-details">
                         <span class="contact-label">Email</span>
-                        <a href="mailto:it@muyovozi.sch.tz" class="contact-email">
-                            <strong>it@muyovozi.sch.tz</strong>
+                        <a href="mailto:it@school.ac.tz" class="contact-email">
+                            <strong>it@school.ac.tz</strong>
                         </a>
                     </div>
                 </div>
@@ -1391,18 +1423,9 @@ if ($is_admin) {
                     </div>
                     <div class="contact-details">
                         <span class="contact-label">Email</span>
-                        <a href="mailto:headmaster@muyovozi.sch.tz" class="contact-email">
-                            <strong>headmaster@muyovozi.sch.tz</strong>
+                        <a href="mailto:headmaster@school.ac.tz" class="contact-email">
+                            <strong>headmaster@school.ac.tz</strong>
                         </a>
-                    </div>
-                </div>
-                <div class="contact-row">
-                    <div class="contact-icon">
-                        <i class="fas fa-calendar-alt"></i>
-                    </div>
-                    <div class="contact-details">
-                        <span class="contact-label">Office Hours</span>
-                        <span class="contact-text">Mon-Fri: 8:00 AM - 3:00 PM</span>
                     </div>
                 </div>
             </div>
@@ -1432,18 +1455,9 @@ if ($is_admin) {
                     </div>
                     <div class="contact-details">
                         <span class="contact-label">Email</span>
-                        <a href="mailto:academic@muyovozi.sch.tz" class="contact-email">
-                            <strong>academic@muyovozi.sch.tz</strong>
+                        <a href="mailto:academic@school.ac.tz" class="contact-email">
+                            <strong>academic@school.ac.tz</strong>
                         </a>
-                    </div>
-                </div>
-                <div class="contact-row">
-                    <div class="contact-icon">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <div class="contact-details">
-                        <span class="contact-label">Office Hours</span>
-                        <span class="contact-text">Mon-Fri: 8:00 AM - 4:00 PM</span>
                     </div>
                 </div>
             </div>
@@ -1473,18 +1487,9 @@ if ($is_admin) {
                     </div>
                     <div class="contact-details">
                         <span class="contact-label">Email</span>
-                        <a href="mailto:secondmaster@muyovozi.sch.tz" class="contact-email">
-                            <strong>secondmaster@muyovozi.sch.tz</strong>
+                        <a href="mailto:secondmaster@school.ac.tz" class="contact-email">
+                            <strong>secondmaster@school.ac.tz</strong>
                         </a>
-                    </div>
-                </div>
-                <div class="contact-row">
-                    <div class="contact-icon">
-                        <i class="fas fa-clock"></i>
-                    </div>
-                    <div class="contact-details">
-                        <span class="contact-label">Office Hours</span>
-                        <span class="contact-text">Mon-Fri: 8:00 AM - 4:00 PM</span>
                     </div>
                 </div>
             </div>
@@ -1496,9 +1501,9 @@ if ($is_admin) {
         <div class="action-buttons">
             <a href="tel:+255714343162" class="action-btn emergency">
                 <i class="fas fa-phone-alt"></i>
-                <span>Emergency IT Support</span>
+                <span>Emergency Support</span>
             </a>
-            <a href="mailto:support@muyovozi.sch.tz" class="action-btn email">
+            <a href="mailto:support@school.ac.tz" class="action-btn email">
                 <i class="fas fa-envelope"></i>
                 <span>General Support</span>
             </a>
@@ -1513,7 +1518,7 @@ if ($is_admin) {
     <div class="contact-footer">
         <div class="info-item">
             <i class="fas fa-building"></i>
-            <span>Muyovozi High School, P.O. Box 123, Tanzania</span>
+            <span>P.O. Box 123, Tanzania</span>
         </div>
         <div class="info-item">
             <i class="fas fa-clock"></i>

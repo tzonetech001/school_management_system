@@ -420,9 +420,7 @@ if ($bg_option === 'image') {
                         <div class="school-main-name">
                             <?php if ($is_super_admin): ?>
                                 Super Admin Dashboard
-                                <span class="super-admin-badge">
-                                    <i class="fas fa-crown me-1"></i>System Admin
-                                </span>
+                                
                             <?php else: ?>
                                 <?php echo htmlspecialchars($school_name); ?>
                             <?php endif; ?>
