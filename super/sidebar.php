@@ -354,15 +354,6 @@ $sidebar_collapsed = isset($preferences['sidebar_collapsed']) && $preferences['s
             <span><i class="fas fa-building me-1"></i> SCHOOLS</span>
         </li>
 
-         <li class="sidebar-item <?php echo is_active(['add_admin.php'], $current_page) ? 'active' : ''; ?>">
-            <a href="../super/add_admin.php">
-                <i class="fas fa-user-plus"></i>
-                <span>Add School Admin</span>
-            </a>
-        </li>
-
-       
-
 
         <!-- Manage All Schools -->
         <li class="sidebar-item <?php echo is_active(['schools.php', 'view_school.php', 'edit_school.php'], $current_page) ? 'active' : ''; ?>">

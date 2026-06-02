@@ -1,5 +1,5 @@
 <?php
-// register_admin.php
+// register_admin.php - WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -9,10 +9,22 @@ $success = '';
 // Check if user has permission (Head Master only)
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
-// Get current user's roles
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
-$stmt = $conn->prepare($user_roles_sql);
+// ========== GET CURRENT SCHOOL ID ==========
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
 $stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+
+// Get current user's roles (filter by school_id)
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
+$stmt = $conn->prepare($user_roles_sql);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -42,10 +54,10 @@ $preferences = [];
 if (isset($_SESSION['admin_id'])) {
     $current_admin_id = $_SESSION['admin_id'];
     
-    // Get theme colors
-    $color_query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = ?";
+    // Get theme colors (filter by school_id)
+    $color_query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = ? AND school_id = ?";
     $stmt = $conn->prepare($color_query);
-    $stmt->bind_param("i", $current_admin_id);
+    $stmt->bind_param("ii", $current_admin_id, $current_school_id);
     $stmt->execute();
     $color_result = $stmt->get_result();
     if ($color_result) {
@@ -54,10 +66,10 @@ if (isset($_SESSION['admin_id'])) {
         }
     }
     
-    // Get preferences
-    $pref_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = ?";
+    // Get preferences (filter by school_id)
+    $pref_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = ? AND school_id = ?";
     $stmt = $conn->prepare($pref_query);
-    $stmt->bind_param("i", $current_admin_id);
+    $stmt->bind_param("ii", $current_admin_id, $current_school_id);
     $stmt->execute();
     $pref_result = $stmt->get_result();
     if ($pref_result) {
@@ -89,7 +101,6 @@ $default_colors = [
     'aqua_blue' => '#4dd2ff'
 ];
 
-// Merge colors with defaults
 foreach ($default_colors as $key => $value) {
     if (!isset($colors[$key])) {
         $colors[$key] = $value;
@@ -192,11 +203,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Please select a primary role.";
     }
     
-    // Check if email already exists
+    // Check if email already exists for SAME SCHOOL
     if (empty($error)) {
-        $check_email_sql = "SELECT id FROM admins WHERE email = ?";
+        $check_email_sql = "SELECT id FROM admins WHERE email = ? AND school_id = ?";
         $stmt = $conn->prepare($check_email_sql);
-        $stmt->bind_param("s", $email);
+        $stmt->bind_param("si", $email, $current_school_id);
         $stmt->execute();
         $check_result = $stmt->get_result();
         if ($check_result->num_rows > 0) {
@@ -204,11 +215,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    // Check if phone already exists
+    // Check if phone already exists for SAME SCHOOL
     if (empty($error)) {
-        $check_phone_sql = "SELECT id FROM admins WHERE phone_number = ?";
+        $check_phone_sql = "SELECT id FROM admins WHERE phone_number = ? AND school_id = ?";
         $stmt = $conn->prepare($check_phone_sql);
-        $stmt->bind_param("s", $phone_number);
+        $stmt->bind_param("si", $phone_number, $current_school_id);
         $stmt->execute();
         $check_result = $stmt->get_result();
         if ($check_result->num_rows > 0) {
@@ -216,11 +227,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    // Check if NIDA already exists (only if NIDA is provided)
+    // Check if NIDA already exists for SAME SCHOOL (only if NIDA is provided)
     if (empty($error) && !empty($nida)) {
-        $check_nida_sql = "SELECT id FROM admins WHERE nida = ?";
+        $check_nida_sql = "SELECT id FROM admins WHERE nida = ? AND school_id = ?";
         $stmt = $conn->prepare($check_nida_sql);
-        $stmt->bind_param("s", $nida);
+        $stmt->bind_param("si", $nida, $current_school_id);
         $stmt->execute();
         $check_result = $stmt->get_result();
         if ($check_result->num_rows > 0) {
@@ -239,15 +250,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             // Handle NIDA - set to NULL if empty
             if (empty($nida) || trim($nida) === '') {
-                $sql = "INSERT INTO admins (first_name, middle_name, last_name, sex, email, check_number, phone_number, password) 
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
-                $stmt = $conn->prepare($sql);
-                $stmt->bind_param("ssssssss", $first_name, $middle_name, $last_name, $sex, $email, $check_number, $phone_number, $hashed_password);
-            } else {
-                $sql = "INSERT INTO admins (first_name, middle_name, last_name, sex, email, check_number, phone_number, nida, password) 
+                $sql = "INSERT INTO admins (first_name, middle_name, last_name, sex, email, check_number, phone_number, password, school_id) 
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
                 $stmt = $conn->prepare($sql);
-                $stmt->bind_param("sssssssss", $first_name, $middle_name, $last_name, $sex, $email, $check_number, $phone_number, $nida, $hashed_password);
+                $stmt->bind_param("ssssssssi", $first_name, $middle_name, $last_name, $sex, $email, $check_number, $phone_number, $hashed_password, $current_school_id);
+            } else {
+                $sql = "INSERT INTO admins (first_name, middle_name, last_name, sex, email, check_number, phone_number, nida, password, school_id) 
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("sssssssssi", $first_name, $middle_name, $last_name, $sex, $email, $check_number, $phone_number, $nida, $hashed_password, $current_school_id);
             }
             
             if ($stmt->execute()) {
@@ -269,12 +280,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 mysqli_commit($conn);
                 
                 // Log the registration
-                $log_sql = "INSERT INTO admin_logs (admin_id, action, description, ip_address) 
-                           VALUES (?, 'register_teacher', ?, ?)";
+                $log_sql = "INSERT INTO admin_logs (admin_id, action, description, ip_address, school_id) 
+                           VALUES (?, 'register_teacher', ?, ?, ?)";
                 $log_stmt = $conn->prepare($log_sql);
                 $description = "Registered new teacher: $first_name $last_name (ID: $new_admin_id)";
                 $ip_address = $_SERVER['REMOTE_ADDR'];
-                $log_stmt->bind_param("iss", $admin_id, $description, $ip_address);
+                $log_stmt->bind_param("issi", $admin_id, $description, $ip_address, $current_school_id);
                 $log_stmt->execute();
                 
                 $_SESSION['success'] = "Teacher registered successfully! Temporary password: " . $temp_password;
@@ -290,9 +301,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
 }
-?>
 
-<?php 
 // Calculate sidebar class
 $sidebarClass = ($preferences['sidebar_collapsed'] == '1') ? 'sidebar-hidden' : '';
 ?>
@@ -300,6 +309,7 @@ $sidebarClass = ($preferences['sidebar_collapsed'] == '1') ? 'sidebar-hidden' : 
 <?php include '../controller/header.php'; ?>
 <?php include '../controller/sidebar.php'; ?>
 
+<!-- HTML STAYS THE SAME - NO CHANGES NEEDED BELOW THIS LINE -->
 <style>
     :root {
         --primary-color: <?php echo $colors['primary']; ?>;
@@ -1280,11 +1290,9 @@ function toggleRoleCard(checkbox, roleId) {
         }
     }
     
-    // Update primary role options
     updatePrimaryRadios();
 }
 
-// Update primary role radios based on selected checkboxes
 function updatePrimaryRadios() {
     const checkboxes = document.querySelectorAll('.role-checkbox');
     let hasChecked = false;
@@ -1304,7 +1312,6 @@ function updatePrimaryRadios() {
         }
     });
     
-    // If no roles selected, disable all radios
     if (!hasChecked) {
         document.querySelectorAll('.primary-radio').forEach(radio => {
             radio.disabled = true;
@@ -1312,9 +1319,7 @@ function updatePrimaryRadios() {
     }
 }
 
-// Validation function for step 1
 function validateStep1() {
-    // Get all required fields
     const firstName = document.getElementById('first_name');
     const lastName = document.getElementById('last_name');
     const email = document.getElementById('email');
@@ -1326,14 +1331,12 @@ function validateStep1() {
     let isValid = true;
     let errorMessage = '';
     
-    // Reset validation styles
     [firstName, lastName, email].forEach(field => {
         field.classList.remove('is-invalid');
     });
     phoneInput.classList.remove('is-invalid');
     nida.classList.remove('is-invalid');
     
-    // Validate each field
     if (!firstName.value.trim()) {
         firstName.classList.add('is-invalid');
         errorMessage = 'First name is required';
@@ -1351,7 +1354,6 @@ function validateStep1() {
         isValid = false;
     }
     
-    // Email validation
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!email.value.trim() || !emailRegex.test(email.value)) {
         email.classList.add('is-invalid');
@@ -1359,7 +1361,6 @@ function validateStep1() {
         isValid = false;
     }
     
-    // Phone validation (255 followed by exactly 9 digits)
     const phoneRegex = /^255\d{9}$/;
     if (!phoneInput.value.trim() || !phoneRegex.test(phoneNumber)) {
         phoneInput.classList.add('is-invalid');
@@ -1367,7 +1368,6 @@ function validateStep1() {
         isValid = false;
     }
     
-    // NIDA validation (if provided)
     if (nida.value.trim() && nida.value.length !== 20) {
         nida.classList.add('is-invalid');
         if (!errorMessage) errorMessage = 'NIDA number must be exactly 20 digits or left blank';
@@ -1375,14 +1375,12 @@ function validateStep1() {
     }
     
     if (!isValid) {
-        // Show validation error modal
         document.getElementById('validationErrorTitle').textContent = 'Form Validation Error';
         document.getElementById('validationErrorMessage').textContent = errorMessage;
         
         const errorModal = new bootstrap.Modal(document.getElementById('validationErrorModal'));
         errorModal.show();
         
-        // Scroll to first error after modal is shown
         setTimeout(() => {
             const firstInvalid = document.querySelector('.is-invalid');
             if (firstInvalid) {
@@ -1402,17 +1400,12 @@ function goToStep2() {
         document.getElementById('step1').style.display = 'none';
         document.getElementById('step2').style.display = 'block';
         
-        // Update progress indicators
         document.getElementById('step1Indicator').classList.remove('active');
         document.getElementById('step1Indicator').classList.add('completed');
         document.getElementById('step2Indicator').classList.add('active');
         
         currentStep = 2;
-        
-        // Enable/disable radio buttons based on checked state
         updatePrimaryRadios();
-        
-        // Scroll to top of form
         document.querySelector('.form-card').scrollIntoView({ behavior: 'smooth' });
     }
 }
@@ -1421,22 +1414,17 @@ function goToStep1() {
     document.getElementById('step2').style.display = 'none';
     document.getElementById('step1').style.display = 'block';
     
-    // Update progress indicators
     document.getElementById('step1Indicator').classList.remove('completed');
     document.getElementById('step1Indicator').classList.add('active');
     document.getElementById('step2Indicator').classList.remove('active');
     
     currentStep = 1;
-    
-    // Scroll to top of form
     document.querySelector('.form-card').scrollIntoView({ behavior: 'smooth' });
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    // Initialize role cards
     updatePrimaryRadios();
     
-    // Initialize selected role cards
     document.querySelectorAll('.role-checkbox:checked').forEach(checkbox => {
         const card = checkbox.closest('.role-card');
         if (card) {
@@ -1444,35 +1432,28 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Event listeners for navigation buttons
     document.getElementById('nextStepBtn').addEventListener('click', goToStep2);
     document.getElementById('prevStepBtn').addEventListener('click', goToStep1);
     
-    // Enable/disable primary role radio based on checkbox selection
     const checkboxes = document.querySelectorAll('.role-checkbox');
-    
     checkboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
             updatePrimaryRadios();
         });
     });
     
-    // Form validation before submission
     document.getElementById('adminForm').addEventListener('submit', function(e) {
-        // Validate step 1 first
         if (!validateStep1()) {
             e.preventDefault();
             goToStep1();
             return false;
         }
         
-        // Validate roles
-        const checkboxes = document.querySelectorAll('.role-checkbox:checked');
+        const selectedCheckboxes = document.querySelectorAll('.role-checkbox:checked');
         const primaryRadio = document.querySelector('.primary-radio:checked');
         
-        if (checkboxes.length === 0) {
+        if (selectedCheckboxes.length === 0) {
             e.preventDefault();
-            
             Swal.fire({
                 title: 'Role Selection Error',
                 text: 'Please select at least one role',
@@ -1485,7 +1466,6 @@ document.addEventListener('DOMContentLoaded', function() {
         
         if (!primaryRadio) {
             e.preventDefault();
-            
             Swal.fire({
                 title: 'Primary Role Error',
                 text: 'Please select a primary role',
@@ -1496,13 +1476,11 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
         
-        // Show loading state
         const submitBtn = document.getElementById('submitBtn');
         const originalContent = submitBtn.innerHTML;
         submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Registering...';
         submitBtn.disabled = true;
         
-        // Re-enable after 10 seconds if still on page (fallback)
         setTimeout(() => {
             submitBtn.innerHTML = originalContent;
             submitBtn.disabled = false;
@@ -1511,36 +1489,17 @@ document.addEventListener('DOMContentLoaded', function() {
         return true;
     });
     
-    // Remove validation classes when user starts typing
     document.querySelectorAll('#step1 input').forEach(input => {
         input.addEventListener('input', function() {
             this.classList.remove('is-invalid');
         });
     });
     
-    // Phone number formatting - only allow digits and limit to 9 characters
     document.getElementById('phone_number').addEventListener('input', function(e) {
-        // Remove non-numeric characters
         this.value = this.value.replace(/\D/g, '');
-        
-        // Limit to 9 digits
         if (this.value.length > 9) {
             this.value = this.value.slice(0, 9);
         }
-        
-        // Auto-format with dashes for better readability
-        if (this.value.length > 3 && this.value.length <= 6) {
-            const prefix = this.value.substring(0, 3);
-            const suffix = this.value.substring(3);
-            this.placeholder = prefix + '-' + suffix;
-        } else if (this.value.length > 6) {
-            const prefix = this.value.substring(0, 3);
-            const middle = this.value.substring(3, 6);
-            const suffix = this.value.substring(6);
-            this.placeholder = prefix + '-' + middle + '-' + suffix;
-        }
-        
-        // Show validation
         if (this.value.length === 9) {
             this.classList.remove('is-invalid');
         } else if (this.value.length > 0) {
@@ -1548,27 +1507,11 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // NIDA validation
     document.getElementById('nida').addEventListener('input', function(e) {
-        // Allow only digits
         this.value = this.value.replace(/\D/g, '');
-        
-        // Limit to 20 digits
         if (this.value.length > 20) {
             this.value = this.value.slice(0, 20);
         }
-        
-        // Group digits for better readability
-        if (this.value.length > 0) {
-            let formatted = '';
-            for (let i = 0; i < this.value.length; i += 4) {
-                if (i > 0) formatted += '-';
-                formatted += this.value.substring(i, i + 4);
-            }
-            this.placeholder = formatted;
-        }
-        
-        // Show validation
         if (this.value.length > 0 && this.value.length !== 20) {
             this.classList.add('is-invalid');
         } else {
@@ -1576,7 +1519,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Email validation on blur
     document.getElementById('email').addEventListener('blur', function() {
         const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (this.value.trim() && !emailRegex.test(this.value)) {
@@ -1584,7 +1526,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     });
     
-    // Auto-hide error messages after 10 seconds
     setTimeout(() => {
         const errorAlerts = document.querySelectorAll('.alert-danger-custom');
         errorAlerts.forEach(alert => {
@@ -1592,7 +1533,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }, 10000);
     
-    // Show success message if exists in session
     <?php if (isset($_SESSION['success'])): ?>
     Swal.fire({
         title: 'Success!',

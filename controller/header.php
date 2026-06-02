@@ -498,10 +498,12 @@ if ($bg_option === 'image') {
                                     </div>
                                 </div>
                                 <div class="user-dropdown-menu-items">
+                                     <?php if (!$is_super_admin): ?>
                                     <a href="../profile/profile" class="user-dropdown-item">
                                         <i class="fas fa-user-circle"></i>
                                         <span>Profile</span>
                                     </a>
+                                    <?php endif; ?>
                                     <?php if (!$is_super_admin): ?>
                                     <a href="../profile/settings" class="user-dropdown-item">
                                         <i class="fas fa-palette"></i>

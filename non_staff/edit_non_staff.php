@@ -1,5 +1,5 @@
 <?php
-// edit_non_staff.php - Edit Non-Staff Employee
+// edit_non_staff.php - Edit Non-Staff Employee WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -14,10 +14,22 @@ if (!isset($_SESSION['admin_id'])) {
 
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
-// Permission check
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
-$stmt = $conn->prepare($user_roles_sql);
+// ========== GET CURRENT SCHOOL ID ==========
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
 $stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+
+// Permission check (with school_id)
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
+$stmt = $conn->prepare($user_roles_sql);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -47,18 +59,98 @@ if ($edit_id <= 0) {
     exit();
 }
 
-// Load theme settings (same as register_non_staff.php)
-// ... [Include theme loading code same as register_non_staff.php] ...
+// Load theme settings (with school_id)
+$theme_settings = [];
+$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = ? AND school_id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$result = $stmt->get_result();
+if ($result && mysqli_num_rows($result) > 0) {
+    while ($row = mysqli_fetch_assoc($result)) {
+        $theme_settings[$row['setting_key']] = $row['setting_value'];
+    }
+}
 
-// Get employee data
-$sql = "SELECT * FROM non_staff WHERE id = ?";
+$preferences = [];
+$prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = ? AND school_id = ?";
+$stmt = $conn->prepare($prefs_query);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$prefs_result = $stmt->get_result();
+if ($prefs_result && mysqli_num_rows($prefs_result) > 0) {
+    while ($row = mysqli_fetch_assoc($prefs_result)) {
+        $preferences[$row['preference_key']] = $row['preference_value'];
+    }
+}
+
+$default_colors = [
+    'primary' => '#3B9DB3',
+    'primary_dark' => '#2d7c8f',
+    'primary_light' => '#8bc5d6',
+    'success' => '#28a745',
+    'danger' => '#dc3545',
+    'warning' => '#ffc107',
+    'info' => '#17a2b8'
+];
+
+$colors = $default_colors;
+foreach ($theme_settings as $key => $value) {
+    if (array_key_exists($key, $colors) && $value !== null) {
+        $colors[$key] = $value;
+    }
+}
+
+$pref_defaults = [
+    'background_opacity' => '65',
+    'animations' => '1',
+    'font_size' => '16',
+    'compact_mode' => '0',
+    'background_option' => 'image',
+    'sidebar_collapsed' => '0',
+    'animation_speed' => 'normal'
+];
+
+foreach ($pref_defaults as $key => $default) {
+    if (!isset($preferences[$key]) || $preferences[$key] === null) {
+        $preferences[$key] = $default;
+    }
+}
+
+$bg_opacity = isset($preferences['background_opacity']) ? $preferences['background_opacity'] / 100 : 0.65;
+$animations_enabled = $preferences['animations'];
+$font_size = $preferences['font_size'];
+$compact_mode = $preferences['compact_mode'];
+$bg_option = $preferences['background_option'];
+$sidebar_collapsed = $preferences['sidebar_collapsed'];
+$animation_speed = $preferences['animation_speed'];
+
+$animation_speeds = ['slow' => '0.5s', 'normal' => '0.3s', 'fast' => '0.15s'];
+$animation_duration = isset($animation_speeds[$animation_speed]) ? $animation_speeds[$animation_speed] : '0.3s';
+
+$font_size_map = ['10' => '10px', '12' => '12px', '14' => '14px', '16' => '16px', '18' => '18px'];
+$font_size_value = isset($font_size_map[$font_size]) ? $font_size_map[$font_size] : '16px';
+
+$background_colors = ['gray' => '#e9ecef', 'eye_care' => '#c7e9c0', 'milk' => '#fdf5e6', 'dark_light' => '#2d2d2d'];
+
+if ($bg_option === 'image') {
+    $bg_style = "linear-gradient(rgba(255,255,255,{$bg_opacity}), rgba(255,255,255,{$bg_opacity})), url('../muyovozi.png') no-repeat center center fixed";
+    $bg_size = 'cover';
+} else {
+    $bg_color = isset($background_colors[$bg_option]) ? $background_colors[$bg_option] : '#e9ecef';
+    $bg_style = $bg_color;
+    $bg_size = 'auto';
+}
+
+// Get employee data (with school_id verification)
+$sql = "SELECT * FROM non_staff WHERE id = ? AND school_id = ?";
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $edit_id);
+$stmt->bind_param("ii", $edit_id, $current_school_id);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if (!$result || $result->num_rows == 0) {
-    $_SESSION['error'] = "Employee not found.";
+    $_SESSION['error'] = "Employee not found or you don't have permission to edit this employee.";
     header("Location: non_staff.php");
     exit();
 }
@@ -67,7 +159,7 @@ $employee = $result->fetch_assoc();
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // Sanitize inputs (same as register)
+    // Sanitize inputs
     $first_name = mysqli_real_escape_string($conn, trim($_POST['first_name'] ?? ''));
     $middle_name = mysqli_real_escape_string($conn, trim($_POST['middle_name'] ?? ''));
     $last_name = mysqli_real_escape_string($conn, trim($_POST['last_name'] ?? ''));
@@ -88,8 +180,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $notes = mysqli_real_escape_string($conn, trim($_POST['notes'] ?? ''));
     $status = isset($_POST['status']) ? 1 : 0;
     
-    // Validation (same as register)
-    // ... [validation code] ...
+    // Validate required fields
+    if (empty($first_name) || empty($last_name) || empty($sex) || empty($email) || empty($phone_input) || empty($position) || empty($employment_date)) {
+        $error = "Please fill in all required fields.";
+    }
+    
+    // Validate email
+    if (empty($error) && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $error = "Invalid email format.";
+    }
+    
+    // Validate phone number
+    $phone_regex = '/^255\d{9}$/';
+    if (empty($error) && !preg_match($phone_regex, $phone_number)) {
+        $error = "Invalid phone number format. Must be 255 followed by 9 digits.";
+    }
+    
+    // Validate NIDA if provided
+    if (empty($error) && !empty($nida) && strlen($nida) !== 20) {
+        $error = "NIDA number must be exactly 20 digits.";
+    }
+    
+    // Check if email already exists for ANOTHER employee in SAME SCHOOL
+    if (empty($error)) {
+        $check_email_sql = "SELECT id FROM non_staff WHERE email = ? AND id != ? AND school_id = ?";
+        $stmt = $conn->prepare($check_email_sql);
+        $stmt->bind_param("sii", $email, $edit_id, $current_school_id);
+        $stmt->execute();
+        if ($stmt->get_result()->num_rows > 0) {
+            $error = "Email already exists. Please use a different email.";
+        }
+    }
+    
+    // Check if phone already exists for ANOTHER employee in SAME SCHOOL
+    if (empty($error)) {
+        $check_phone_sql = "SELECT id FROM non_staff WHERE phone_number = ? AND id != ? AND school_id = ?";
+        $stmt = $conn->prepare($check_phone_sql);
+        $stmt->bind_param("sii", $phone_number, $edit_id, $current_school_id);
+        $stmt->execute();
+        if ($stmt->get_result()->num_rows > 0) {
+            $error = "Phone number already exists. Please use a different phone number.";
+        }
+    }
+    
+    // Check if NIDA already exists for ANOTHER employee in SAME SCHOOL
+    if (empty($error) && !empty($nida)) {
+        $check_nida_sql = "SELECT id FROM non_staff WHERE nida = ? AND id != ? AND school_id = ?";
+        $stmt = $conn->prepare($check_nida_sql);
+        $stmt->bind_param("sii", $nida, $edit_id, $current_school_id);
+        $stmt->execute();
+        if ($stmt->get_result()->num_rows > 0) {
+            $error = "NIDA number already exists. Please use a different NIDA number.";
+        }
+    }
     
     if (empty($error)) {
         // Handle profile image upload
@@ -114,27 +257,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
-        // Update database
+        // Update database (with school_id verification)
         if (empty($nida)) {
             $sql = "UPDATE non_staff SET first_name=?, middle_name=?, last_name=?, sex=?, email=?, phone_number=?, nida=NULL,
                     position=?, department=?, employment_date=?, contract_type=?, salary_scale=?, work_location=?,
                     emergency_contact_name=?, emergency_contact_phone=?, address=?, profile_image=?, status=?, notes=?
-                    WHERE id=?";
+                    WHERE id=? AND school_id=?";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssssssssssssssssssi", 
+            $stmt->bind_param("ssssssssssssssssssii", 
                 $first_name, $middle_name, $last_name, $sex, $email, $phone_number,
                 $position, $department, $employment_date, $contract_type, $salary_scale, $work_location,
-                $emergency_contact_name, $emergency_contact_phone, $address, $profile_image, $status, $notes, $edit_id);
+                $emergency_contact_name, $emergency_contact_phone, $address, $profile_image, $status, $notes, $edit_id, $current_school_id);
         } else {
             $sql = "UPDATE non_staff SET first_name=?, middle_name=?, last_name=?, sex=?, email=?, phone_number=?, nida=?,
                     position=?, department=?, employment_date=?, contract_type=?, salary_scale=?, work_location=?,
                     emergency_contact_name=?, emergency_contact_phone=?, address=?, profile_image=?, status=?, notes=?
-                    WHERE id=?";
+                    WHERE id=? AND school_id=?";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sssssssssssssssssssi", 
+            $stmt->bind_param("sssssssssssssssssssii", 
                 $first_name, $middle_name, $last_name, $sex, $email, $phone_number, $nida,
                 $position, $department, $employment_date, $contract_type, $salary_scale, $work_location,
-                $emergency_contact_name, $emergency_contact_phone, $address, $profile_image, $status, $notes, $edit_id);
+                $emergency_contact_name, $emergency_contact_phone, $address, $profile_image, $status, $notes, $edit_id, $current_school_id);
         }
         
         if ($stmt->execute()) {
@@ -327,7 +470,6 @@ if (!file_exists($profile_image_url) || empty($employee['profile_image'])) {
         background: <?php echo $bg_style; ?>;
         background-size: <?php echo $bg_size; ?>;
         min-height: 100vh;
-       ;
     }
 </style>
 

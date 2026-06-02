@@ -1,5 +1,5 @@
 <?php
-// view_non_staff.php - AJAX endpoint for employee details
+// view_non_staff.php - AJAX endpoint for employee details WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -15,16 +15,28 @@ if (!isset($_GET['id']) || empty($_GET['id'])) {
     exit();
 }
 
+$admin_id = $_SESSION['admin_id'];
+
+// ========== GET CURRENT SCHOOL ID ==========
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
+$stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+
 $employee_id = intval($_GET['id']);
 
-$sql = "SELECT * FROM non_staff WHERE id = ?";
+// Get employee data (with school_id verification)
+$sql = "SELECT * FROM non_staff WHERE id = ? AND school_id = ?";
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $employee_id);
+$stmt->bind_param("ii", $employee_id, $current_school_id);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if (!$result || $result->num_rows == 0) {
-    echo '<div class="alert alert-danger">Employee not found.</div>';
+    echo '<div class="alert alert-danger">Employee not found or you don\'t have permission to view this employee.</div>';
     exit();
 }
 
@@ -38,11 +50,13 @@ if (!file_exists($profile_image) || empty($employee['profile_image'])) {
     $avatar_url = $profile_image;
 }
 
-// Load theme colors for styling
-$admin_id = $_SESSION['admin_id'];
+// Load theme colors for styling (with school_id)
 $theme_settings = [];
-$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $admin_id";
-$result_theme = mysqli_query($conn, $query);
+$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = ? AND school_id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$result_theme = $stmt->get_result();
 if ($result_theme && mysqli_num_rows($result_theme) > 0) {
     while ($row = mysqli_fetch_assoc($result_theme)) {
         $theme_settings[$row['setting_key']] = $row['setting_value'];

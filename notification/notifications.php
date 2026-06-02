@@ -1,5 +1,5 @@
 <?php
-// notifications.php
+// notifications.php - WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -7,20 +7,33 @@ require_once '../controller/db_connect.php';
 $is_logged_in = isset($_SESSION['admin_id']);
 $admin_id = $is_logged_in ? $_SESSION['admin_id'] : null;
 $is_admin = false;
+$current_school_id = null;
 
 if ($is_logged_in) {
+    // ========== GET CURRENT SCHOOL ID ==========
+    $school_query = "SELECT school_id FROM admins WHERE id = ?";
+    $stmt = $conn->prepare($school_query);
+    $stmt->bind_param("i", $admin_id);
+    $stmt->execute();
+    $school_result = $stmt->get_result();
+    $current_admin_data = $school_result->fetch_assoc();
+    $current_school_id = $current_admin_data['school_id'] ?? 1;
+    
     // Get admin info and check if they are admin (Head Master or Second Master)
     $admin_sql = "SELECT a.*, 
                  GROUP_CONCAT(DISTINCT ar.role_name) as roles
                  FROM admins a
                  LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
                  LEFT JOIN admin_roles ar ON ara.role_id = ar.id
-                 WHERE a.id = $admin_id
+                 WHERE a.id = ? AND a.school_id = ?
                  GROUP BY a.id";
-    $admin_result = mysqli_query($conn, $admin_sql);
+    $stmt = $conn->prepare($admin_sql);
+    $stmt->bind_param("ii", $admin_id, $current_school_id);
+    $stmt->execute();
+    $admin_result = $stmt->get_result();
     
-    if ($admin_result && mysqli_num_rows($admin_result) > 0) {
-        $admin_info = mysqli_fetch_assoc($admin_result);
+    if ($admin_result && $admin_result->num_rows > 0) {
+        $admin_info = $admin_result->fetch_assoc();
         $admin_roles = explode(',', $admin_info['roles']);
         $is_admin = in_array('Head Master', $admin_roles) || in_array('Second Master', $admin_roles) || in_array('Academic Master', $admin_roles);
     }
@@ -32,15 +45,29 @@ if (isset($_GET['action']) && $is_logged_in) {
     
     switch ($_GET['action']) {
         case 'star':
-            $sql = "UPDATE notifications SET is_starred = NOT is_starred WHERE id = $notification_id AND admin_id = $admin_id";
-            mysqli_query($conn, $sql);
+            // Verify notification belongs to current school
+            $check_sql = "SELECT id FROM notifications WHERE id = ? AND school_id = ?";
+            $stmt = $conn->prepare($check_sql);
+            $stmt->bind_param("ii", $notification_id, $current_school_id);
+            $stmt->execute();
+            $check_result = $stmt->get_result();
+            
+            if ($check_result->num_rows > 0) {
+                $sql = "UPDATE notifications SET is_starred = NOT is_starred WHERE id = ? AND admin_id = ? AND school_id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("iii", $notification_id, $admin_id, $current_school_id);
+                $stmt->execute();
+            }
             break;
             
         case 'delete':
-            // Check if user can delete (owner or admin)
-            $check_sql = "SELECT * FROM notifications WHERE id = $notification_id";
-            $check_result = mysqli_query($conn, $check_sql);
-            $notification = mysqli_fetch_assoc($check_result);
+            // Check if user can delete (owner or admin) and notification belongs to current school
+            $check_sql = "SELECT * FROM notifications WHERE id = ? AND school_id = ?";
+            $stmt = $conn->prepare($check_sql);
+            $stmt->bind_param("ii", $notification_id, $current_school_id);
+            $stmt->execute();
+            $check_result = $stmt->get_result();
+            $notification = $check_result->fetch_assoc();
             
             if ($notification && ($notification['admin_id'] == $admin_id || $is_admin)) {
                 // Delete associated file
@@ -49,70 +76,100 @@ if (isset($_GET['action']) && $is_logged_in) {
                 }
                 
                 // Delete notification views
-                $delete_views_sql = "DELETE FROM notification_views WHERE notification_id = $notification_id";
-                mysqli_query($conn, $delete_views_sql);
+                $delete_views_sql = "DELETE FROM notification_views WHERE notification_id = ? AND school_id = ?";
+                $stmt = $conn->prepare($delete_views_sql);
+                $stmt->bind_param("ii", $notification_id, $current_school_id);
+                $stmt->execute();
                 
                 // Delete notification
-                $sql = "DELETE FROM notifications WHERE id = $notification_id";
-                mysqli_query($conn, $sql);
+                $sql = "DELETE FROM notifications WHERE id = ? AND school_id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("ii", $notification_id, $current_school_id);
+                $stmt->execute();
                 $_SESSION['success'] = "Notification deleted successfully!";
             }
             break;
             
         case 'delete_all':
-            if ($is_admin) {
+            if ($is_admin && $current_school_id) {
                 // Get all notifications to delete their files
-                $sql = "SELECT file_path FROM notifications WHERE file_path IS NOT NULL";
-                $result = mysqli_query($conn, $sql);
-                while ($row = mysqli_fetch_assoc($result)) {
+                $sql = "SELECT file_path FROM notifications WHERE file_path IS NOT NULL AND school_id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("i", $current_school_id);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                while ($row = $result->fetch_assoc()) {
                     if (file_exists($row['file_path'])) {
                         unlink($row['file_path']);
                     }
                 }
                 
-                // Delete all notification views
-                $delete_all_views_sql = "DELETE FROM notification_views";
-                mysqli_query($conn, $delete_all_views_sql);
+                // Delete all notification views for this school
+                $delete_all_views_sql = "DELETE FROM notification_views WHERE school_id = ?";
+                $stmt = $conn->prepare($delete_all_views_sql);
+                $stmt->bind_param("i", $current_school_id);
+                $stmt->execute();
                 
-                // Delete all notifications
-                $sql = "DELETE FROM notifications";
-                mysqli_query($conn, $sql);
+                // Delete all notifications for this school
+                $sql = "DELETE FROM notifications WHERE school_id = ?";
+                $stmt = $conn->prepare($sql);
+                $stmt->bind_param("i", $current_school_id);
+                $stmt->execute();
                 $_SESSION['success'] = "All notifications deleted successfully!";
             }
             break;
             
         case 'archive':
-            $sql = "UPDATE notifications SET status = 'archived' WHERE id = $notification_id AND admin_id = $admin_id";
-            mysqli_query($conn, $sql);
+            $sql = "UPDATE notifications SET status = 'archived' WHERE id = ? AND admin_id = ? AND school_id = ?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("iii", $notification_id, $admin_id, $current_school_id);
+            $stmt->execute();
             break;
             
         case 'mark_all_read':
-            if ($is_logged_in) {
-                mysqli_query($conn, "UPDATE admins SET last_notification_check = NOW() WHERE id = $admin_id");
+            if ($is_logged_in && $current_school_id) {
+                $stmt = $conn->prepare("UPDATE admins SET last_notification_check = NOW() WHERE id = ? AND school_id = ?");
+                $stmt->bind_param("ii", $admin_id, $current_school_id);
+                $stmt->execute();
                 $_SESSION['success'] = "All notifications marked as read!";
             }
             break;
             
         case 'mark_read':
-            if ($is_logged_in && isset($_GET['id'])) {
-                // Record view
+            if ($is_logged_in && isset($_GET['id']) && $current_school_id) {
                 $notification_id = mysqli_real_escape_string($conn, $_GET['id']);
                 $viewer_type = 'admin';
                 
-                // Check if already viewed
-                $check_view_sql = "SELECT * FROM notification_views 
-                                  WHERE notification_id = $notification_id AND viewer_id = $admin_id";
-                $check_result = mysqli_query($conn, $check_view_sql);
+                // Check if notification belongs to current school
+                $check_sql = "SELECT id FROM notifications WHERE id = ? AND school_id = ?";
+                $stmt = $conn->prepare($check_sql);
+                $stmt->bind_param("ii", $notification_id, $current_school_id);
+                $stmt->execute();
+                $check_result = $stmt->get_result();
                 
-                if (mysqli_num_rows($check_result) == 0) {
-                    // Add view record
-                    $view_sql = "INSERT INTO notification_views (notification_id, viewer_id, viewer_type) 
-                                VALUES ($notification_id, $admin_id, '$viewer_type')";
-                    mysqli_query($conn, $view_sql);
+                if ($check_result->num_rows > 0) {
+                    // Check if already viewed
+                    $check_view_sql = "SELECT * FROM notification_views 
+                                      WHERE notification_id = ? AND viewer_id = ? AND school_id = ?";
+                    $stmt = $conn->prepare($check_view_sql);
+                    $stmt->bind_param("iii", $notification_id, $admin_id, $current_school_id);
+                    $stmt->execute();
+                    $check_view_result = $stmt->get_result();
                     
-                    // Update views count
-                    $update_sql = "UPDATE notifications SET views_count = views_count + 1 WHERE id = $notification_id";
-                    mysqli_query($conn, $update_sql);
+                    if ($check_view_result->num_rows == 0) {
+                        // Add view record
+                        $view_sql = "INSERT INTO notification_views (notification_id, viewer_id, viewer_type, school_id) 
+                                    VALUES (?, ?, ?, ?)";
+                        $stmt = $conn->prepare($view_sql);
+                        $stmt->bind_param("iisi", $notification_id, $admin_id, $viewer_type, $current_school_id);
+                        $stmt->execute();
+                        
+                        // Update views count
+                        $update_sql = "UPDATE notifications SET views_count = views_count + 1 WHERE id = ? AND school_id = ?";
+                        $stmt = $conn->prepare($update_sql);
+                        $stmt->bind_param("ii", $notification_id, $current_school_id);
+                        $stmt->execute();
+                    }
                 }
             }
             break;
@@ -122,16 +179,29 @@ if (isset($_GET['action']) && $is_logged_in) {
     exit();
 }
 
-// Get notifications based on visibility
+// Get notifications based on visibility and school_id
 $where_conditions = [];
 $params = [];
+$param_types = "";
 
-if ($is_logged_in && $is_admin) {
-    // Admins can see all active notifications
-    $where_conditions[] = "n.status = 'active'";
-} elseif ($is_logged_in) {
-    // Regular logged-in users see public + their own private notifications
-    $where_conditions[] = "(n.visibility = 'public' OR n.admin_id = $admin_id)";
+if ($is_logged_in && $current_school_id) {
+    $where_conditions[] = "n.school_id = ?";
+    $params[] = $current_school_id;
+    $param_types .= "i";
+    
+    if ($is_admin) {
+        // Admins can see all active notifications for their school
+        $where_conditions[] = "n.status = 'active'";
+    } else {
+        // Regular logged-in users see public + their own private notifications
+        $where_conditions[] = "(n.visibility = 'public' OR n.admin_id = ?)";
+        $params[] = $admin_id;
+        $param_types .= "i";
+        $where_conditions[] = "n.status = 'active'";
+    }
+} elseif ($is_logged_in && !$current_school_id) {
+    // Should not happen, but fallback
+    $where_conditions[] = "n.visibility = 'public'";
     $where_conditions[] = "n.status = 'active'";
 } else {
     // Guests only see public notifications
@@ -147,11 +217,11 @@ $sql = "SELECT n.*,
        CONCAT(a.first_name, ' ', a.last_name) as author_name,
        a.profile_image as author_image,
        GROUP_CONCAT(DISTINCT ar.role_name) as author_roles,
-       (SELECT COUNT(*) FROM notification_views nv WHERE nv.notification_id = n.id) as total_views,
+       (SELECT COUNT(*) FROM notification_views nv WHERE nv.notification_id = n.id AND nv.school_id = n.school_id) as total_views,
        (CASE 
-          WHEN $is_logged_in THEN 
+          WHEN ? = 1 THEN 
             (SELECT COUNT(*) FROM notification_views nv2 
-             WHERE nv2.notification_id = n.id AND nv2.viewer_id = $admin_id)
+             WHERE nv2.notification_id = n.id AND nv2.viewer_id = ? AND nv2.school_id = n.school_id)
           ELSE 0 
         END) as is_viewed
        FROM notifications n
@@ -160,9 +230,25 @@ $sql = "SELECT n.*,
        LEFT JOIN admin_roles ar ON ara.role_id = ar.id
        $where_clause
        GROUP BY n.id
-       ORDER BY n.is_starred DESC, n.priority = 'important' DESC, n.created_at DESC";
+       ORDER BY n.is_starred DESC, 
+                FIELD(n.priority, 'important', 'starred', 'normal'),
+                n.created_at DESC";
 
-$result = mysqli_query($conn, $sql);
+// Prepare and execute
+$is_logged_int = $is_logged_in ? 1 : 0;
+if (!empty($params)) {
+    // Add the two extra params for the CASE statement
+    $all_params = array_merge([$is_logged_int, $admin_id], $params);
+    $all_types = "ii" . $param_types;
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param($all_types, ...$all_params);
+    $stmt->execute();
+    $result = $stmt->get_result();
+} else {
+    // No school_id filter? Should not happen for logged in users
+    $result = mysqli_query($conn, $sql);
+}
+
 $notifications = [];
 if ($result && mysqli_num_rows($result) > 0) {
     while ($row = mysqli_fetch_assoc($result)) {
@@ -172,29 +258,39 @@ if ($result && mysqli_num_rows($result) > 0) {
 
 // Get unread count for logged-in users
 $unread_count = 0;
-if ($is_logged_in) {
+if ($is_logged_in && $current_school_id) {
     // Get last check time
-    $last_check_sql = "SELECT last_notification_check FROM admins WHERE id = $admin_id";
-    $last_check_result = mysqli_query($conn, $last_check_sql);
-    $last_check_row = mysqli_fetch_assoc($last_check_result);
+    $last_check_sql = "SELECT last_notification_check FROM admins WHERE id = ? AND school_id = ?";
+    $stmt = $conn->prepare($last_check_sql);
+    $stmt->bind_param("ii", $admin_id, $current_school_id);
+    $stmt->execute();
+    $last_check_result = $stmt->get_result();
+    $last_check_row = $last_check_result->fetch_assoc();
     $last_check = $last_check_row ? $last_check_row['last_notification_check'] : null;
     
     if ($last_check) {
         $count_sql = "SELECT COUNT(DISTINCT n.id) as count 
                      FROM notifications n
-                     LEFT JOIN notification_views nv ON n.id = nv.notification_id AND nv.viewer_id = $admin_id
+                     LEFT JOIN notification_views nv ON n.id = nv.notification_id AND nv.viewer_id = ? AND nv.school_id = n.school_id
                      WHERE n.status = 'active' 
-                     AND n.created_at > '$last_check'
+                     AND n.school_id = ?
+                     AND n.created_at > ?
                      AND nv.id IS NULL";
         
         // If not admin, filter by visibility
         if (!$is_admin) {
-            $count_sql .= " AND (n.visibility = 'public' OR n.admin_id = $admin_id)";
+            $count_sql .= " AND (n.visibility = 'public' OR n.admin_id = ?)";
+            $stmt = $conn->prepare($count_sql);
+            $stmt->bind_param("iisi", $admin_id, $current_school_id, $last_check, $admin_id);
+        } else {
+            $stmt = $conn->prepare($count_sql);
+            $stmt->bind_param("iis", $admin_id, $current_school_id, $last_check);
         }
         
-        $count_result = mysqli_query($conn, $count_sql);
+        $stmt->execute();
+        $count_result = $stmt->get_result();
         if ($count_result) {
-            $count_row = mysqli_fetch_assoc($count_result);
+            $count_row = $count_result->fetch_assoc();
             $unread_count = $count_row ? $count_row['count'] : 0;
         }
     }
@@ -233,7 +329,7 @@ function getFileExtension($filename) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Notifications - Muyovozi High School</title>
+    <title>Notifications - School System</title>
     
     <!-- Include header -->
     <?php include '../controller/header.php'; ?>
@@ -647,53 +743,46 @@ function getFileExtension($filename) {
                 </h2>
                 
                 <div class="dropdown">
-    <button class="btn btn-primary dropdown-toggle" type="button" id="actionDropdown" 
-            data-bs-toggle="dropdown" aria-expanded="false">
-        <i class="fas fa-cog me-2"></i>Actions
-    </button>
-
-    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="actionDropdown">
-          <!-- Notification Actions -->
-        <?php if ($is_logged_in): ?>
-
-            <li>
-                <a class="dropdown-item" href="new_notification.php">
-                    <i class="fas fa-plus me-2 text-primary"></i>New Notification
-                </a>
-            </li>
-
-            <?php if ($is_admin && !empty($notifications)): ?>
-                <li>
-                    <button class="dropdown-item text-danger" 
-                            data-bs-toggle="modal" 
-                            data-bs-target="#deleteAllModal">
-                        <i class="fas fa-trash me-2"></i>Delete All
+                    <button class="btn btn-primary dropdown-toggle" type="button" id="actionDropdown" 
+                            data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fas fa-cog me-2"></i>Actions
                     </button>
-                </li>
-            <?php endif; ?>
 
-            <?php if ($unread_count > 0): ?>
-                <li>
-                    <a class="dropdown-item text-success" 
-                       href="notifications.php?action=mark_all_read">
-                        <i class="fas fa-check-double me-2"></i>Mark All Read
-                    </a>
-                </li>
-            <?php endif; ?>
+                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="actionDropdown">
+                        <?php if ($is_logged_in): ?>
+                            <li>
+                                <a class="dropdown-item" href="new_notification.php">
+                                    <i class="fas fa-plus me-2 text-primary"></i>New Notification
+                                </a>
+                            </li>
 
-        <?php else: ?>
+                            <?php if ($is_admin && !empty($notifications)): ?>
+                                <li>
+                                    <button class="dropdown-item text-danger" 
+                                            data-bs-toggle="modal" 
+                                            data-bs-target="#deleteAllModal">
+                                        <i class="fas fa-trash me-2"></i>Delete All
+                                    </button>
+                                </li>
+                            <?php endif; ?>
 
-            <li>
-                <a class="dropdown-item" href="../login.php">
-                    <i class="fas fa-sign-in-alt me-2"></i>Login to Post Notifications
-                </a>
-            </li>
-
-        <?php endif; ?>
-
-    </ul>
-</div>
-
+                            <?php if ($unread_count > 0): ?>
+                                <li>
+                                    <a class="dropdown-item text-success" 
+                                       href="notifications.php?action=mark_all_read">
+                                        <i class="fas fa-check-double me-2"></i>Mark All Read
+                                    </a>
+                                </li>
+                            <?php endif; ?>
+                        <?php else: ?>
+                            <li>
+                                <a class="dropdown-item" href="../login.php">
+                                    <i class="fas fa-sign-in-alt me-2"></i>Login to Post Notifications
+                                </a>
+                            </li>
+                        <?php endif; ?>
+                    </ul>
+                </div>
             </div>
 
             <!-- Messages -->
@@ -786,6 +875,7 @@ function getFileExtension($filename) {
                             <?php echo $notification['priority'] == 'important' ? 'important' : ''; ?> 
                             <?php echo $notification['visibility'] == 'private' ? 'private' : ''; ?>
                             <?php echo $is_new ? 'unread' : ''; ?>"
+                            data-id="<?php echo $notification['id']; ?>"
                             <?php if ($is_new && $is_logged_in): ?>
                                 onclick="markAsRead(<?php echo $notification['id']; ?>, this)"
                             <?php endif; ?>>
@@ -1091,7 +1181,10 @@ function getFileExtension($filename) {
                 }
                 
                 // Update data attribute
-                card.closest('.notification-item').setAttribute('data-unread', 'false');
+                const item = card.closest('.notification-item');
+                if (item) {
+                    item.setAttribute('data-unread', 'false');
+                }
                 
                 // Update unread count in header
                 const unreadCountBadge = document.querySelector('.page-title .badge');
@@ -1194,7 +1287,9 @@ function getFileExtension($filename) {
             document.querySelectorAll('.filter-buttons .btn').forEach(btn => {
                 btn.classList.remove('active');
             });
-            event.target.classList.add('active');
+            if (event && event.target) {
+                event.target.classList.add('active');
+            }
             
             // Show empty state if no notifications match filter
             const container = document.getElementById('notificationsContainer');

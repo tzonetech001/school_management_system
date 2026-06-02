@@ -1,5 +1,5 @@
 <?php
-// edit_admin.php
+// register.php - Student Registration with Dynamic School Code
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -9,10 +9,23 @@ $success = '';
 // Check if user has permission (Head Master or Second Master only)
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
-// Get current user's roles
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
-$stmt = $conn->prepare($user_roles_sql);
+// ========== GET CURRENT SCHOOL ID AND SCHOOL CODE ==========
+$school_query = "SELECT school_id, school_code FROM admins a JOIN schools s ON a.school_id = s.id WHERE a.id = ?";
+$stmt = $conn->prepare($school_query);
 $stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+$current_school_code = $current_admin_data['school_code'] ?? 'MVZ001';
+
+// Get current user's roles (with school_id)
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
+$stmt = $conn->prepare($user_roles_sql);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -20,10 +33,10 @@ while ($row = $user_roles_result->fetch_assoc()) {
     $user_role_ids[] = $row['role_id'];
 }
 
-// Check if user has Head Master (1) or Second Master (2) role
+// Check if user has Head Master (1), Second Master (2), or Academic Master (3) role
 $has_permission = false;
 foreach ($user_role_ids as $role_id) {
-    if ($role_id == 1 || $role_id == 2 || $role_id == 3) { // Head Master or Second Master
+    if ($role_id == 1 || $role_id == 2 || $role_id == 3) {
         $has_permission = true;
         break;
     }
@@ -31,7 +44,7 @@ foreach ($user_role_ids as $role_id) {
 
 if (!$has_permission) {
     $_SESSION['error'] = "You don't have permission to view page you need.";
-    header("Location:  ../404.php");
+    header("Location: ../404.php");
     exit();
 }
 
@@ -47,19 +60,83 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
 $student = [];
 $edit_mode = false;
 
-// Check if we're editing an existing student
+// Check if we're editing an existing student (with school_id verification)
 if (isset($_GET['edit'])) {
     $edit_mode = true;
     $id = mysqli_real_escape_string($conn, $_GET['edit']);
-    $sql = "SELECT * FROM students WHERE id = $id";
-    $result = mysqli_query($conn, $sql);
-    if ($result && mysqli_num_rows($result) > 0) {
-        $student = mysqli_fetch_assoc($result);
+    $sql = "SELECT * FROM students WHERE id = ? AND school_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ii", $id, $current_school_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    if ($result && $result->num_rows > 0) {
+        $student = $result->fetch_assoc();
     } else {
-        $_SESSION['error'] = "Student not found!";
+        $_SESSION['error'] = "Student not found or you don't have permission!";
         header("Location: students.php");
         exit();
     }
+}
+
+// ==================== REGENERATE INDEX NUMBERS WITH DYNAMIC SCHOOL CODE ====================
+function regenerateAllIndexNumbers($conn, $school_code, $school_id) {
+    $combination_order = ['HGE', 'HGL', 'HGK', 'HKL', 'KLF', 'EGM', 'HLF', 'HGF'];
+    
+    // Process Form Five - continuous numbering across all combinations with female first
+    $form_five_index = 1; // Start from 0501 for Form Five
+    
+    foreach ($combination_order as $combination) {
+        $form_five_sql = "SELECT id FROM students 
+                         WHERE class = 'Form Five' 
+                         AND combination = ?
+                         AND is_leaver = FALSE
+                         AND school_id = ?
+                         ORDER BY 
+                             CASE WHEN sex = 'Female' THEN 1 ELSE 2 END,
+                             first_name, last_name";
+        $stmt = $conn->prepare($form_five_sql);
+        $stmt->bind_param("si", $combination, $school_id);
+        $stmt->execute();
+        $form_five_result = $stmt->get_result();
+        
+        while ($student = $form_five_result->fetch_assoc()) {
+            $new_index = $school_code . '-' . str_pad(($form_five_index + 500), 4, '0', STR_PAD_LEFT);
+            $update_sql = "UPDATE students SET index_number = ? WHERE id = ? AND school_id = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            $update_stmt->bind_param("sii", $new_index, $student['id'], $school_id);
+            $update_stmt->execute();
+            $form_five_index++;
+        }
+    }
+    
+    // Process Form Six - continuous numbering across all combinations with female first
+    $form_six_index = 1; // Start from 0501 for Form Six
+    
+    foreach ($combination_order as $combination) {
+        $form_six_sql = "SELECT id FROM students 
+                        WHERE class = 'Form Six' 
+                        AND combination = ?
+                        AND is_leaver = FALSE
+                        AND school_id = ?
+                        ORDER BY 
+                            CASE WHEN sex = 'Female' THEN 1 ELSE 2 END,
+                            first_name, last_name";
+        $stmt = $conn->prepare($form_six_sql);
+        $stmt->bind_param("si", $combination, $school_id);
+        $stmt->execute();
+        $form_six_result = $stmt->get_result();
+        
+        while ($student = $form_six_result->fetch_assoc()) {
+            $new_index = $school_code . '-' . str_pad(($form_six_index + 500), 4, '0', STR_PAD_LEFT);
+            $update_sql = "UPDATE students SET index_number = ? WHERE id = ? AND school_id = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            $update_stmt->bind_param("sii", $new_index, $student['id'], $school_id);
+            $update_stmt->execute();
+            $form_six_index++;
+        }
+    }
+    
+    return true;
 }
 
 // Handle form submission
@@ -107,13 +184,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
-    // Check if admission number already exists for the SAME class
-    $check_admission_sql = "SELECT id FROM students WHERE admission_number = '$admission_number' AND class = '$class'";
+    // Check if admission number already exists for the SAME class AND SAME SCHOOL
+    $check_admission_sql = "SELECT id FROM students WHERE admission_number = ? AND class = ? AND school_id = ?";
+    $stmt = $conn->prepare($check_admission_sql);
+    $stmt->bind_param("ssi", $admission_number, $class, $current_school_id);
+    $stmt->execute();
+    $check_result = $stmt->get_result();
+    
     if ($edit_mode) {
-        $check_admission_sql .= " AND id != " . $student['id'];
+        // If editing, exclude current student
+        $check_admission_sql .= " AND id != ?";
+        $stmt = $conn->prepare("SELECT id FROM students WHERE admission_number = ? AND class = ? AND school_id = ? AND id != ?");
+        $stmt->bind_param("ssii", $admission_number, $class, $current_school_id, $student['id']);
+        $stmt->execute();
+        $check_result = $stmt->get_result();
     }
-    $check_result = mysqli_query($conn, $check_admission_sql);
-    if (mysqli_num_rows($check_result) > 0) {
+    
+    if ($check_result->num_rows > 0) {
         $_SESSION['error'] = "Admission number already exists for this class!";
         header("Location: register.php" . ($edit_mode ? "?edit=" . $student['id'] : ""));
         exit();
@@ -123,78 +210,119 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     mysqli_begin_transaction($conn);
     
     try {
-        if ($edit_mode) {
-            // Update existing student
-            $sql = "UPDATE students SET 
-                    first_name = '$first_name',
-                    second_name = '$second_name',
-                    last_name = '$last_name',
-                    sex = '$sex',
-                    combination = '$combination',
-                    date_of_birth = '$date_of_birth',
-                    date_of_admission = '$date_of_admission',
-                    admission_number = '$admission_number',
-                    class = '$class',
-                    citizenship = '$citizenship',
-                    place_of_birth = '$place_of_birth',
-                    parent_name = '$parent_name',
-                    parent_phone = '$parent_phone',
-                    parent_occupation = '$parent_occupation',
-                    parent_residence = '$parent_residence',
-                    former_school = '$former_school',
-                    school_transferred_to = '$school_transferred_to',
-                    date_leaving_school = $date_leaving_school,
-                    school_transferred_from = '$school_transferred_from'
-                    WHERE id = " . $student['id'];
-            
-            if (!mysqli_query($conn, $sql)) {
-                throw new Exception("Error updating student: " . mysqli_error($conn));
-            }
-        } else {
+       if ($edit_mode) {
+    // Update existing student - Count placeholders properly
+    $sql = "UPDATE students SET 
+            first_name = ?,
+            second_name = ?,
+            last_name = ?,
+            sex = ?,
+            combination = ?,
+            date_of_birth = ?,
+            date_of_admission = ?,
+            admission_number = ?,
+            class = ?,
+            citizenship = ?,
+            place_of_birth = ?,
+            parent_name = ?,
+            parent_phone = ?,
+            parent_occupation = ?,
+            parent_residence = ?,
+            former_school = ?,
+            school_transferred_to = ?,
+            date_leaving_school = ?,
+            school_transferred_from = ?,
+            updated_by_admin = ?
+            WHERE id = ? AND school_id = ?";
+    
+    $stmt = $conn->prepare($sql);
+    
+    // Count: first_name to school_transferred_from = 19 fields + updated_by_admin = 20, + id = 21, + school_id = 22
+    // Total = 22 placeholders
+    $stmt->bind_param("sssssssssssssssssssiii", 
+        $first_name,           // 1
+        $second_name,          // 2
+        $last_name,            // 3
+        $sex,                  // 4
+        $combination,          // 5
+        $date_of_birth,        // 6
+        $date_of_admission,    // 7
+        $admission_number,     // 8
+        $class,                // 9
+        $citizenship,          // 10
+        $place_of_birth,       // 11
+        $parent_name,          // 12
+        $parent_phone,         // 13
+        $parent_occupation,    // 14
+        $parent_residence,     // 15
+        $former_school,        // 16
+        $school_transferred_to,// 17
+        $date_leaving_school,  // 18 (this could be NULL)
+        $school_transferred_from, // 19
+        $admin_id,             // 20 - updated_by_admin
+        $student['id'],        // 21 - id
+        $current_school_id     // 22 - school_id
+    );
+    
+    if (!$stmt->execute()) {
+        throw new Exception("Error updating student: " . $stmt->error);
+    }
+} else {
             // Hash the parent phone number as initial password
             $hashed_password = password_hash($parent_phone, PASSWORD_DEFAULT);
             
-            // Insert new student with password
+            // Insert new student with password and school_id
             $sql = "INSERT INTO students (
                     first_name, second_name, last_name, sex, combination, 
                     date_of_birth, date_of_admission, admission_number, class, 
                     citizenship, place_of_birth, parent_name, parent_phone, 
                     parent_occupation, parent_residence, former_school, 
                     school_transferred_to, date_leaving_school, school_transferred_from,
-                    password
+                    password, school_id
                     ) VALUES (
-                    '$first_name', '$second_name', '$last_name', '$sex', '$combination',
-                    '$date_of_birth', '$date_of_admission', '$admission_number', '$class',
-                    '$citizenship', '$place_of_birth', '$parent_name', '$parent_phone',
-                    '$parent_occupation', '$parent_residence', '$former_school',
-                    '$school_transferred_to', $date_leaving_school, '$school_transferred_from',
-                    '$hashed_password'
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?
                     )";
             
-            if (!mysqli_query($conn, $sql)) {
-                throw new Exception("Error registering student: " . mysqli_error($conn));
+            $stmt = $conn->prepare($sql);
+            $date_leaving_school_null = ($date_leaving_school == 'NULL') ? null : $date_leaving_school;
+            $stmt->bind_param("ssssssssssssssssssssi", 
+                $first_name, $second_name, $last_name, $sex, $combination,
+                $date_of_birth, $date_of_admission, $admission_number, $class,
+                $citizenship, $place_of_birth, $parent_name, $parent_phone,
+                $parent_occupation, $parent_residence, $former_school,
+                $school_transferred_to, $date_leaving_school_null, $school_transferred_from,
+                $hashed_password, $current_school_id);
+            
+            if (!$stmt->execute()) {
+                throw new Exception("Error registering student: " . $stmt->error);
             }
             
             // Get the newly inserted student ID
             $new_student_id = mysqli_insert_id($conn);
             
             // Log the student creation with password info
-            $admin_id = $_SESSION['admin_id'] ?? 1;
-            $log_sql = "INSERT INTO admin_logs (admin_id, action, description, ip_address) 
-                        VALUES ($admin_id, 'Student Registered', 
-                        'Registered student: $first_name $last_name (Admission: $admission_number) with default password as parent phone', 
-                        '" . $_SERVER['REMOTE_ADDR'] . "')";
-            mysqli_query($conn, $log_sql);
+            $log_sql = "INSERT INTO admin_logs (admin_id, action, description, ip_address, school_id) 
+                        VALUES (?, 'Student Registered', ?, ?, ?)";
+            $log_stmt = $conn->prepare($log_sql);
+            $description = "Registered student: $first_name $last_name (Admission: $admission_number) with default password as parent phone";
+            $ip_address = $_SERVER['REMOTE_ADDR'];
+            $log_stmt->bind_param("issi", $admin_id, $description, $ip_address, $current_school_id);
+            $log_stmt->execute();
         }
         
-        // REGENERATE ALL INDEX NUMBERS for entire database with female first ordering
-        regenerateAllIndexNumbers($conn);
+        // REGENERATE ALL INDEX NUMBERS with dynamic school code
+        regenerateAllIndexNumbers($conn, $current_school_code, $current_school_id);
         
         // Commit transaction
         mysqli_commit($conn);
         
-        $message = $edit_mode ? "Student updated successfully! Index numbers regenerated." : 
-                               "Student registered successfully! Default password is parent's phone number. Index numbers regenerated.";
+        $message = $edit_mode ? "Student updated successfully! Index numbers regenerated with format: {$current_school_code}-XXXX." : 
+                               "Student registered successfully! Default password is parent's phone number. Index numbers regenerated with format: {$current_school_code}-XXXX.";
         
         $_SESSION['success'] = $message;
         header("Location: students.php");
@@ -208,99 +336,26 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
 }
-
-function regenerateAllIndexNumbers($conn) {
-    // Define combination order
-    $combination_order = ['HGE', 'HGL', 'HGK', 'HKL', 'KLF', 'EGM', 'HLF', 'HGF'];
-    
-    // Process Form Five - continuous numbering across all combinations with female first
-    $form_five_index = 1; // Start from 0501 for Form Five
-    
-    foreach ($combination_order as $combination) {
-        // UPDATED: Get female students first, then male, within each combination
-        $form_five_sql = "SELECT * FROM students 
-                         WHERE class = 'Form Five' 
-                         AND combination = '$combination'
-                         AND is_leaver = FALSE
-                         ORDER BY 
-                             CASE WHEN sex = 'Female' THEN 1 ELSE 2 END,  -- Female first
-                             first_name, 
-                             last_name";
-        
-        $form_five_result = mysqli_query($conn, $form_five_sql);
-        
-        if (!$form_five_result) {
-            throw new Exception("Error fetching Form Five $combination students: " . mysqli_error($conn));
-        }
-        
-        while ($student = mysqli_fetch_assoc($form_five_result)) {
-            $new_index = 'S5098-' . str_pad(($form_five_index + 500), 4, '0', STR_PAD_LEFT);
-           
-            // Update the student's index number
-            $update_sql = "UPDATE students SET index_number = '$new_index' WHERE id = " . $student['id'];
-            
-            if (!mysqli_query($conn, $update_sql)) {
-                throw new Exception("Error updating index number for student ID " . $student['id'] . ": " . mysqli_error($conn));
-            }
-            
-            $form_five_index++;
-        }
-    }
-    
-    // Process Form Six - continuous numbering across all combinations with female first
-    $form_six_index = 1; // Start from 0501 for Form Six
-    
-    foreach ($combination_order as $combination) {
-        // UPDATED: Get female students first, then male, within each combination
-        $form_six_sql = "SELECT * FROM students 
-                        WHERE class = 'Form Six' 
-                        AND combination = '$combination'
-                        AND is_leaver = FALSE
-                        ORDER BY 
-                            CASE WHEN sex = 'Female' THEN 1 ELSE 2 END,  -- Female first
-                            first_name, 
-                            last_name";
-        
-        $form_six_result = mysqli_query($conn, $form_six_sql);
-        
-        if (!$form_six_result) {
-            throw new Exception("Error fetching Form Six $combination students: " . mysqli_error($conn));
-        }
-        
-        while ($student = mysqli_fetch_assoc($form_six_result)) {
-            $new_index = 'S5098-' . str_pad(($form_six_index + 500), 4, '0', STR_PAD_LEFT);
-            
-            // Update the student's index number
-            $update_sql = "UPDATE students SET index_number = '$new_index' WHERE id = " . $student['id'];
-            
-            if (!mysqli_query($conn, $update_sql)) {
-                throw new Exception("Error updating index number for student ID " . $student['id'] . ": " . mysqli_error($conn));
-            }
-            
-            $form_six_index++;
-        }
-    }
-    
-    return true;
-}
 ?>
 
 <?php include '../controller/header.php'; ?>
 <?php include '../controller/sidebar.php'; ?>
 
-
 <div class="main-content">
     <div class="container-fluid">
         <!-- Page Title -->
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="page-title"><?php echo $edit_mode ? 'Edit Student' : 'Student Registration'; ?></h2>
+            <h2 class="page-title">
+                <?php echo $edit_mode ? 'Edit Student' : 'Student Registration'; ?>
+                <small class="text-muted ms-2">School Code: <?php echo htmlspecialchars($current_school_code); ?></small>
+            </h2>
              <div class="dropdown d-md-block d-none">
                 <button class="btn btn-primary dropdown-toggle" type="button" id="actionsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                     <i class="fas fa-cog me-2"></i>Actions
                 </button>
                 <ul class="dropdown-menu" aria-labelledby="actionsDropdown">
                     <li><a class="dropdown-item" href="register.php"><i class="fas fa-user-plus me-2"></i>New Student</a></li>
-                    <li><a class="dropdown-item" href="students.php"><i  class="fas fa-users me-2"></i>Manage students</a></li>
+                    <li><a class="dropdown-item" href="students.php"><i class="fas fa-users me-2"></i>Manage students</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="leavers.php"><i class="fas fa-user-graduate me-2"></i>View Leavers/Graduates</a></li>
                 </ul>
@@ -312,7 +367,7 @@ function regenerateAllIndexNumbers($conn) {
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="mobileActionsBtn">
                     <li><a class="dropdown-item" href="register.php"><i class="fas fa-user-plus me-2"></i>New Student</a></li>
-                    <li><a class="dropdown-item" href="students.php"><i  class="fas fa-users me-2"></i>Manage students</a></li>
+                    <li><a class="dropdown-item" href="students.php"><i class="fas fa-users me-2"></i>Manage students</a></li>
                     <li><hr class="dropdown-divider"></li>
                     <li><a class="dropdown-item" href="leavers.php"><i class="fas fa-user-graduate me-2"></i>View Leavers/Graduates</a></li>
                 </ul>
@@ -333,6 +388,14 @@ function regenerateAllIndexNumbers($conn) {
             <i class="fas fa-info-circle me-2"></i>
             <strong>Note:</strong> New students will have their parent's phone number as the default password. 
             Students can change their password after first login.
+            <br>
+            <strong>Index Number Format:</strong> <code><?php echo htmlspecialchars($current_school_code); ?>-XXXX</code> (auto-generated after registration)
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        <?php else: ?>
+        <div class="alert alert-info alert-dismissible fade show" role="alert">
+            <i class="fas fa-info-circle me-2"></i>
+            <strong>Note:</strong> After editing, index numbers will be regenerated automatically with format: <code><?php echo htmlspecialchars($current_school_code); ?>-XXXX</code>
             <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
         <?php endif; ?>
@@ -340,8 +403,7 @@ function regenerateAllIndexNumbers($conn) {
         <!-- Registration Form with Steps -->
         <form id="registrationForm" method="POST" action="">
             <div class="card watermark-card">
-                <div class="card-header" style=" background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    color: var(--white);">
+                <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
                     <ul class="nav nav-pills card-header-pills" id="formTabs" role="tablist">
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active" id="step1-tab" data-bs-toggle="pill" data-bs-target="#step1" type="button" role="tab">
@@ -455,6 +517,7 @@ function regenerateAllIndexNumbers($conn) {
                             <div class="watermark-icon text-center mb-4">
                                 <i class="fas fa-school watermark-large-icon"></i>
                                 <h4 class="mt-3 text-watermark">Admission Details</h4>
+                                <p class="text-muted">Index numbers will be auto-generated after registration: <strong><?php echo htmlspecialchars($current_school_code); ?>-XXXX</strong></p>
                             </div>
                             
                             <div class="row">
@@ -837,11 +900,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Processing...';
                 submitBtn.disabled = true;
                 
-                // Re-enable button after 5 seconds if still on page
+                // Re-enable button after 10 seconds if still on page (fallback)
                 setTimeout(() => {
                     submitBtn.innerHTML = originalText;
                     submitBtn.disabled = false;
-                }, 5000);
+                }, 10000);
             }
             
             return true;

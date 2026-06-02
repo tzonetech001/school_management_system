@@ -251,12 +251,7 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                 </li>
                 <?php endif; ?>
                 <?php if ($is_head_master || $is_second_master): ?>
-                <li>
-                    <a href="../staff/otp" class="<?php echo ($current_page == 'otp.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-user-lock"></i>
-                        <span>Manage OTP</span>
-                    </a>
-                </li>
+                
                 <li>
                     <a href="../staff/report_admin" class="<?php echo ($current_page == 'report_admin.php') ? 'active' : ''; ?>">
                         <i class="fas fa-download"></i>
@@ -474,12 +469,7 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                         <span>Assign to Staff</span>
                     </a>
                 </li>
-                <li>
-                    <a href="../maintenance/maintenance_logs" class="<?php echo ($current_page == 'maintenance_logs.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-history"></i>
-                        <span>Logs</span>
-                    </a>
-                </li>
+                
                 <li>
                     <a href="../maintenance/report_maintenance" class="<?php echo ($current_page == 'report_maintenance.php') ? 'active' : ''; ?>">
                         <i class="fas fa-download"></i>
@@ -489,27 +479,7 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
             </ul>
         </li>
         <?php endif; ?>
-        
-        <!-- Bursar & Store -->
-        <?php if ($is_head_master || $is_second_master || $is_bursar_store): ?>
-        <li>
-            <a href="../bursar/bursar" class="<?php echo ($current_page == 'bursar.php') ? 'active' : ''; ?>">
-                <i class="fas fa-money-check-alt"></i>
-                <span class="menu-text">Bursar</span>
-            </a>
-        </li>
-        <?php endif; ?>
-        
-        
-        <!-- Storekeeper -->
-        <?php if ($is_head_master || $is_second_master || $is_bursar_store): ?>
-        <li>
-            <a href="../store/store" class="<?php echo ($current_page == 'store.php') ? 'active' : ''; ?>">
-                <i class="fas fa-warehouse"></i>
-                <span class="menu-text">Storekeeper</span>
-            </a>
-        </li>
-        <?php endif; ?>
+    
       
         
         <!-- Support Section -->

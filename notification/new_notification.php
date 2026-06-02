@@ -1,5 +1,5 @@
 <?php
-// new_notification.php
+// new_notification.php - WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -16,18 +16,34 @@ if (!isset($_SESSION['admin_id'])) {
 $admin_id = $_SESSION['admin_id'];
 $is_admin = false;
 
+// ========== GET CURRENT SCHOOL ID AND SCHOOL CODE ==========
+$school_query = "SELECT a.school_id, s.school_code 
+                 FROM admins a 
+                 JOIN schools s ON a.school_id = s.id 
+                 WHERE a.id = ?";
+$stmt = $conn->prepare($school_query);
+$stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+$current_school_code = $current_admin_data['school_code'] ?? 'MVZ001';
+
 // Get admin info and check if they are admin (Head Master or Second Master)
 $admin_sql = "SELECT a.*, 
              GROUP_CONCAT(DISTINCT ar.role_name) as roles
              FROM admins a
              LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
              LEFT JOIN admin_roles ar ON ara.role_id = ar.id
-             WHERE a.id = $admin_id
+             WHERE a.id = ? AND a.school_id = ?
              GROUP BY a.id";
-$admin_result = mysqli_query($conn, $admin_sql);
+$stmt = $conn->prepare($admin_sql);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$admin_result = $stmt->get_result();
 
-if ($admin_result && mysqli_num_rows($admin_result) > 0) {
-    $admin_info = mysqli_fetch_assoc($admin_result);
+if ($admin_result && $admin_result->num_rows > 0) {
+    $admin_info = $admin_result->fetch_assoc();
     $admin_roles = explode(',', $admin_info['roles']);
     $is_admin = in_array('Head Master', $admin_roles) || in_array('Second Master', $admin_roles);
 }
@@ -51,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $file_path = null;
     $file_name = null;
     $file_type = null;
-    $file_size = null;  // Changed from 0 to null for proper NULL handling
+    $file_size = null;
     
     // Handle file upload
     if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] == 0 && $_FILES['attachment']['size'] > 0) {
@@ -134,15 +150,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
     
-    // Prepare SQL with proper NULL handling
-    // Convert PHP null to SQL NULL
+    // Prepare SQL with proper NULL handling - ADDED school_id
     $file_path_sql = ($file_path !== null) ? "'" . mysqli_real_escape_string($conn, $file_path) . "'" : "NULL";
     $file_name_sql = ($file_name !== null) ? "'" . mysqli_real_escape_string($conn, $file_name) . "'" : "NULL";
     $file_type_sql = ($file_type !== null) ? "'" . mysqli_real_escape_string($conn, $file_type) . "'" : "NULL";
     $file_size_sql = ($file_size !== null && $file_size > 0) ? intval($file_size) : "NULL";
     
-    // Build INSERT query
-    $sql = "INSERT INTO notifications (admin_id, title, description, file_path, file_type, file_name, file_size, visibility, priority) 
+    // Build INSERT query with school_id
+    $sql = "INSERT INTO notifications (admin_id, title, description, file_path, file_type, file_name, file_size, visibility, priority, school_id) 
             VALUES (
                 $admin_id, 
                 '$title', 
@@ -152,7 +167,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $file_name_sql, 
                 $file_size_sql, 
                 '$visibility', 
-                '$priority'
+                '$priority',
+                $current_school_id
             )";
     
     // Log the query for debugging (remove in production)
@@ -163,8 +179,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         // Get the inserted notification ID
         $notification_id = mysqli_insert_id($conn);
         
-        // Update last notification check for all admins to mark as unread
-        mysqli_query($conn, "UPDATE admins SET last_notification_check = DATE_SUB(NOW(), INTERVAL 1 MINUTE)");
+        // Update last notification check for all admins in this school to mark as unread
+        mysqli_query($conn, "UPDATE admins SET last_notification_check = DATE_SUB(NOW(), INTERVAL 1 MINUTE) WHERE school_id = $current_school_id");
         
         $_SESSION['success'] = "Notification created successfully!";
         header("Location: notifications.php");
@@ -196,7 +212,7 @@ function formatFileSize($bytes) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Create New Notification - Muyovozi High School</title>
+    <title>Create New Notification - School System</title>
     
     <!-- Include header -->
     <?php include '../controller/header.php'; ?>
@@ -367,6 +383,7 @@ function formatFileSize($bytes) {
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="page-title">
                     <i class="fas fa-bell me-2"></i>Create New Notification
+                    <small class="text-muted ms-2">School: <?php echo htmlspecialchars($current_school_code); ?></small>
                 </h2>
                 <div>
                     <a href="notifications.php" class="btn btn-outline-secondary back-button">
@@ -417,7 +434,7 @@ function formatFileSize($bytes) {
                     
                     <!-- File Upload -->
                     <div class="mb-4">
-                        <label class="form-label">Attachment (Optional)</label>
+                        <label class="form-label">Attachment (Optional, max 5MB)</label>
                         <div class="upload-area" id="uploadArea">
                             <div class="upload-icon">
                                 <i class="fas fa-cloud-upload-alt"></i>

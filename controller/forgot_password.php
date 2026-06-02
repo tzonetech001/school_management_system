@@ -6,6 +6,14 @@ require_once '../controller/db_connect.php';
 // Set timezone
 date_default_timezone_set('Africa/Dar_es_Salaam');
 
+<<<<<<< HEAD
+=======
+// Beem Africa API Credentials
+define('BEEM_API_KEY', '5e3de507568');
+define('BEEM_SECRET_KEY', 'MDRhM2MxNGUxZGNmYmRjNDMzYzVmYjlkY2MyM2UxNTRmNjMyNzGRjMmQ5YmMxZjdiODRkZTg2ZjQwYQ==');
+define('BEEM_SOURCE_ADDR', 'MUYOVOZI HS');
+
+>>>>>>> 2a613b5b65837b091bce4eafcd33b48ee98729d1
 $error = '';
 $success = '';
 $step = 1;

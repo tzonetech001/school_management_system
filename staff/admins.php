@@ -1,5 +1,5 @@
 <?php
-// admins.php - Staff Management with Account Lock System
+// admins.php - Staff Management with School ID Filtering
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -14,10 +14,19 @@ if (!isset($_SESSION['admin_id'])) {
 
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
+// Get current admin's school_id - HII NI MUHIMU SANA
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
+$stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin = $school_result->fetch_assoc();
+$current_school_id = $current_admin['school_id'] ?? 1;
+
 // ==================== LOAD THEME SETTINGS ====================
-// Load user's theme settings
+// Load user's theme settings (filter by school_id as well)
 $theme_settings = [];
-$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $admin_id";
+$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $admin_id AND school_id = $current_school_id";
 $result = mysqli_query($conn, $query);
 if ($result && mysqli_num_rows($result) > 0) {
     while ($row = mysqli_fetch_assoc($result)) {
@@ -27,9 +36,9 @@ if ($result && mysqli_num_rows($result) > 0) {
     }
 }
 
-// Load preferences
+// Load preferences (filter by school_id)
 $preferences = [];
-$prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = $admin_id";
+$prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = $admin_id AND school_id = $current_school_id";
 $prefs_result = mysqli_query($conn, $prefs_query);
 if ($prefs_result && mysqli_num_rows($prefs_result) > 0) {
     while ($row = mysqli_fetch_assoc($prefs_result)) {
@@ -39,7 +48,7 @@ if ($prefs_result && mysqli_num_rows($prefs_result) > 0) {
     }
 }
 
-// Default theme colors
+// Default theme colors (same as before)
 $default_colors = [
     'primary' => '#3B9DB3',
     'primary_dark' => '#2d7c8f',
@@ -125,10 +134,13 @@ if ($bg_option === 'image') {
 }
 
 // ==================== PERMISSION CHECK ====================
-// Get current user's roles
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
+// Get current user's roles (filter by school_id)
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
 $stmt = $conn->prepare($user_roles_sql);
-$stmt->bind_param("i", $admin_id);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -151,12 +163,12 @@ if (!$has_permission) {
     exit();
 }
 
-// ==================== ACCOUNT LOCK FUNCTIONS ====================
+// ==================== ACCOUNT LOCK FUNCTIONS (with school_id check) ====================
 
-function isAdminAccountLocked($conn, $admin_id) {
-    $sql = "SELECT locked_until, failed_login_attempts FROM admins WHERE id = ?";
+function isAdminAccountLocked($conn, $admin_id, $school_id) {
+    $sql = "SELECT locked_until, failed_login_attempts FROM admins WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $admin_id);
+    $stmt->bind_param("ii", $admin_id, $school_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $admin = $result->fetch_assoc();
@@ -168,7 +180,7 @@ function isAdminAccountLocked($conn, $admin_id) {
         $now = time();
         
         if ($locked_until <= $now) {
-            unlockAdminAccount($conn, $admin_id);
+            unlockAdminAccount($conn, $admin_id, $school_id);
             return false;
         }
         return true;
@@ -176,19 +188,19 @@ function isAdminAccountLocked($conn, $admin_id) {
     return false;
 }
 
-function getAdminLockInfo($conn, $admin_id) {
-    $sql = "SELECT locked_until, failed_login_attempts, last_login_attempt FROM admins WHERE id = ?";
+function getAdminLockInfo($conn, $admin_id, $school_id) {
+    $sql = "SELECT locked_until, failed_login_attempts, last_login_attempt FROM admins WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $admin_id);
+    $stmt->bind_param("ii", $admin_id, $school_id);
     $stmt->execute();
     $result = $stmt->get_result();
     return $result->fetch_assoc();
 }
 
-function getRemainingLockTime($conn, $admin_id) {
-    $sql = "SELECT locked_until FROM admins WHERE id = ?";
+function getRemainingLockTime($conn, $admin_id, $school_id) {
+    $sql = "SELECT locked_until FROM admins WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $admin_id);
+    $stmt->bind_param("ii", $admin_id, $school_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $admin = $result->fetch_assoc();
@@ -204,28 +216,28 @@ function getRemainingLockTime($conn, $admin_id) {
     return 0;
 }
 
-function unlockAdminAccount($conn, $admin_id) {
+function unlockAdminAccount($conn, $admin_id, $school_id) {
     $sql = "UPDATE admins SET 
             failed_login_attempts = 0, 
             locked_until = NULL,
             last_login_attempt = NULL 
-            WHERE id = ?";
+            WHERE id = ? AND school_id = ?";
     
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $admin_id);
+    $stmt->bind_param("ii", $admin_id, $school_id);
     
     if ($stmt->execute()) {
-        $email_sql = "SELECT email FROM admins WHERE id = ?";
+        $email_sql = "SELECT email FROM admins WHERE id = ? AND school_id = ?";
         $stmt = $conn->prepare($email_sql);
-        $stmt->bind_param("i", $admin_id);
+        $stmt->bind_param("ii", $admin_id, $school_id);
         $stmt->execute();
         $email_result = $stmt->get_result();
         $admin = $email_result->fetch_assoc();
         
         if ($admin) {
-            $delete_sql = "DELETE FROM admin_login_attempts WHERE identifier = ?";
+            $delete_sql = "DELETE FROM admin_login_attempts WHERE identifier = ? AND school_id = ?";
             $stmt = $conn->prepare($delete_sql);
-            $stmt->bind_param("s", $admin['email']);
+            $stmt->bind_param("si", $admin['email'], $school_id);
             $stmt->execute();
         }
         return true;
@@ -233,18 +245,22 @@ function unlockAdminAccount($conn, $admin_id) {
     return false;
 }
 
-function unlockAllExpiredAccounts($conn) {
+function unlockAllExpiredAccounts($conn, $school_id) {
     $sql = "UPDATE admins SET 
             failed_login_attempts = 0, 
             locked_until = NULL 
             WHERE locked_until IS NOT NULL 
-            AND locked_until <= NOW()";
-    return mysqli_query($conn, $sql);
+            AND locked_until <= NOW()
+            AND school_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $school_id);
+    $stmt->execute();
+    return $stmt->affected_rows;
 }
 
-// ==================== MAINTENANCE FUNCTIONS ====================
+// ==================== MAINTENANCE FUNCTIONS (with school_id) ====================
 
-function returnItemsForStaff($conn, $staff_id, $admin_id) {
+function returnItemsForStaff($conn, $staff_id, $admin_id, $school_id) {
     mysqli_begin_transaction($conn);
     $returned_count = 0;
     
@@ -253,10 +269,10 @@ function returnItemsForStaff($conn, $staff_id, $admin_id) {
                            FROM maintenance_staff_assignments msa
                            JOIN maintenance_items mi ON msa.item_id = mi.id
                            JOIN admins a ON msa.staff_id = a.id
-                           WHERE msa.staff_id = ? AND msa.status = 'active'";
+                           WHERE msa.staff_id = ? AND msa.status = 'active' AND msa.school_id = ?";
         
         $stmt = $conn->prepare($assignments_sql);
-        $stmt->bind_param("i", $staff_id);
+        $stmt->bind_param("ii", $staff_id, $school_id);
         $stmt->execute();
         $assignments_result = $stmt->get_result();
         
@@ -266,15 +282,15 @@ function returnItemsForStaff($conn, $staff_id, $admin_id) {
                           return_date = CURDATE(),
                           return_condition = 'good',
                           return_notes = 'Auto-returned: Staff deleted'
-                          WHERE id = ?";
+                          WHERE id = ? AND school_id = ?";
             
             $update_stmt = $conn->prepare($update_sql);
-            $update_stmt->bind_param("i", $assignment['id']);
+            $update_stmt->bind_param("ii", $assignment['id'], $school_id);
             $update_stmt->execute();
             
-            $update_item_sql = "UPDATE maintenance_items SET status = 'available' WHERE id = ?";
+            $update_item_sql = "UPDATE maintenance_items SET status = 'available' WHERE id = ? AND school_id = ?";
             $update_item_stmt = $conn->prepare($update_item_sql);
-            $update_item_stmt->bind_param("i", $assignment['item_id']);
+            $update_item_stmt->bind_param("ii", $assignment['item_id'], $school_id);
             $update_item_stmt->execute();
             
             $returned_count++;
@@ -289,8 +305,8 @@ function returnItemsForStaff($conn, $staff_id, $admin_id) {
     }
 }
 
-// ==================== GET ALL ADMINS ====================
-
+// ==================== GET ALL ADMINS FOR CURRENT SCHOOL ====================
+// MUHIMU SANA: Filter by current school_id
 $sql = "SELECT a.*, 
         GROUP_CONCAT(DISTINCT ar.role_name ORDER BY ara.is_primary DESC, ar.role_name SEPARATOR ', ') as roles,
         MAX(ara.is_primary) as has_primary,
@@ -298,10 +314,15 @@ $sql = "SELECT a.*,
         FROM admins a
         LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
         LEFT JOIN admin_roles ar ON ara.role_id = ar.id
+        WHERE a.school_id = ?
         GROUP BY a.id
         ORDER BY a.status DESC, a.first_name, a.last_name";
 
-$result = mysqli_query($conn, $sql);
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$result = $stmt->get_result();
+
 $admins = [];
 if ($result && mysqli_num_rows($result) > 0) {
     while ($row = mysqli_fetch_assoc($result)) {
@@ -309,12 +330,25 @@ if ($result && mysqli_num_rows($result) > 0) {
     }
 }
 
-// ==================== HANDLE ACTIONS ====================
+// ==================== HANDLE ACTIONS (with school_id check) ====================
 
 // Handle admin deletion
 if (isset($_GET['delete'])) {
     $id = mysqli_real_escape_string($conn, $_GET['delete']);
     $current_admin_id = $_SESSION['admin_id'] ?? 0;
+    
+    // First verify this admin belongs to current school
+    $verify_sql = "SELECT id FROM admins WHERE id = ? AND school_id = ?";
+    $verify_stmt = $conn->prepare($verify_sql);
+    $verify_stmt->bind_param("ii", $id, $current_school_id);
+    $verify_stmt->execute();
+    $verify_result = $verify_stmt->get_result();
+    
+    if ($verify_result->num_rows == 0) {
+        $_SESSION['error'] = "Unauthorized: Cannot delete admin from another school.";
+        header("Location: admins.php");
+        exit();
+    }
     
     if ($id == $current_admin_id) {
         $_SESSION['error'] = "You cannot delete your own account!";
@@ -322,16 +356,16 @@ if (isset($_GET['delete'])) {
         exit();
     }
     
-    $items_returned = returnItemsForStaff($conn, $id, $current_admin_id);
+    $items_returned = returnItemsForStaff($conn, $id, $current_admin_id, $current_school_id);
     
     $delete_roles_sql = "DELETE FROM admin_role_assignments WHERE admin_id = ?";
     $stmt = $conn->prepare($delete_roles_sql);
     $stmt->bind_param("i", $id);
     $stmt->execute();
     
-    $delete_sql = "DELETE FROM admins WHERE id = ?";
+    $delete_sql = "DELETE FROM admins WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($delete_sql);
-    $stmt->bind_param("i", $id);
+    $stmt->bind_param("ii", $id, $current_school_id);
     
     if ($stmt->execute()) {
         $message = "Teacher deleted successfully!";
@@ -346,13 +380,26 @@ if (isset($_GET['delete'])) {
     exit();
 }
 
-// Handle status toggle
+// Handle status toggle (with school_id verification)
 if (isset($_GET['toggle_status'])) {
     $id = mysqli_real_escape_string($conn, $_GET['toggle_status']);
     
-    $status_sql = "UPDATE admins SET status = NOT status WHERE id = ?";
+    // Verify admin belongs to current school
+    $verify_sql = "SELECT id FROM admins WHERE id = ? AND school_id = ?";
+    $verify_stmt = $conn->prepare($verify_sql);
+    $verify_stmt->bind_param("ii", $id, $current_school_id);
+    $verify_stmt->execute();
+    $verify_result = $verify_stmt->get_result();
+    
+    if ($verify_result->num_rows == 0) {
+        $_SESSION['error'] = "Unauthorized: Cannot modify admin from another school.";
+        header("Location: admins.php");
+        exit();
+    }
+    
+    $status_sql = "UPDATE admins SET status = NOT status WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($status_sql);
-    $stmt->bind_param("i", $id);
+    $stmt->bind_param("ii", $id, $current_school_id);
     
     if ($stmt->execute()) {
         $_SESSION['success'] = "Teacher status updated successfully!";
@@ -363,7 +410,7 @@ if (isset($_GET['toggle_status'])) {
     exit();
 }
 
-// Handle password reset
+// Handle password reset (with school_id verification)
 if (isset($_GET['reset_password'])) {
     $id = intval($_GET['reset_password']);
     
@@ -373,12 +420,25 @@ if (isset($_GET['reset_password'])) {
         exit();
     }
     
+    // Verify admin belongs to current school
+    $verify_sql = "SELECT id FROM admins WHERE id = ? AND school_id = ?";
+    $verify_stmt = $conn->prepare($verify_sql);
+    $verify_stmt->bind_param("ii", $id, $current_school_id);
+    $verify_stmt->execute();
+    $verify_result = $verify_stmt->get_result();
+    
+    if ($verify_result->num_rows == 0) {
+        $_SESSION['error'] = "Unauthorized: Cannot reset password for admin from another school.";
+        header("Location: admins.php");
+        exit();
+    }
+    
     $current_year = date('Y');
     $temp_password = "school@" . $current_year;
     $hashed_password = password_hash($temp_password, PASSWORD_DEFAULT);
     
-    $stmt = $conn->prepare("UPDATE admins SET password = ?, updated_at = NOW() WHERE id = ?");
-    $stmt->bind_param("si", $hashed_password, $id);
+    $stmt = $conn->prepare("UPDATE admins SET password = ?, updated_at = NOW() WHERE id = ? AND school_id = ?");
+    $stmt->bind_param("sii", $hashed_password, $id, $current_school_id);
     
     if ($stmt->execute()) {
         $_SESSION['success'] = "Password reset successfully! New password: " . $temp_password;
@@ -389,10 +449,23 @@ if (isset($_GET['reset_password'])) {
     exit();
 }
 
-// Handle unlock admin account (Only Head Master & Second Master)
+// Handle unlock admin account (with school_id verification)
 if (isset($_GET['unlock_account'])) {
     $id = mysqli_real_escape_string($conn, $_GET['unlock_account']);
     $current_admin_id = $_SESSION['admin_id'] ?? 0;
+    
+    // Verify admin belongs to current school
+    $verify_sql = "SELECT id FROM admins WHERE id = ? AND school_id = ?";
+    $verify_stmt = $conn->prepare($verify_sql);
+    $verify_stmt->bind_param("ii", $id, $current_school_id);
+    $verify_stmt->execute();
+    $verify_result = $verify_stmt->get_result();
+    
+    if ($verify_result->num_rows == 0) {
+        $_SESSION['error'] = "Unauthorized: Cannot unlock admin from another school.";
+        header("Location: admins.php");
+        exit();
+    }
     
     if ($id == $current_admin_id) {
         $_SESSION['error'] = "You cannot unlock your own account! Please contact another administrator.";
@@ -400,7 +473,7 @@ if (isset($_GET['unlock_account'])) {
         exit();
     }
     
-    if (unlockAdminAccount($conn, $id)) {
+    if (unlockAdminAccount($conn, $id, $current_school_id)) {
         $_SESSION['success'] = "Teacher account unlocked successfully!";
     } else {
         $_SESSION['error'] = "Error unlocking teacher account.";
@@ -409,22 +482,40 @@ if (isset($_GET['unlock_account'])) {
     exit();
 }
 
-// Handle auto-unlock all expired accounts
+// Handle auto-unlock all expired accounts (only for current school)
 if (isset($_GET['auto_unlock_all'])) {
-    if (unlockAllExpiredAccounts($conn)) {
-        $affected = mysqli_affected_rows($conn);
-        $_SESSION['success'] = "$affected expired locked accounts have been auto-unlocked.";
-    } else {
-        $_SESSION['error'] = "Error auto-unlocking accounts.";
-    }
+    $affected = unlockAllExpiredAccounts($conn, $current_school_id);
+    $_SESSION['success'] = "$affected expired locked accounts have been auto-unlocked.";
     header("Location: admins.php");
     exit();
+}
+
+// Helper function to check lock status with school_id
+function isAdminAccountLockedWithSchool($conn, $admin_id, $school_id) {
+    $sql = "SELECT locked_until FROM admins WHERE id = ? AND school_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ii", $admin_id, $school_id);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $admin = $result->fetch_assoc();
+    
+    if (!$admin) return false;
+    
+    if ($admin['locked_until'] !== null && $admin['locked_until'] != '') {
+        $locked_until = strtotime($admin['locked_until']);
+        $now = time();
+        if ($locked_until > $now) {
+            return true;
+        }
+    }
+    return false;
 }
 ?>
 
 <?php include '../controller/header.php'; ?>
 <?php include '../controller/sidebar.php'; ?>
 
+<!-- REST OF THE HTML REMAINS THE SAME, but update the PHP loops to use the new function -->
 <div class="main-content">
     <div class="container-fluid">
         <!-- Page Title -->
@@ -519,7 +610,7 @@ if (isset($_GET['auto_unlock_all'])) {
                         <?php 
                         $locked_count = 0;
                         foreach ($admins as $a) {
-                            if (isAdminAccountLocked($conn, $a['id'])) $locked_count++;
+                            if (isAdminAccountLockedWithSchool($conn, $a['id'], $current_school_id)) $locked_count++;
                         }
                         echo $locked_count;
                         ?>
@@ -592,9 +683,9 @@ if (isset($_GET['auto_unlock_all'])) {
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($admins as $admin): 
-                                    $is_locked = isAdminAccountLocked($conn, $admin['id']);
-                                    $lock_info = getAdminLockInfo($conn, $admin['id']);
-                                    $remaining_minutes = getRemainingLockTime($conn, $admin['id']);
+                                    $is_locked = isAdminAccountLockedWithSchool($conn, $admin['id'], $current_school_id);
+                                    $lock_info = getAdminLockInfo($conn, $admin['id'], $current_school_id);
+                                    $remaining_minutes = getRemainingLockTime($conn, $admin['id'], $current_school_id);
                                     
                                     $profile_image = '../uploads/profiles/' . ($admin['profile_image'] ?: 'default.jpg');
                                     if (!file_exists($profile_image) || empty($admin['profile_image'])) {
@@ -851,6 +942,7 @@ if (isset($_GET['auto_unlock_all'])) {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 
 <style>
+    /* Same styles as before - keep unchanged */
     :root {
         --primary-color: <?php echo $colors['primary']; ?>;
         --primary-dark: <?php echo $colors['primary_dark']; ?>;
@@ -876,7 +968,6 @@ if (isset($_GET['auto_unlock_all'])) {
         background-size: <?php echo $bg_size; ?>;
         background-position: center;
         min-height: 100vh;
-       
     }
 
     <?php if ($compact_mode === '1'): ?>
@@ -1021,7 +1112,7 @@ if (isset($_GET['auto_unlock_all'])) {
 </style>
 
 <script>
-// Show SweetAlert2 notifications
+// Same JavaScript as before - keep unchanged
 document.addEventListener('DOMContentLoaded', function() {
     const successMessage = document.getElementById('successMessage');
     const errorMessage = document.getElementById('errorMessage');
@@ -1143,10 +1234,8 @@ viewButtons.forEach(button => {
         const adminId = this.dataset.adminId;
         const adminName = this.dataset.adminName;
         
-        // Update modal title with teacher name
         document.getElementById('modalAdminName').textContent = adminName;
         
-        // Show loading state
         document.getElementById('adminDetails').innerHTML = `
             <div class="text-center py-4">
                 <div class="spinner-border text-primary" role="status">
@@ -1156,7 +1245,6 @@ viewButtons.forEach(button => {
             </div>
         `;
         
-        // Fetch specific admin details using the correct endpoint
         fetch(`view_admin.php?id=${adminId}`)
             .then(response => {
                 if (!response.ok) {

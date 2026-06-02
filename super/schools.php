@@ -1,5 +1,5 @@
 <?php
-// super/schools.php - Simplified Schools Management
+// super/schools.php - Schools Management with Logo Upload
 session_start();
 
 // Check if Super Admin is logged in
@@ -25,94 +25,48 @@ if (!$super_admin) {
     exit();
 }
 
-// Handle Status Toggle (Activate/Suspend)
-if (isset($_GET['toggle_status']) && isset($_GET['id'])) {
-    $school_id = (int)$_GET['id'];
-    $new_status = $_GET['toggle_status'] == 'activate' ? 'Active' : 'Suspended';
+// ==================== HELPER FUNCTION: Upload Logo ====================
+function uploadSchoolLogo($file, $school_id, $school_code) {
+    $upload_dir = '../uploads/school_logos/';
     
-    $update_sql = "UPDATE schools SET status = ? WHERE id = ?";
-    $stmt = $conn->prepare($update_sql);
-    $stmt->bind_param("si", $new_status, $school_id);
-    
-    if ($stmt->execute()) {
-        $_SESSION['toast_message'] = "School status updated to " . $new_status . "!";
-        $_SESSION['toast_type'] = "success";
-    } else {
-        $_SESSION['toast_message'] = "Failed to update school status!";
-        $_SESSION['toast_type'] = "error";
-    }
-    $stmt->close();
-    header("Location: schools.php");
-    exit();
-}
-
-// Handle Delete School
-if (isset($_GET['delete']) && isset($_GET['id'])) {
-    $school_id = (int)$_GET['id'];
-    
-    // Check if school exists
-    $check_sql = "SELECT school_name FROM schools WHERE id = ?";
-    $check_stmt = $conn->prepare($check_sql);
-    $check_stmt->bind_param("i", $school_id);
-    $check_stmt->execute();
-    $check_result = $check_stmt->get_result();
-    $school = $check_result->fetch_assoc();
-    
-    if ($school) {
-        // Start transaction
-        $conn->begin_transaction();
-        
-        try {
-            // Delete related data
-            $delete_students = "DELETE FROM students WHERE school_id = ?";
-            $stmt = $conn->prepare($delete_students);
-            $stmt->bind_param("i", $school_id);
-            $stmt->execute();
-            $stmt->close();
-            
-            $delete_admins = "DELETE FROM admins WHERE school_id = ?";
-            $stmt = $conn->prepare($delete_admins);
-            $stmt->bind_param("i", $school_id);
-            $stmt->execute();
-            $stmt->close();
-            
-            $delete_dorms = "DELETE FROM dormitories WHERE school_id = ?";
-            $stmt = $conn->prepare($delete_dorms);
-            $stmt->bind_param("i", $school_id);
-            $stmt->execute();
-            $stmt->close();
-            
-            $delete_exams = "DELETE FROM exam_types WHERE school_id = ?";
-            $stmt = $conn->prepare($delete_exams);
-            $stmt->bind_param("i", $school_id);
-            $stmt->execute();
-            $stmt->close();
-            
-            $delete_school = "DELETE FROM schools WHERE id = ?";
-            $stmt = $conn->prepare($delete_school);
-            $stmt->bind_param("i", $school_id);
-            $stmt->execute();
-            $stmt->close();
-            
-            $conn->commit();
-            $_SESSION['toast_message'] = "School '" . htmlspecialchars($school['school_name']) . "' and all its data has been deleted!";
-            $_SESSION['toast_type'] = "success";
-        } catch (Exception $e) {
-            $conn->rollback();
-            $_SESSION['toast_message'] = "Error deleting school: " . $e->getMessage();
-            $_SESSION['toast_type'] = "error";
-        }
-    } else {
-        $_SESSION['toast_message'] = "School not found!";
-        $_SESSION['toast_type'] = "error";
+    // Create directory if not exists
+    if (!file_exists($upload_dir)) {
+        mkdir($upload_dir, 0777, true);
     }
     
-    $check_stmt->close();
-    header("Location: schools.php");
-    exit();
+    $allowed_types = ['image/jpeg', 'image/png', 'image/jpg', 'image/gif', 'image/webp'];
+    $max_size = 2 * 1024 * 1024; // 2MB
+    
+    // Check if file was uploaded
+    if (!isset($file) || $file['error'] !== UPLOAD_ERR_OK) {
+        return ['success' => false, 'message' => 'No file uploaded or upload error'];
+    }
+    
+    // Validate file type
+    if (!in_array($file['type'], $allowed_types)) {
+        return ['success' => false, 'message' => 'Only JPG, PNG, GIF, and WEBP images are allowed!'];
+    }
+    
+    // Validate file size
+    if ($file['size'] > $max_size) {
+        return ['success' => false, 'message' => 'Image size must be less than 2MB!'];
+    }
+    
+    // Generate unique filename
+    $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+    $filename = 'school_' . $school_id . '_' . $school_code . '_' . time() . '.' . $extension;
+    $filepath = $upload_dir . $filename;
+    $db_path = 'uploads/school_logos/' . $filename;
+    
+    // Upload file
+    if (move_uploaded_file($file['tmp_name'], $filepath)) {
+        return ['success' => true, 'path' => $db_path];
+    } else {
+        return ['success' => false, 'message' => 'Failed to upload image'];
+    }
 }
 
-// Handle Add School
+// ==================== ADD SCHOOL ====================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_school'])) {
     $school_code = mysqli_real_escape_string($conn, trim($_POST['school_code']));
     $school_name = mysqli_real_escape_string($conn, trim($_POST['school_name']));
@@ -144,6 +98,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_school'])) {
         $stmt->bind_param("ssssss", $school_code, $school_name, $school_motto, $address, $phone, $email);
         
         if ($stmt->execute()) {
+            $school_id = $conn->insert_id;
+            
+            // Handle logo upload
+            if (isset($_FILES['school_logo']) && $_FILES['school_logo']['error'] === UPLOAD_ERR_OK) {
+                $upload_result = uploadSchoolLogo($_FILES['school_logo'], $school_id, $school_code);
+                if ($upload_result['success']) {
+                    $update_logo = "UPDATE schools SET logo_path = ? WHERE id = ?";
+                    $logo_stmt = $conn->prepare($update_logo);
+                    $logo_stmt->bind_param("si", $upload_result['path'], $school_id);
+                    $logo_stmt->execute();
+                    $logo_stmt->close();
+                }
+            }
+            
             $_SESSION['toast_message'] = "School '" . $school_name . "' created successfully!";
             $_SESSION['toast_type'] = "success";
         } else {
@@ -159,7 +127,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_school'])) {
     exit();
 }
 
-// Handle Edit School
+// ==================== EDIT SCHOOL ====================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_school'])) {
     $school_id = (int)$_POST['school_id'];
     $school_code = mysqli_real_escape_string($conn, trim($_POST['school_code']));
@@ -184,6 +152,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_school'])) {
     }
     $check_stmt->close();
     
+    // Get current logo path
+    $current_logo_sql = "SELECT logo_path FROM schools WHERE id = ?";
+    $current_logo_stmt = $conn->prepare($current_logo_sql);
+    $current_logo_stmt->bind_param("i", $school_id);
+    $current_logo_stmt->execute();
+    $current_logo_result = $current_logo_stmt->get_result();
+    $current_logo = $current_logo_result->fetch_assoc();
+    $current_logo_path = $current_logo['logo_path'] ?? null;
+    $current_logo_stmt->close();
+    
     $update_sql = "UPDATE schools SET 
                    school_code = ?, school_name = ?, school_motto = ?, 
                    address = ?, phone = ?, email = ?, status = ?
@@ -192,6 +170,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_school'])) {
     $stmt->bind_param("sssssssi", $school_code, $school_name, $school_motto, $address, $phone, $email, $status, $school_id);
     
     if ($stmt->execute()) {
+        // Handle logo upload
+        if (isset($_FILES['school_logo']) && $_FILES['school_logo']['error'] === UPLOAD_ERR_OK) {
+            // Delete old logo if exists
+            if ($current_logo_path && file_exists('../' . $current_logo_path)) {
+                unlink('../' . $current_logo_path);
+            }
+            
+            $upload_result = uploadSchoolLogo($_FILES['school_logo'], $school_id, $school_code);
+            if ($upload_result['success']) {
+                $update_logo = "UPDATE schools SET logo_path = ? WHERE id = ?";
+                $logo_stmt = $conn->prepare($update_logo);
+                $logo_stmt->bind_param("si", $upload_result['path'], $school_id);
+                $logo_stmt->execute();
+                $logo_stmt->close();
+            }
+        }
+        
         $_SESSION['toast_message'] = "School '" . $school_name . "' updated successfully!";
         $_SESSION['toast_type'] = "success";
     } else {
@@ -199,6 +194,106 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_school'])) {
         $_SESSION['toast_type'] = "error";
     }
     $stmt->close();
+    header("Location: schools.php");
+    exit();
+}
+
+// ==================== REMOVE SCHOOL LOGO ====================
+if (isset($_GET['remove_logo']) && isset($_GET['id'])) {
+    $school_id = (int)$_GET['id'];
+    
+    // Get logo path
+    $logo_sql = "SELECT logo_path FROM schools WHERE id = ?";
+    $logo_stmt = $conn->prepare($logo_sql);
+    $logo_stmt->bind_param("i", $school_id);
+    $logo_stmt->execute();
+    $logo_result = $logo_stmt->get_result();
+    $logo_data = $logo_result->fetch_assoc();
+    
+    if ($logo_data['logo_path'] && file_exists('../' . $logo_data['logo_path'])) {
+        unlink('../' . $logo_data['logo_path']);
+    }
+    $logo_stmt->close();
+    
+    $update_sql = "UPDATE schools SET logo_path = NULL WHERE id = ?";
+    $update_stmt = $conn->prepare($update_sql);
+    $update_stmt->bind_param("i", $school_id);
+    
+    if ($update_stmt->execute()) {
+        $_SESSION['toast_message'] = "School logo removed successfully!";
+        $_SESSION['toast_type'] = "success";
+    } else {
+        $_SESSION['toast_message'] = "Error removing logo!";
+        $_SESSION['toast_type'] = "error";
+    }
+    $update_stmt->close();
+    header("Location: schools.php");
+    exit();
+}
+
+// ==================== STATUS TOGGLE ====================
+if (isset($_GET['toggle_status']) && isset($_GET['id'])) {
+    $school_id = (int)$_GET['id'];
+    $new_status = $_GET['toggle_status'] == 'activate' ? 'Active' : 'Suspended';
+    
+    $update_sql = "UPDATE schools SET status = ? WHERE id = ?";
+    $stmt = $conn->prepare($update_sql);
+    $stmt->bind_param("si", $new_status, $school_id);
+    
+    if ($stmt->execute()) {
+        $_SESSION['toast_message'] = "School status updated to " . $new_status . "!";
+        $_SESSION['toast_type'] = "success";
+    } else {
+        $_SESSION['toast_message'] = "Failed to update school status!";
+        $_SESSION['toast_type'] = "error";
+    }
+    $stmt->close();
+    header("Location: schools.php");
+    exit();
+}
+
+// ==================== DELETE SCHOOL ====================
+if (isset($_GET['delete']) && isset($_GET['id'])) {
+    $school_id = (int)$_GET['id'];
+    
+    // Get school info
+    $info_sql = "SELECT school_name, logo_path FROM schools WHERE id = ?";
+    $info_stmt = $conn->prepare($info_sql);
+    $info_stmt->bind_param("i", $school_id);
+    $info_stmt->execute();
+    $info_result = $info_stmt->get_result();
+    $school_info = $info_result->fetch_assoc();
+    
+    if ($school_info) {
+        // Delete logo file if exists
+        if ($school_info['logo_path'] && file_exists('../' . $school_info['logo_path'])) {
+            unlink('../' . $school_info['logo_path']);
+        }
+        
+        // Start transaction
+        $conn->begin_transaction();
+        
+        try {
+            // Delete related data
+            $conn->query("DELETE FROM students WHERE school_id = $school_id");
+            $conn->query("DELETE FROM admins WHERE school_id = $school_id");
+            $conn->query("DELETE FROM dormitories WHERE school_id = $school_id");
+            $conn->query("DELETE FROM exam_types WHERE school_id = $school_id");
+            $conn->query("DELETE FROM notifications WHERE school_id = $school_id");
+            $conn->query("DELETE FROM maintenance_items WHERE school_id = $school_id");
+            $conn->query("DELETE FROM store_tools WHERE school_id = $school_id");
+            $conn->query("DELETE FROM schools WHERE id = $school_id");
+            
+            $conn->commit();
+            $_SESSION['toast_message'] = "School '" . $school_info['school_name'] . "' and all its data deleted!";
+            $_SESSION['toast_type'] = "success";
+        } catch (Exception $e) {
+            $conn->rollback();
+            $_SESSION['toast_message'] = "Error deleting school!";
+            $_SESSION['toast_type'] = "error";
+        }
+    }
+    $info_stmt->close();
     header("Location: schools.php");
     exit();
 }
@@ -216,7 +311,6 @@ $total_schools = count($schools);
 $active_schools = count(array_filter($schools, function($s) { return $s['status'] == 'Active'; }));
 $suspended_schools = count(array_filter($schools, function($s) { return $s['status'] == 'Suspended'; }));
 
-// Set timezone
 date_default_timezone_set('Africa/Dar_es_Salaam');
 ?>
 
@@ -227,17 +321,10 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Schools - Super Admin</title>
     
-    <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <!-- SweetAlert2 -->
     <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    
-    <!-- DataTables -->
     <link href="https://cdn.datatables.net/1.13.4/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>
@@ -263,13 +350,7 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
             padding: 20px;
             text-align: center;
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
-            transition: all 0.3s ease;
             border-left: 4px solid var(--primary-color);
-        }
-
-        .stats-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
         }
 
         .stats-card h2 {
@@ -277,12 +358,6 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
             font-weight: 700;
             margin-bottom: 5px;
             color: var(--primary-color);
-        }
-
-        .stats-card p {
-            margin: 0;
-            color: #666;
-            font-size: 0.9rem;
         }
 
         .status-badge {
@@ -294,18 +369,17 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
         }
         .status-Active { background: #d4edda; color: #155724; }
         .status-Suspended { background: #f8d7da; color: #721c24; }
-        .status-Expired { background: #fff3cd; color: #856404; }
-        .status-Inactive { background: #e2e3e5; color: #383d41; }
 
-        .action-btns .btn {
-            padding: 4px 8px;
-            margin: 0 2px;
-            font-size: 0.75rem;
+        .school-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            object-fit: cover;
+            background: #f0f0f0;
         }
 
         .modal-content {
             border-radius: 15px;
-            border: none;
         }
         .modal-header {
             background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
@@ -315,17 +389,10 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
         .modal-header .btn-close {
             filter: brightness(0) invert(1);
         }
-        .modal-body {
-            padding: 25px;
-        }
         .form-control, .form-select {
             border-radius: 10px;
             border: 1px solid #e0e0e0;
             padding: 10px 15px;
-        }
-        .form-control:focus, .form-select:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 0.2rem rgba(59, 157, 179, 0.25);
         }
         .btn-submit {
             background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
@@ -333,11 +400,14 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
             border-radius: 10px;
             padding: 10px 25px;
             color: white;
-            font-weight: 500;
         }
-        .btn-submit:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(59, 157, 179, 0.3);
+        .logo-preview {
+            width: 100px;
+            height: 100px;
+            border-radius: 15px;
+            object-fit: cover;
+            border: 2px solid var(--primary-color);
+            background: #f8f9fa;
         }
     </style>
 </head>
@@ -349,12 +419,11 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
 <main class="main-content">
     <div class="container-fluid">
         
-        <!-- Page Header -->
         <div class="page-header">
             <div class="row align-items-center">
                 <div class="col-md-8">
                     <h2><i class="fas fa-building me-2"></i> Manage Schools</h2>
-                    <p class="mb-0">View, add, edit, and manage all schools in the system</p>
+                    <p class="mb-0">Manage all schools in the system</p>
                 </div>
                 <div class="col-md-4 text-md-end">
                     <button type="button" class="btn btn-light" data-bs-toggle="modal" data-bs-target="#addSchoolModal">
@@ -364,29 +433,27 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
             </div>
         </div>
 
-        <!-- Statistics Cards -->
         <div class="row mb-4">
             <div class="col-md-4 mb-3">
                 <div class="stats-card">
                     <h2><?php echo $total_schools; ?></h2>
-                    <p><i class="fas fa-school me-1"></i> Total Schools</p>
+                    <p>Total Schools</p>
                 </div>
             </div>
             <div class="col-md-4 mb-3">
                 <div class="stats-card">
                     <h2 class="text-success"><?php echo $active_schools; ?></h2>
-                    <p><i class="fas fa-check-circle me-1 text-success"></i> Active Schools</p>
+                    <p>Active Schools</p>
                 </div>
             </div>
             <div class="col-md-4 mb-3">
                 <div class="stats-card">
                     <h2 class="text-warning"><?php echo $suspended_schools; ?></h2>
-                    <p><i class="fas fa-pause-circle me-1 text-warning"></i> Suspended Schools</p>
+                    <p>Suspended Schools</p>
                 </div>
             </div>
         </div>
 
-        <!-- Schools Table -->
         <div class="card">
             <div class="card-body">
                 <div class="table-responsive">
@@ -394,10 +461,10 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
                         <thead>
                             <tr>
                                 <th>ID</th>
+                                <th>Logo</th>
                                 <th>School Code</th>
                                 <th>School Name</th>
                                 <th>Motto</th>
-                                <th>Address</th>
                                 <th>Phone</th>
                                 <th>Status</th>
                                 <th>Created</th>
@@ -406,12 +473,20 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
                         </thead>
                         <tbody>
                             <?php foreach ($schools as $school): ?>
-                            <tr id="school-row-<?php echo $school['id']; ?>">
+                            <tr>
                                 <td><?php echo $school['id']; ?></td>
+                                <td>
+                                    <?php if ($school['logo_path'] && file_exists('../' . $school['logo_path'])): ?>
+                                        <img src="../<?php echo $school['logo_path']; ?>" class="school-logo" alt="Logo">
+                                    <?php else: ?>
+                                        <div class="school-logo d-flex align-items-center justify-content-center bg-light">
+                                            <i class="fas fa-school text-secondary"></i>
+                                        </div>
+                                    <?php endif; ?>
+                                </td>
                                 <td><strong><?php echo htmlspecialchars($school['school_code']); ?></strong></td>
                                 <td><?php echo htmlspecialchars($school['school_name']); ?></td>
                                 <td><?php echo htmlspecialchars($school['school_motto'] ?? '-'); ?></td>
-                                <td><?php echo htmlspecialchars(substr($school['address'] ?? '-', 0, 50)); ?>...</td>
                                 <td><?php echo htmlspecialchars($school['phone'] ?? '-'); ?></td>
                                 <td>
                                     <span class="status-badge status-<?php echo $school['status']; ?>">
@@ -419,106 +494,102 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
                                     </span>
                                 </td>
                                 <td><?php echo date('M d, Y', strtotime($school['created_at'])); ?></td>
-                                <td class="action-btns">
-                                    <button type="button" class="btn btn-sm btn-primary" 
-                                            onclick="editSchool(<?php echo $school['id']; ?>)"
-                                            title="Edit School">
+                                <td>
+                                    <button class="btn btn-sm btn-primary" onclick="editSchool(<?php echo $school['id']; ?>)">
                                         <i class="fas fa-edit"></i>
                                     </button>
                                     <?php if ($school['status'] == 'Active'): ?>
-                                    <button type="button" class="btn btn-sm btn-warning" 
-                                            onclick="toggleStatus(<?php echo $school['id']; ?>, 'suspend')"
-                                            title="Suspend School">
+                                    <button class="btn btn-sm btn-warning" onclick="toggleStatus(<?php echo $school['id']; ?>, 'suspend')">
                                         <i class="fas fa-pause"></i>
                                     </button>
                                     <?php else: ?>
-                                    <button type="button" class="btn btn-sm btn-success" 
-                                            onclick="toggleStatus(<?php echo $school['id']; ?>, 'activate')"
-                                            title="Activate School">
+                                    <button class="btn btn-sm btn-success" onclick="toggleStatus(<?php echo $school['id']; ?>, 'activate')">
                                         <i class="fas fa-play"></i>
                                     </button>
                                     <?php endif; ?>
-                                    <button type="button" class="btn btn-sm btn-danger" 
-                                            onclick="deleteSchool(<?php echo $school['id']; ?>, '<?php echo addslashes($school['school_name']); ?>')"
-                                            title="Delete School">
-                                        <i class="fas fa-trash-alt"></i>
+                                    <button class="btn btn-sm btn-danger" onclick="deleteSchool(<?php echo $school['id']; ?>, '<?php echo addslashes($school['school_name']); ?>')">
+                                        <i class="fas fa-trash"></i>
                                     </button>
                                  </td>
-                             </tr>
+                              </tr>
                             <?php endforeach; ?>
                         </tbody>
                      </table>
                 </div>
             </div>
         </div>
-
     </div>
 </main>
 
-<!-- ==================== ADD SCHOOL MODAL ==================== -->
-<div class="modal fade" id="addSchoolModal" tabindex="-1" data-bs-backdrop="static">
+<!-- ADD SCHOOL MODAL -->
+<div class="modal fade" id="addSchoolModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-plus-circle me-2"></i> Add New School</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="">
+            <form method="POST" enctype="multipart/form-data">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">School Code <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="school_code" required 
-                               placeholder="e.g., MVZ001" maxlength="20">
-                        <small class="text-muted">Unique code for the school</small>
+                        <input type="text" class="form-control" name="school_code" required placeholder="e.g., MVZ001">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">School Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="school_name" required 
-                               placeholder="e.g., Muyovozi High School">
+                        <input type="text" class="form-control" name="school_name" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">School Motto</label>
-                        <input type="text" class="form-control" name="school_motto" 
-                               placeholder="e.g., Education For Life">
+                        <input type="text" class="form-control" name="school_motto">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">School Logo</label>
+                        <input type="file" class="form-control" name="school_logo" accept="image/*">
+                        <small class="text-muted">Max 2MB. JPG, PNG, GIF, WEBP</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Address</label>
-                        <textarea class="form-control" name="address" rows="2" 
-                                  placeholder="Full school address"></textarea>
+                        <textarea class="form-control" name="address" rows="2"></textarea>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Phone Number</label>
-                        <input type="tel" class="form-control" name="phone" 
-                               placeholder="e.g., 255712345678">
+                        <input type="tel" class="form-control" name="phone">
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Email Address</label>
-                        <input type="email" class="form-control" name="email" 
-                               placeholder="school@example.com">
+                        <input type="email" class="form-control" name="email">
                     </div>
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="add_school" class="btn btn-submit">
-                        <i class="fas fa-save me-2"></i> Create School
-                    </button>
+                    <button type="submit" name="add_school" class="btn btn-submit">Create School</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
 
-<!-- ==================== EDIT SCHOOL MODAL ==================== -->
-<div class="modal fade" id="editSchoolModal" tabindex="-1" data-bs-backdrop="static">
+<!-- EDIT SCHOOL MODAL -->
+<div class="modal fade" id="editSchoolModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-edit me-2"></i> Edit School</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="" id="editSchoolForm">
+            <form method="POST" enctype="multipart/form-data" id="editSchoolForm">
                 <div class="modal-body">
                     <input type="hidden" name="school_id" id="edit_school_id">
+                    <div class="text-center mb-3" id="logoPreviewContainer">
+                        <img id="logoPreview" class="logo-preview" src="" alt="School Logo" style="display: none;">
+                        <div id="noLogoPreview" class="logo-preview d-flex align-items-center justify-content-center bg-light">
+                            <i class="fas fa-school fa-3x text-secondary"></i>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-danger mt-2" id="removeLogoBtn" style="display: none;" onclick="removeLogo()">
+                            <i class="fas fa-trash me-1"></i> Remove Logo
+                        </button>
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">School Code <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" name="school_code" id="edit_school_code" required>
@@ -530,6 +601,11 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
                     <div class="mb-3">
                         <label class="form-label">School Motto</label>
                         <input type="text" class="form-control" name="school_motto" id="edit_school_motto">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Change Logo</label>
+                        <input type="file" class="form-control" name="school_logo" id="edit_school_logo" accept="image/*">
+                        <small class="text-muted">Leave empty to keep current logo</small>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Address</label>
@@ -555,9 +631,7 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="edit_school" class="btn btn-submit">
-                        <i class="fas fa-save me-2"></i> Update School
-                    </button>
+                    <button type="submit" name="edit_school" class="btn btn-submit">Update School</button>
                 </div>
             </form>
         </div>
@@ -569,39 +643,20 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
 $(document).ready(function() {
     $('#schoolsTable').DataTable({
         pageLength: 10,
-        order: [[0, 'desc']],
-        language: {
-            search: "Search:",
-            lengthMenu: "Show _MENU_ entries",
-            info: "Showing _START_ to _END_ of _TOTAL_ entries",
-            paginate: {
-                first: "First",
-                last: "Last",
-                next: "Next",
-                previous: "Previous"
-            }
-        }
+        order: [[0, 'desc']]
     });
 });
 
-// Show toast message from session
 <?php if (isset($_SESSION['toast_message'])): ?>
 Swal.fire({
     icon: '<?php echo $_SESSION['toast_type'] == 'success' ? 'success' : 'error'; ?>',
     title: '<?php echo $_SESSION['toast_type'] == 'success' ? 'Success!' : 'Error!'; ?>',
     text: '<?php echo htmlspecialchars($_SESSION['toast_message']); ?>',
     confirmButtonColor: '#3B9DB3',
-    timer: 3000,
-    showConfirmButton: true,
-    position: 'center'
+    timer: 3000
 });
-<?php 
-unset($_SESSION['toast_message']);
-unset($_SESSION['toast_type']);
-endif; 
-?>
+<?php unset($_SESSION['toast_message']); unset($_SESSION['toast_type']); endif; ?>
 
-// Edit School Function
 function editSchool(id) {
     $.ajax({
         url: 'get_school.php',
@@ -617,6 +672,19 @@ function editSchool(id) {
             $('#edit_phone').val(data.phone);
             $('#edit_email').val(data.email);
             $('#edit_status').val(data.status);
+            
+            // Handle logo preview
+            if (data.logo_path && data.logo_path !== '') {
+                $('#logoPreview').attr('src', '../' + data.logo_path).show();
+                $('#noLogoPreview').hide();
+                $('#removeLogoBtn').show();
+                $('#edit_school_logo').val('');
+            } else {
+                $('#logoPreview').hide();
+                $('#noLogoPreview').show();
+                $('#removeLogoBtn').hide();
+            }
+            
             $('#editSchoolModal').modal('show');
         },
         error: function() {
@@ -625,20 +693,30 @@ function editSchool(id) {
     });
 }
 
-// Toggle Status Function
-function toggleStatus(id, action) {
-    let title = action == 'suspend' ? 'Suspend School' : 'Activate School';
-    let text = action == 'suspend' ? 'Are you sure you want to suspend this school?' : 'Are you sure you want to activate this school?';
-    let confirmText = action == 'suspend' ? 'Yes, suspend it!' : 'Yes, activate it!';
-    
+function removeLogo() {
+    let schoolId = $('#edit_school_id').val();
     Swal.fire({
-        title: title,
-        text: text,
+        title: 'Remove Logo?',
+        text: 'Are you sure you want to remove this school logo?',
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonColor: '#dc3545',
+        confirmButtonText: 'Yes, remove it!'
+    }).then((result) => {
+        if (result.isConfirmed) {
+            window.location.href = 'schools.php?remove_logo=1&id=' + schoolId;
+        }
+    });
+}
+
+function toggleStatus(id, action) {
+    Swal.fire({
+        title: action == 'suspend' ? 'Suspend School?' : 'Activate School?',
+        text: action == 'suspend' ? 'Are you sure you want to suspend this school?' : 'Are you sure you want to activate this school?',
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: action == 'suspend' ? '#dc3545' : '#28a745',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: confirmText
+        confirmButtonText: action == 'suspend' ? 'Yes, suspend!' : 'Yes, activate!'
     }).then((result) => {
         if (result.isConfirmed) {
             window.location.href = 'schools.php?toggle_status=' + action + '&id=' + id;
@@ -646,29 +724,14 @@ function toggleStatus(id, action) {
     });
 }
 
-// Delete School Function
 function deleteSchool(id, name) {
     Swal.fire({
         title: 'Delete School?',
-        html: `<div style="text-align: left;">
-                    <p><strong>⚠️ WARNING: This action is IRREVERSIBLE!</strong></p>
-                    <p>You are about to delete <strong>"${name}"</strong>.</p>
-                    <p>This will permanently delete all data related to this school including:</p>
-                    <ul>
-                        <li>All students and their records</li>
-                        <li>All staff and administrators</li>
-                        <li>All dormitories and rooms</li>
-                        <li>All exam results</li>
-                        <li>All notifications and logs</li>
-                    </ul>
-                    <p class="text-danger"><strong>This action cannot be undone!</strong></p>
-                </div>`,
+        html: `<strong>"${name}"</strong> will be permanently deleted!`,
         icon: 'warning',
         showCancelButton: true,
         confirmButtonColor: '#dc3545',
-        cancelButtonColor: '#6c757d',
-        confirmButtonText: 'Yes, delete everything!',
-        cancelButtonText: 'Cancel'
+        confirmButtonText: 'Yes, delete!'
     }).then((result) => {
         if (result.isConfirmed) {
             window.location.href = 'schools.php?delete=1&id=' + id;

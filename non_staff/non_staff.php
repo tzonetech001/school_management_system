@@ -1,5 +1,5 @@
 <?php
-// non_staff.php - Non-Staff Employee Management
+// non_staff.php - Non-Staff Employee Management WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -14,10 +14,22 @@ if (!isset($_SESSION['admin_id'])) {
 
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
+// ========== GET CURRENT SCHOOL ID ==========
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
+$stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+
 // ==================== LOAD THEME SETTINGS ====================
 $theme_settings = [];
-$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $admin_id";
-$result = mysqli_query($conn, $query);
+$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = ? AND school_id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$result = $stmt->get_result();
 if ($result && mysqli_num_rows($result) > 0) {
     while ($row = mysqli_fetch_assoc($result)) {
         $theme_settings[$row['setting_key']] = $row['setting_value'];
@@ -25,8 +37,11 @@ if ($result && mysqli_num_rows($result) > 0) {
 }
 
 $preferences = [];
-$prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = $admin_id";
-$prefs_result = mysqli_query($conn, $prefs_query);
+$prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = ? AND school_id = ?";
+$stmt = $conn->prepare($prefs_query);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$prefs_result = $stmt->get_result();
 if ($prefs_result && mysqli_num_rows($prefs_result) > 0) {
     while ($row = mysqli_fetch_assoc($prefs_result)) {
         $preferences[$row['preference_key']] = $row['preference_value'];
@@ -97,10 +112,13 @@ if ($bg_option === 'image') {
     $bg_size = 'auto';
 }
 
-// ==================== PERMISSION CHECK ====================
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
+// ==================== PERMISSION CHECK (with school_id) ====================
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
 $stmt = $conn->prepare($user_roles_sql);
-$stmt->bind_param("i", $admin_id);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -122,15 +140,28 @@ if (!$has_permission) {
     exit();
 }
 
-// ==================== HANDLE ACTIONS ====================
+// ==================== HANDLE ACTIONS (with school_id) ====================
 
 // Handle deletion
 if (isset($_GET['delete'])) {
     $id = mysqli_real_escape_string($conn, $_GET['delete']);
     
-    $delete_sql = "DELETE FROM non_staff WHERE id = ?";
+    // Verify employee belongs to current school
+    $verify_sql = "SELECT id FROM non_staff WHERE id = ? AND school_id = ?";
+    $verify_stmt = $conn->prepare($verify_sql);
+    $verify_stmt->bind_param("ii", $id, $current_school_id);
+    $verify_stmt->execute();
+    $verify_result = $verify_stmt->get_result();
+    
+    if ($verify_result->num_rows == 0) {
+        $_SESSION['error'] = "Unauthorized: Cannot delete employee from another school.";
+        header("Location: non_staff.php");
+        exit();
+    }
+    
+    $delete_sql = "DELETE FROM non_staff WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($delete_sql);
-    $stmt->bind_param("i", $id);
+    $stmt->bind_param("ii", $id, $current_school_id);
     
     if ($stmt->execute()) {
         $_SESSION['success'] = "Employee deleted successfully!";
@@ -145,9 +176,22 @@ if (isset($_GET['delete'])) {
 if (isset($_GET['toggle_status'])) {
     $id = mysqli_real_escape_string($conn, $_GET['toggle_status']);
     
-    $status_sql = "UPDATE non_staff SET status = NOT status WHERE id = ?";
+    // Verify employee belongs to current school
+    $verify_sql = "SELECT id FROM non_staff WHERE id = ? AND school_id = ?";
+    $verify_stmt = $conn->prepare($verify_sql);
+    $verify_stmt->bind_param("ii", $id, $current_school_id);
+    $verify_stmt->execute();
+    $verify_result = $verify_stmt->get_result();
+    
+    if ($verify_result->num_rows == 0) {
+        $_SESSION['error'] = "Unauthorized: Cannot modify employee from another school.";
+        header("Location: non_staff.php");
+        exit();
+    }
+    
+    $status_sql = "UPDATE non_staff SET status = NOT status WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($status_sql);
-    $stmt->bind_param("i", $id);
+    $stmt->bind_param("ii", $id, $current_school_id);
     
     if ($stmt->execute()) {
         $_SESSION['success'] = "Employee status updated successfully!";
@@ -158,10 +202,12 @@ if (isset($_GET['toggle_status'])) {
     exit();
 }
 
-// ==================== GET ALL NON-STAFF EMPLOYEES ====================
-
-$sql = "SELECT * FROM non_staff ORDER BY status DESC, first_name, last_name";
-$result = mysqli_query($conn, $sql);
+// ==================== GET ALL NON-STAFF EMPLOYEES (with school_id) ====================
+$sql = "SELECT * FROM non_staff WHERE school_id = ? ORDER BY status DESC, first_name, last_name";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$result = $stmt->get_result();
 $employees = [];
 if ($result && mysqli_num_rows($result) > 0) {
     while ($row = mysqli_fetch_assoc($result)) {
@@ -178,16 +224,16 @@ foreach ($employees as $emp) {
     else $inactive_count++;
 }
 
-// Get distinct positions and departments for filters
+// Get distinct positions and departments for filters (with school_id)
 $positions = [];
 $departments = [];
-$pos_result = mysqli_query($conn, "SELECT DISTINCT position FROM non_staff WHERE position IS NOT NULL ORDER BY position");
+$pos_result = mysqli_query($conn, "SELECT DISTINCT position FROM non_staff WHERE school_id = $current_school_id AND position IS NOT NULL ORDER BY position");
 if ($pos_result) {
     while ($row = mysqli_fetch_assoc($pos_result)) {
         $positions[] = $row['position'];
     }
 }
-$dept_result = mysqli_query($conn, "SELECT DISTINCT department FROM non_staff WHERE department IS NOT NULL ORDER BY department");
+$dept_result = mysqli_query($conn, "SELECT DISTINCT department FROM non_staff WHERE school_id = $current_school_id AND department IS NOT NULL ORDER BY department");
 if ($dept_result) {
     while ($row = mysqli_fetch_assoc($dept_result)) {
         $departments[] = $row['department'];
@@ -521,7 +567,6 @@ if ($dept_result) {
         background-size: <?php echo $bg_size; ?>;
         background-position: center;
         min-height: 100vh;
-        
     }
 
     <?php if ($compact_mode === '1'): ?>

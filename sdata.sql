@@ -293,8 +293,28 @@ SET `school_motto` = 'Education For Life'
 WHERE `id` = 1
 
 
--- Add system-wide theme defaults
+-- Add system-wide theme defaults to schools table
 ALTER TABLE `schools` 
-ADD COLUMN `system_theme` TEXT DEFAULT NULL COMMENT 'JSON of default theme colors',
-ADD COLUMN `system_preferences` TEXT DEFAULT NULL COMMENT 'JSON of default user preferences',
-ADD COLUMN `allowed_customization` JSON DEFAULT NULL COMMENT 'Which settings users can customize';
+ADD COLUMN IF NOT EXISTS `system_theme` TEXT DEFAULT NULL COMMENT 'JSON of default theme colors',
+ADD COLUMN IF NOT EXISTS `system_preferences` TEXT DEFAULT NULL COMMENT 'JSON of default user preferences',
+ADD COLUMN IF NOT EXISTS `allowed_customization` TEXT DEFAULT NULL COMMENT 'JSON of allowed customizations';
+
+-- Insert default system theme for existing school
+UPDATE `schools` 
+SET 
+    `system_theme` = '{"primary":"#3B9DB3","primary_dark":"#2d7c8f","primary_light":"#8bc5d6","light":"#f8f9fa","white":"#ffffff","gray":"#e9ecef","text":"#333333","text_light":"#666666","border":"#e0e0e0","success":"#28a745","danger":"#dc3545","warning":"#ffc107","info":"#17a2b8","coral":"#FF7F50","forest_green":"#2E7D32","lime_green":"#63E07E","sky_blue":"#66d9ff","aqua_blue":"#4dd2ff"}',
+    `system_preferences` = '{"sidebar_collapsed":"0","font_size":"16","animations":"1","compact_mode":"0","background_opacity":"65","background_option":"image","animation_speed":"normal"}',
+    `allowed_customization` = '{"theme":true,"preferences":true}'
+WHERE `id` = 1;
+
+-- Add super_admin field to admins table (if not exists)
+ALTER TABLE `admins` 
+ADD COLUMN IF NOT EXISTS `is_super_admin` TINYINT(1) DEFAULT 0,
+ADD INDEX IF NOT EXISTS `idx_super_admin` (`is_super_admin`);
+
+-- Add logo column to schools table
+ALTER TABLE `schools` 
+ADD COLUMN `logo_path` varchar(255) DEFAULT NULL AFTER `school_motto`;
+
+-- Update default school logo (if you have a default logo)
+-- UPDATE `schools` SET `logo_path` = 'uploads/school_logos/default.png' WHERE `id` = 1;

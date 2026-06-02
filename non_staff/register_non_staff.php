@@ -1,5 +1,5 @@
 <?php
-// register_non_staff.php - Register New Non-Staff Employee
+// register_non_staff.php - Register New Non-Staff Employee WITH SCHOOL ID
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -14,10 +14,22 @@ if (!isset($_SESSION['admin_id'])) {
 
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
-// Permission check
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
-$stmt = $conn->prepare($user_roles_sql);
+// ========== GET CURRENT SCHOOL ID ==========
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
 $stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+
+// Permission check (with school_id)
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
+$stmt = $conn->prepare($user_roles_sql);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -39,10 +51,13 @@ if (!$has_permission) {
     exit();
 }
 
-// Load theme settings
+// Load theme settings (with school_id)
 $theme_settings = [];
-$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $admin_id";
-$result = mysqli_query($conn, $query);
+$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = ? AND school_id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$result = $stmt->get_result();
 if ($result && mysqli_num_rows($result) > 0) {
     while ($row = mysqli_fetch_assoc($result)) {
         $theme_settings[$row['setting_key']] = $row['setting_value'];
@@ -50,8 +65,11 @@ if ($result && mysqli_num_rows($result) > 0) {
 }
 
 $preferences = [];
-$prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = $admin_id";
-$prefs_result = mysqli_query($conn, $prefs_query);
+$prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = ? AND school_id = ?";
+$stmt = $conn->prepare($prefs_query);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$prefs_result = $stmt->get_result();
 if ($prefs_result && mysqli_num_rows($prefs_result) > 0) {
     while ($row = mysqli_fetch_assoc($prefs_result)) {
         $preferences[$row['preference_key']] = $row['preference_value'];
@@ -160,33 +178,33 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "NIDA number must be exactly 20 digits.";
     }
     
-    // Check if email already exists
+    // Check if email already exists for SAME SCHOOL
     if (empty($error)) {
-        $check_email_sql = "SELECT id FROM non_staff WHERE email = ?";
+        $check_email_sql = "SELECT id FROM non_staff WHERE email = ? AND school_id = ?";
         $stmt = $conn->prepare($check_email_sql);
-        $stmt->bind_param("s", $email);
+        $stmt->bind_param("si", $email, $current_school_id);
         $stmt->execute();
         if ($stmt->get_result()->num_rows > 0) {
             $error = "Email already exists. Please use a different email.";
         }
     }
     
-    // Check if phone already exists
+    // Check if phone already exists for SAME SCHOOL
     if (empty($error)) {
-        $check_phone_sql = "SELECT id FROM non_staff WHERE phone_number = ?";
+        $check_phone_sql = "SELECT id FROM non_staff WHERE phone_number = ? AND school_id = ?";
         $stmt = $conn->prepare($check_phone_sql);
-        $stmt->bind_param("s", $phone_number);
+        $stmt->bind_param("si", $phone_number, $current_school_id);
         $stmt->execute();
         if ($stmt->get_result()->num_rows > 0) {
             $error = "Phone number already exists. Please use a different phone number.";
         }
     }
     
-    // Check if NIDA already exists
+    // Check if NIDA already exists for SAME SCHOOL
     if (empty($error) && !empty($nida)) {
-        $check_nida_sql = "SELECT id FROM non_staff WHERE nida = ?";
+        $check_nida_sql = "SELECT id FROM non_staff WHERE nida = ? AND school_id = ?";
         $stmt = $conn->prepare($check_nida_sql);
-        $stmt->bind_param("s", $nida);
+        $stmt->bind_param("si", $nida, $current_school_id);
         $stmt->execute();
         if ($stmt->get_result()->num_rows > 0) {
             $error = "NIDA number already exists. Please use a different NIDA number.";
@@ -211,27 +229,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
-        // Insert into database
+        // Insert into database WITH school_id
         if (empty($nida)) {
             $sql = "INSERT INTO non_staff (first_name, middle_name, last_name, sex, email, phone_number, nida, 
                     position, department, employment_date, contract_type, salary_scale, work_location,
-                    emergency_contact_name, emergency_contact_phone, address, profile_image, status, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    emergency_contact_name, emergency_contact_phone, address, profile_image, status, notes, school_id)
+                    VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sssssssssssssssssi", 
+            $stmt->bind_param("ssssssssssssssssssi", 
                 $first_name, $middle_name, $last_name, $sex, $email, $phone_number,
                 $position, $department, $employment_date, $contract_type, $salary_scale, $work_location,
-                $emergency_contact_name, $emergency_contact_phone, $address, $profile_image, $status, $notes);
+                $emergency_contact_name, $emergency_contact_phone, $address, $profile_image, $status, $notes, $current_school_id);
         } else {
             $sql = "INSERT INTO non_staff (first_name, middle_name, last_name, sex, email, phone_number, nida, 
                     position, department, employment_date, contract_type, salary_scale, work_location,
-                    emergency_contact_name, emergency_contact_phone, address, profile_image, status, notes)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    emergency_contact_name, emergency_contact_phone, address, profile_image, status, notes, school_id)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ssssssssssssssssssi", 
+            $stmt->bind_param("sssssssssssssssssssi", 
                 $first_name, $middle_name, $last_name, $sex, $email, $phone_number, $nida,
                 $position, $department, $employment_date, $contract_type, $salary_scale, $work_location,
-                $emergency_contact_name, $emergency_contact_phone, $address, $profile_image, $status, $notes);
+                $emergency_contact_name, $emergency_contact_phone, $address, $profile_image, $status, $notes, $current_school_id);
         }
         
         if ($stmt->execute()) {
@@ -248,6 +266,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <?php include '../controller/header.php'; ?>
 <?php include '../controller/sidebar.php'; ?>
 
+<!-- HTML FORM REMAINS THE SAME - just the PHP logic above is updated -->
 <div class="main-content">
     <div class="container-fluid">
         <!-- Page Header -->
@@ -468,7 +487,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         background-size: <?php echo $bg_size; ?>;
         background-position: center;
         min-height: 100vh;
-        
     }
 
     <?php if ($compact_mode === '1'): ?>

@@ -1,5 +1,5 @@
 <?php
-// students.php - Student Management with Fixed Leaver & Status Functions
+// students.php - Student Management with Dynamic School Code
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -14,10 +14,23 @@ if (!isset($_SESSION['admin_id'])) {
 
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
-// Load theme settings
+// ========== GET CURRENT SCHOOL ID AND SCHOOL CODE ==========
+$school_query = "SELECT school_id, school_code FROM admins a JOIN schools s ON a.school_id = s.id WHERE a.id = ?";
+$stmt = $conn->prepare($school_query);
+$stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+$current_school_code = $current_admin_data['school_code'] ?? 'MVZ001';
+
+// Load theme settings (with school_id)
 $theme_settings = [];
-$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $admin_id";
-$result = mysqli_query($conn, $query);
+$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = ? AND school_id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$result = $stmt->get_result();
 if ($result && mysqli_num_rows($result) > 0) {
     while ($row = mysqli_fetch_assoc($result)) {
         $theme_settings[$row['setting_key']] = $row['setting_value'];
@@ -25,8 +38,11 @@ if ($result && mysqli_num_rows($result) > 0) {
 }
 
 $preferences = [];
-$prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = $admin_id";
-$prefs_result = mysqli_query($conn, $prefs_query);
+$prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = ? AND school_id = ?";
+$stmt = $conn->prepare($prefs_query);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$prefs_result = $stmt->get_result();
 if ($prefs_result && mysqli_num_rows($prefs_result) > 0) {
     while ($row = mysqli_fetch_assoc($prefs_result)) {
         $preferences[$row['preference_key']] = $row['preference_value'];
@@ -97,10 +113,13 @@ if ($bg_option === 'image') {
     $bg_size = 'auto';
 }
 
-// ==================== PERMISSION CHECK ====================
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
+// ==================== PERMISSION CHECK (with school_id) ====================
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
 $stmt = $conn->prepare($user_roles_sql);
-$stmt->bind_param("i", $admin_id);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -127,10 +146,10 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
 
 // ==================== HELPER FUNCTIONS ====================
 
-function isStudentAccountLocked($conn, $student_id) {
-    $sql = "SELECT locked_until, failed_login_attempts FROM students WHERE id = ?";
+function isStudentAccountLocked($conn, $student_id, $school_id) {
+    $sql = "SELECT locked_until, failed_login_attempts FROM students WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $student_id);
+    $stmt->bind_param("ii", $student_id, $school_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $student = $result->fetch_assoc();
@@ -142,7 +161,7 @@ function isStudentAccountLocked($conn, $student_id) {
         $now = time();
         
         if ($locked_until <= $now) {
-            unlockStudentAccount($conn, $student_id);
+            unlockStudentAccount($conn, $student_id, $school_id);
             return false;
         }
         return true;
@@ -150,19 +169,19 @@ function isStudentAccountLocked($conn, $student_id) {
     return false;
 }
 
-function getStudentLockInfo($conn, $student_id) {
-    $sql = "SELECT locked_until, failed_login_attempts FROM students WHERE id = ?";
+function getStudentLockInfo($conn, $student_id, $school_id) {
+    $sql = "SELECT locked_until, failed_login_attempts FROM students WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $student_id);
+    $stmt->bind_param("ii", $student_id, $school_id);
     $stmt->execute();
     $result = $stmt->get_result();
     return $result->fetch_assoc();
 }
 
-function getStudentLockExpiry($conn, $student_id) {
-    $sql = "SELECT locked_until FROM students WHERE id = ?";
+function getStudentLockExpiry($conn, $student_id, $school_id) {
+    $sql = "SELECT locked_until FROM students WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $student_id);
+    $stmt->bind_param("ii", $student_id, $school_id);
     $stmt->execute();
     $result = $stmt->get_result();
     $student = $result->fetch_assoc();
@@ -173,28 +192,28 @@ function getStudentLockExpiry($conn, $student_id) {
     return null;
 }
 
-function unlockStudentAccount($conn, $student_id) {
+function unlockStudentAccount($conn, $student_id, $school_id) {
     $sql = "UPDATE students SET 
             failed_login_attempts = 0, 
             locked_until = NULL,
             last_login_attempt = NULL 
-            WHERE id = ?";
+            WHERE id = ? AND school_id = ?";
     
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $student_id);
+    $stmt->bind_param("ii", $student_id, $school_id);
     
     if ($stmt->execute()) {
-        $admission_sql = "SELECT admission_number FROM students WHERE id = ?";
+        $admission_sql = "SELECT admission_number FROM students WHERE id = ? AND school_id = ?";
         $stmt = $conn->prepare($admission_sql);
-        $stmt->bind_param("i", $student_id);
+        $stmt->bind_param("ii", $student_id, $school_id);
         $stmt->execute();
         $admission_result = $stmt->get_result();
         $student = $admission_result->fetch_assoc();
         
         if ($student) {
-            $delete_sql = "DELETE FROM student_login_attempts WHERE identifier = ?";
+            $delete_sql = "DELETE FROM student_login_attempts WHERE identifier = ? AND school_id = ?";
             $stmt = $conn->prepare($delete_sql);
-            $stmt->bind_param("s", $student['admission_number']);
+            $stmt->bind_param("si", $student['admission_number'], $school_id);
             $stmt->execute();
         }
         return true;
@@ -202,39 +221,46 @@ function unlockStudentAccount($conn, $student_id) {
     return false;
 }
 
-function updateRoomOccupancy($conn, $room_id) {
+function updateRoomOccupancy($conn, $room_id, $school_id) {
     $update_sql = "UPDATE dormitory_rooms 
                    SET current_occupancy = (
                        SELECT COUNT(*) FROM student_dormitory 
-                       WHERE room_id = $room_id AND status = 'Active'
+                       WHERE room_id = ? AND status = 'Active' AND school_id = ?
                    )
-                   WHERE id = $room_id";
-    return mysqli_query($conn, $update_sql);
+                   WHERE id = ? AND school_id = ?";
+    $stmt = $conn->prepare($update_sql);
+    $stmt->bind_param("iiii", $room_id, $school_id, $room_id, $school_id);
+    return $stmt->execute();
 }
 
-function updateDormitoryOccupancy($conn, $dormitory_id) {
+function updateDormitoryOccupancy($conn, $dormitory_id, $school_id) {
     $update_sql = "UPDATE dormitories 
                    SET current_occupancy = (
                        SELECT COUNT(DISTINCT sd.id) 
                        FROM student_dormitory sd
                        JOIN dormitory_rooms dr ON sd.room_id = dr.id
-                       WHERE dr.dormitory_id = $dormitory_id AND sd.status = 'Active'
+                       WHERE dr.dormitory_id = ? AND sd.status = 'Active' AND sd.school_id = ?
                    )
-                   WHERE id = $dormitory_id";
-    return mysqli_query($conn, $update_sql);
+                   WHERE id = ? AND school_id = ?";
+    $stmt = $conn->prepare($update_sql);
+    $stmt->bind_param("iiii", $dormitory_id, $school_id, $dormitory_id, $school_id);
+    return $stmt->execute();
 }
 
-function cleanupStudentDormitoryAssignments($conn, $student_id) {
+function cleanupStudentDormitoryAssignments($conn, $student_id, $school_id) {
     $cleaned_count = 0;
     $rooms_to_update = [];
     $dormitories_to_update = [];
     
     $assignments_sql = "SELECT id, room_id, dormitory_id FROM student_dormitory 
-                       WHERE student_id = $student_id AND status = 'Active'";
-    $assignments_result = mysqli_query($conn, $assignments_sql);
+                       WHERE student_id = ? AND status = 'Active' AND school_id = ?";
+    $stmt = $conn->prepare($assignments_sql);
+    $stmt->bind_param("ii", $student_id, $school_id);
+    $stmt->execute();
+    $assignments_result = $stmt->get_result();
     
-    if ($assignments_result && mysqli_num_rows($assignments_result) > 0) {
-        while ($row = mysqli_fetch_assoc($assignments_result)) {
+    if ($assignments_result && $assignments_result->num_rows > 0) {
+        while ($row = $assignments_result->fetch_assoc()) {
             $assignment_id = $row['id'];
             $room_id = $row['room_id'];
             $dormitory_id = $row['dormitory_id'];
@@ -243,91 +269,115 @@ function cleanupStudentDormitoryAssignments($conn, $student_id) {
                           SET status = 'Removed',
                               removed_date = CURRENT_TIMESTAMP,
                               removal_reason = 'Auto-removed: Student marked as leaver/deactivated'
-                          WHERE id = $assignment_id";
+                          WHERE id = ? AND school_id = ?";
+            $stmt = $conn->prepare($update_sql);
+            $stmt->bind_param("ii", $assignment_id, $school_id);
+            $stmt->execute();
             
-            if (mysqli_query($conn, $update_sql)) {
-                $rooms_to_update[] = $room_id;
-                $dormitories_to_update[] = $dormitory_id;
-                $cleaned_count++;
-            }
+            $rooms_to_update[] = $room_id;
+            $dormitories_to_update[] = $dormitory_id;
+            $cleaned_count++;
         }
         
         foreach (array_unique($rooms_to_update) as $room_id) {
-            updateRoomOccupancy($conn, $room_id);
+            updateRoomOccupancy($conn, $room_id, $school_id);
         }
         
         foreach (array_unique($dormitories_to_update) as $dormitory_id) {
-            updateDormitoryOccupancy($conn, $dormitory_id);
+            updateDormitoryOccupancy($conn, $dormitory_id, $school_id);
         }
     }
     
     return $cleaned_count;
 }
 
-function returnStudentMaintenanceItems($conn, $student_id, $admin_id, $reason = 'Student removed') {
+function returnStudentMaintenanceItems($conn, $student_id, $admin_id, $reason, $school_id) {
     $returned_count = 0;
     
     $assignments_sql = "SELECT id, item_id FROM maintenance_assignments 
-                       WHERE student_id = $student_id AND status = 'active'";
-    $assignments_result = mysqli_query($conn, $assignments_sql);
+                       WHERE student_id = ? AND status = 'active' AND school_id = ?";
+    $stmt = $conn->prepare($assignments_sql);
+    $stmt->bind_param("ii", $student_id, $school_id);
+    $stmt->execute();
+    $assignments_result = $stmt->get_result();
     
-    if ($assignments_result && mysqli_num_rows($assignments_result) > 0) {
-        while ($assignment = mysqli_fetch_assoc($assignments_result)) {
+    if ($assignments_result && $assignments_result->num_rows > 0) {
+        while ($assignment = $assignments_result->fetch_assoc()) {
             $update_assignment_sql = "UPDATE maintenance_assignments SET 
                                      status = 'returned',
                                      return_date = CURDATE(),
                                      return_condition = 'good',
-                                     return_notes = 'Auto-returned: $reason'
-                                     WHERE id = {$assignment['id']}";
+                                     return_notes = ?
+                                     WHERE id = ? AND school_id = ?";
+            $stmt = $conn->prepare($update_assignment_sql);
+            $stmt->bind_param("sii", $reason, $assignment['id'], $school_id);
+            $stmt->execute();
             
-            if (mysqli_query($conn, $update_assignment_sql)) {
-                $update_item_sql = "UPDATE maintenance_items SET status = 'available' WHERE id = {$assignment['item_id']}";
-                mysqli_query($conn, $update_item_sql);
-                $returned_count++;
-            }
+            $update_item_sql = "UPDATE maintenance_items SET status = 'available' WHERE id = ? AND school_id = ?";
+            $stmt = $conn->prepare($update_item_sql);
+            $stmt->bind_param("ii", $assignment['item_id'], $school_id);
+            $stmt->execute();
+            $returned_count++;
         }
     }
     
     return $returned_count;
 }
 
-function regenerateAllIndexNumbers($conn) {
+// ==================== REGENERATE INDEX NUMBERS WITH DYNAMIC SCHOOL CODE ====================
+function regenerateAllIndexNumbers($conn, $school_code, $school_id) {
     $combination_order = ['HGE', 'HGL', 'HGK', 'HKL', 'KLF', 'EGM', 'HLF', 'HGF'];
     
-    // Process Form Five
-    $form_five_index = 1;
+    // Process Form Five - continuous numbering across all combinations with female first
+    $form_five_index = 1; // Start from 0501 for Form Five
+    
     foreach ($combination_order as $combination) {
         $form_five_sql = "SELECT id FROM students 
                          WHERE class = 'Form Five' 
-                         AND combination = '$combination'
+                         AND combination = ?
                          AND is_leaver = FALSE
+                         AND school_id = ?
                          ORDER BY 
                              CASE WHEN sex = 'Female' THEN 1 ELSE 2 END,
                              first_name, last_name";
+        $stmt = $conn->prepare($form_five_sql);
+        $stmt->bind_param("si", $combination, $school_id);
+        $stmt->execute();
+        $form_five_result = $stmt->get_result();
         
-        $form_five_result = mysqli_query($conn, $form_five_sql);
-        while ($student = mysqli_fetch_assoc($form_five_result)) {
-            $new_index = 'S5098-' . str_pad($form_five_index + 500, 4, '0', STR_PAD_LEFT);
-            mysqli_query($conn, "UPDATE students SET index_number = '$new_index' WHERE id = " . $student['id']);
+        while ($student = $form_five_result->fetch_assoc()) {
+            $new_index = $school_code . '-' . str_pad(($form_five_index + 500), 4, '0', STR_PAD_LEFT);
+            $update_sql = "UPDATE students SET index_number = ? WHERE id = ? AND school_id = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            $update_stmt->bind_param("sii", $new_index, $student['id'], $school_id);
+            $update_stmt->execute();
             $form_five_index++;
         }
     }
     
-    // Process Form Six
-    $form_six_index = 1;
+    // Process Form Six - continuous numbering across all combinations with female first
+    $form_six_index = 1; // Start from 0501 for Form Six
+    
     foreach ($combination_order as $combination) {
         $form_six_sql = "SELECT id FROM students 
                         WHERE class = 'Form Six' 
-                        AND combination = '$combination'
+                        AND combination = ?
                         AND is_leaver = FALSE
+                        AND school_id = ?
                         ORDER BY 
                             CASE WHEN sex = 'Female' THEN 1 ELSE 2 END,
                             first_name, last_name";
+        $stmt = $conn->prepare($form_six_sql);
+        $stmt->bind_param("si", $combination, $school_id);
+        $stmt->execute();
+        $form_six_result = $stmt->get_result();
         
-        $form_six_result = mysqli_query($conn, $form_six_sql);
-        while ($student = mysqli_fetch_assoc($form_six_result)) {
-            $new_index = 'S5098-' . str_pad(($form_six_index + 500), 4, '0', STR_PAD_LEFT);
-            mysqli_query($conn, "UPDATE students SET index_number = '$new_index' WHERE id = " . $student['id']);
+        while ($student = $form_six_result->fetch_assoc()) {
+            $new_index = $school_code . '-' . str_pad(($form_six_index + 500), 4, '0', STR_PAD_LEFT);
+            $update_sql = "UPDATE students SET index_number = ? WHERE id = ? AND school_id = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            $update_stmt->bind_param("sii", $new_index, $student['id'], $school_id);
+            $update_stmt->execute();
             $form_six_index++;
         }
     }
@@ -336,7 +386,7 @@ function regenerateAllIndexNumbers($conn) {
 }
 
 // ==================== FIXED MARK AS LEAVER FUNCTION ====================
-function markStudentAsLeaver($conn, $student_id, $admin_id) {
+function markStudentAsLeaver($conn, $student_id, $admin_id, $school_id, $school_code) {
     // Clear any pending results
     while (mysqli_more_results($conn) && mysqli_next_result($conn));
     
@@ -344,9 +394,9 @@ function markStudentAsLeaver($conn, $student_id, $admin_id) {
     
     try {
         // Get student details
-        $student_sql = "SELECT * FROM students WHERE id = ? AND is_leaver = FALSE";
+        $student_sql = "SELECT * FROM students WHERE id = ? AND is_leaver = FALSE AND school_id = ?";
         $stmt = $conn->prepare($student_sql);
-        $stmt->bind_param("i", $student_id);
+        $stmt->bind_param("ii", $student_id, $school_id);
         $stmt->execute();
         $student_result = $stmt->get_result();
         
@@ -371,10 +421,10 @@ function markStudentAsLeaver($conn, $student_id, $admin_id) {
         }
         
         // Clean up dormitory assignments
-        $dorm_cleaned = cleanupStudentDormitoryAssignments($conn, $student_id);
+        $dorm_cleaned = cleanupStudentDormitoryAssignments($conn, $student_id, $school_id);
         
         // Return maintenance items
-        $maintenance_returned = returnStudentMaintenanceItems($conn, $student_id, $admin_id, $reason);
+        $maintenance_returned = returnStudentMaintenanceItems($conn, $student_id, $admin_id, $reason, $school_id);
         
         // Mark as leaver
         $update_sql = "UPDATE students SET 
@@ -387,31 +437,31 @@ function markStudentAsLeaver($conn, $student_id, $admin_id) {
                       class = 'Leavers',
                       updated_at = CURRENT_TIMESTAMP,
                       updated_by_admin = ?
-                      WHERE id = ?";
+                      WHERE id = ? AND school_id = ?";
         
         $stmt = $conn->prepare($update_sql);
-        $stmt->bind_param("ssssii", $current_year, $previous_class, $graduation_status, $current_year, $admin_id, $student_id);
+        $stmt->bind_param("ssssiii", $current_year, $previous_class, $graduation_status, $current_year, $admin_id, $student_id, $school_id);
         
         if (!$stmt->execute()) {
             throw new Exception("Error marking as leaver: " . $stmt->error);
         }
         
         // Add to leavers table
-        $check_sql = "SELECT id FROM student_leavers WHERE student_id = ?";
+        $check_sql = "SELECT id FROM student_leavers WHERE student_id = ? AND school_id = ?";
         $stmt = $conn->prepare($check_sql);
-        $stmt->bind_param("i", $student_id);
+        $stmt->bind_param("ii", $student_id, $school_id);
         $stmt->execute();
         
         if ($stmt->get_result()->num_rows == 0) {
             $insert_sql = "INSERT INTO student_leavers (student_id, index_number, first_name, last_name, 
-                          combination, class_left, year_left, reason, leaver_type) 
-                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                          combination, class_left, year_left, reason, leaver_type, school_id) 
+                          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
             
             $stmt = $conn->prepare($insert_sql);
-            $stmt->bind_param("issssssss", 
+            $stmt->bind_param("issssssssi", 
                 $student_id, $student['index_number'], $student['first_name'], 
                 $student['last_name'], $student['combination'], $previous_class, 
-                $current_year, $reason, $leaver_type);
+                $current_year, $reason, $leaver_type, $school_id);
             $stmt->execute();
         }
         
@@ -419,20 +469,20 @@ function markStudentAsLeaver($conn, $student_id, $admin_id) {
         $history_sql = "INSERT INTO student_graduation_history (
             student_id, from_class, to_class, academic_year, 
             graduation_type, graduation_date, final_index_number,
-            remarks, recorded_by
-        ) VALUES (?, ?, ?, ?, ?, CURRENT_DATE, ?, ?, ?)";
+            remarks, recorded_by, school_id
+        ) VALUES (?, ?, ?, ?, ?, CURRENT_DATE, ?, ?, ?, ?)";
         
         $academic_year = ($current_year - 1) . '/' . $current_year;
         $remarks = $reason . ($maintenance_returned > 0 ? ' - ' . $maintenance_returned . ' maintenance items returned' : '');
         
         $stmt = $conn->prepare($history_sql);
-        $stmt->bind_param("issssssi", 
+        $stmt->bind_param("issssssii", 
             $student_id, $previous_class, $graduation_status, $academic_year,
-            $leaver_type, $student['index_number'], $remarks, $admin_id);
+            $leaver_type, $student['index_number'], $remarks, $admin_id, $school_id);
         $stmt->execute();
         
         // Regenerate index numbers
-        regenerateAllIndexNumbers($conn);
+        regenerateAllIndexNumbers($conn, $school_code, $school_id);
         
         mysqli_commit($conn);
         return ['success' => true, 'dorm_cleaned' => $dorm_cleaned, 'items_returned' => $maintenance_returned];
@@ -444,7 +494,7 @@ function markStudentAsLeaver($conn, $student_id, $admin_id) {
 }
 
 // ==================== FIXED STATUS TOGGLE FUNCTION ====================
-function toggleStudentStatus($conn, $student_id, $admin_id) {
+function toggleStudentStatus($conn, $student_id, $admin_id, $school_id, $school_code) {
     // Clear any pending results
     while (mysqli_more_results($conn) && mysqli_next_result($conn));
     
@@ -452,9 +502,9 @@ function toggleStudentStatus($conn, $student_id, $admin_id) {
     
     try {
         // Get current status
-        $status_sql = "SELECT status, is_leaver FROM students WHERE id = ?";
+        $status_sql = "SELECT status, is_leaver FROM students WHERE id = ? AND school_id = ?";
         $stmt = $conn->prepare($status_sql);
-        $stmt->bind_param("i", $student_id);
+        $stmt->bind_param("ii", $student_id, $school_id);
         $stmt->execute();
         $result = $stmt->get_result();
         
@@ -474,18 +524,21 @@ function toggleStudentStatus($conn, $student_id, $admin_id) {
         
         // If deactivating, clean up dormitory and maintenance items
         if ($new_status == 0) {
-            $dorm_cleaned = cleanupStudentDormitoryAssignments($conn, $student_id);
-            $items_returned = returnStudentMaintenanceItems($conn, $student_id, $admin_id, 'Student deactivated');
+            $dorm_cleaned = cleanupStudentDormitoryAssignments($conn, $student_id, $school_id);
+            $items_returned = returnStudentMaintenanceItems($conn, $student_id, $admin_id, 'Student deactivated', $school_id);
         }
         
         // Update status
-        $update_sql = "UPDATE students SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?";
+        $update_sql = "UPDATE students SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ? AND school_id = ?";
         $stmt = $conn->prepare($update_sql);
-        $stmt->bind_param("ii", $new_status, $student_id);
+        $stmt->bind_param("iii", $new_status, $student_id, $school_id);
         
         if (!$stmt->execute()) {
             throw new Exception("Error updating status: " . $stmt->error);
         }
+        
+        // Regenerate index numbers after status change
+        regenerateAllIndexNumbers($conn, $school_code, $school_id);
         
         mysqli_commit($conn);
         return ['success' => true, 'new_status' => $new_status, 'dorm_cleaned' => $dorm_cleaned, 'items_returned' => $items_returned];
@@ -497,7 +550,7 @@ function toggleStudentStatus($conn, $student_id, $admin_id) {
 }
 
 // ==================== FIXED DELETE STUDENT FUNCTION ====================
-function deleteStudent($conn, $student_id, $admin_id) {
+function deleteStudent($conn, $student_id, $admin_id, $school_id, $school_code) {
     // Clear any pending results
     while (mysqli_more_results($conn) && mysqli_next_result($conn));
     
@@ -505,9 +558,9 @@ function deleteStudent($conn, $student_id, $admin_id) {
     
     try {
         // Get student info
-        $student_sql = "SELECT admission_number, first_name, last_name, class FROM students WHERE id = ?";
+        $student_sql = "SELECT admission_number, first_name, last_name, class FROM students WHERE id = ? AND school_id = ?";
         $stmt = $conn->prepare($student_sql);
-        $stmt->bind_param("i", $student_id);
+        $stmt->bind_param("ii", $student_id, $school_id);
         $stmt->execute();
         $student_result = $stmt->get_result();
         
@@ -518,26 +571,26 @@ function deleteStudent($conn, $student_id, $admin_id) {
         $student = $student_result->fetch_assoc();
         
         // Clean up
-        cleanupStudentDormitoryAssignments($conn, $student_id);
-        returnStudentMaintenanceItems($conn, $student_id, $admin_id, 'Student deleted');
+        cleanupStudentDormitoryAssignments($conn, $student_id, $school_id);
+        returnStudentMaintenanceItems($conn, $student_id, $admin_id, 'Student deleted', $school_id);
         
         // Delete login attempts
-        $delete_attempts = "DELETE FROM student_login_attempts WHERE identifier = ?";
+        $delete_attempts = "DELETE FROM student_login_attempts WHERE identifier = ? AND school_id = ?";
         $stmt = $conn->prepare($delete_attempts);
-        $stmt->bind_param("s", $student['admission_number']);
+        $stmt->bind_param("si", $student['admission_number'], $school_id);
         $stmt->execute();
         
         // Delete student
-        $delete_sql = "DELETE FROM students WHERE id = ?";
+        $delete_sql = "DELETE FROM students WHERE id = ? AND school_id = ?";
         $stmt = $conn->prepare($delete_sql);
-        $stmt->bind_param("i", $student_id);
+        $stmt->bind_param("ii", $student_id, $school_id);
         
         if (!$stmt->execute()) {
             throw new Exception("Error deleting student: " . $stmt->error);
         }
         
         // Regenerate index numbers
-        regenerateAllIndexNumbers($conn);
+        regenerateAllIndexNumbers($conn, $school_code, $school_id);
         
         mysqli_commit($conn);
         return ['success' => true];
@@ -549,7 +602,7 @@ function deleteStudent($conn, $student_id, $admin_id) {
 }
 
 // ==================== PROMOTE FUNCTION ====================
-function promoteFormFiveToSix($conn, $admin_id) {
+function promoteFormFiveToSix($conn, $admin_id, $school_id, $school_code) {
     // Clear any pending results
     while (mysqli_more_results($conn) && mysqli_next_result($conn));
     
@@ -561,58 +614,64 @@ function promoteFormFiveToSix($conn, $admin_id) {
         
         // Mark current Form Six as graduates
         $form_six_sql = "SELECT id, index_number, first_name, last_name, combination FROM students 
-                        WHERE class = 'Form Six' AND is_leaver = FALSE";
-        $form_six_result = mysqli_query($conn, $form_six_sql);
+                        WHERE class = 'Form Six' AND is_leaver = FALSE AND school_id = ?";
+        $stmt = $conn->prepare($form_six_sql);
+        $stmt->bind_param("i", $school_id);
+        $stmt->execute();
+        $form_six_result = $stmt->get_result();
         
-        while ($student = mysqli_fetch_assoc($form_six_result)) {
-            cleanupStudentDormitoryAssignments($conn, $student['id']);
-            returnStudentMaintenanceItems($conn, $student['id'], $admin_id, 'Graduated from Form Six');
+        while ($student = $form_six_result->fetch_assoc()) {
+            cleanupStudentDormitoryAssignments($conn, $student['id'], $school_id);
+            returnStudentMaintenanceItems($conn, $student['id'], $admin_id, 'Graduated from Form Six', $school_id);
             
             $update_sql = "UPDATE students SET 
                           is_leaver = TRUE, status = FALSE, year_left = ?,
                           previous_class = 'Form Six', graduation_status = 'Graduated',
                           graduation_year = ?, class = 'Leavers',
                           updated_at = CURRENT_TIMESTAMP, updated_by_admin = ?
-                          WHERE id = ?";
+                          WHERE id = ? AND school_id = ?";
             $stmt = $conn->prepare($update_sql);
-            $stmt->bind_param("ssii", $current_year, $current_year, $admin_id, $student['id']);
+            $stmt->bind_param("ssiii", $current_year, $current_year, $admin_id, $student['id'], $school_id);
             $stmt->execute();
             
             // Add to leavers table
-            $check_sql = "SELECT id FROM student_leavers WHERE student_id = ?";
+            $check_sql = "SELECT id FROM student_leavers WHERE student_id = ? AND school_id = ?";
             $stmt = $conn->prepare($check_sql);
-            $stmt->bind_param("i", $student['id']);
+            $stmt->bind_param("ii", $student['id'], $school_id);
             $stmt->execute();
             
             if ($stmt->get_result()->num_rows == 0) {
                 $insert_sql = "INSERT INTO student_leavers (student_id, index_number, first_name, last_name, 
-                              combination, class_left, year_left, reason, leaver_type) 
-                              VALUES (?, ?, ?, ?, ?, 'Form Six', ?, 'Graduated from Form Six', 'Graduated')";
+                              combination, class_left, year_left, reason, leaver_type, school_id) 
+                              VALUES (?, ?, ?, ?, ?, 'Form Six', ?, 'Graduated from Form Six', 'Graduated', ?)";
                 $stmt = $conn->prepare($insert_sql);
-                $stmt->bind_param("isssss", $student['id'], $student['index_number'], 
-                    $student['first_name'], $student['last_name'], $student['combination'], $current_year);
+                $stmt->bind_param("isssssi", $student['id'], $student['index_number'], 
+                    $student['first_name'], $student['last_name'], $student['combination'], $current_year, $school_id);
                 $stmt->execute();
             }
         }
         
         // Promote Form Five to Form Six
-        $form_five_sql = "SELECT id FROM students WHERE class = 'Form Five' AND is_leaver = FALSE";
-        $form_five_result = mysqli_query($conn, $form_five_sql);
+        $form_five_sql = "SELECT id FROM students WHERE class = 'Form Five' AND is_leaver = FALSE AND school_id = ?";
+        $stmt = $conn->prepare($form_five_sql);
+        $stmt->bind_param("i", $school_id);
+        $stmt->execute();
+        $form_five_result = $stmt->get_result();
         
-        while ($student = mysqli_fetch_assoc($form_five_result)) {
+        while ($student = $form_five_result->fetch_assoc()) {
             $update_sql = "UPDATE students SET 
                           class = 'Form Six', previous_class = 'Form Five', 
                           promotion_status = 'Promoted to Form Six',
                           class_changed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP,
                           updated_by_admin = ?
-                          WHERE id = ?";
+                          WHERE id = ? AND school_id = ?";
             $stmt = $conn->prepare($update_sql);
-            $stmt->bind_param("ii", $admin_id, $student['id']);
+            $stmt->bind_param("iii", $admin_id, $student['id'], $school_id);
             $stmt->execute();
         }
         
         // Regenerate index numbers
-        regenerateAllIndexNumbers($conn);
+        regenerateAllIndexNumbers($conn, $school_code, $school_id);
         
         mysqli_commit($conn);
         return ['success' => true];
@@ -628,7 +687,7 @@ function promoteFormFiveToSix($conn, $admin_id) {
 // Handle Mark as Leaver
 if (isset($_GET['mark_leaver']) && !empty($_GET['mark_leaver'])) {
     $student_id = intval($_GET['mark_leaver']);
-    $result = markStudentAsLeaver($conn, $student_id, $admin_id);
+    $result = markStudentAsLeaver($conn, $student_id, $admin_id, $current_school_id, $current_school_code);
     
     if ($result['success']) {
         $_SESSION['success'] = "Student marked as " . ($result['dorm_cleaned'] > 0 ? "leaver! " . $result['dorm_cleaned'] . " dormitory assignments cleaned up. " : "") . 
@@ -649,7 +708,7 @@ if (isset($_GET['mark_leaver']) && !empty($_GET['mark_leaver'])) {
 // Handle Status Toggle
 if (isset($_GET['toggle_status']) && !empty($_GET['toggle_status'])) {
     $student_id = intval($_GET['toggle_status']);
-    $result = toggleStudentStatus($conn, $student_id, $admin_id);
+    $result = toggleStudentStatus($conn, $student_id, $admin_id, $current_school_id, $current_school_code);
     
     if ($result['success']) {
         $status_text = $result['new_status'] == 1 ? "activated" : "deactivated";
@@ -676,7 +735,7 @@ if (isset($_GET['toggle_status']) && !empty($_GET['toggle_status'])) {
 // Handle Delete
 if (isset($_GET['delete']) && !empty($_GET['delete'])) {
     $student_id = intval($_GET['delete']);
-    $result = deleteStudent($conn, $student_id, $admin_id);
+    $result = deleteStudent($conn, $student_id, $admin_id, $current_school_id, $current_school_code);
     
     if ($result['success']) {
         $_SESSION['success'] = "Student deleted successfully! Index numbers regenerated.";
@@ -696,7 +755,7 @@ if (isset($_GET['delete']) && !empty($_GET['delete'])) {
 if (isset($_GET['unlock_account']) && !empty($_GET['unlock_account'])) {
     $student_id = intval($_GET['unlock_account']);
     
-    if (unlockStudentAccount($conn, $student_id)) {
+    if (unlockStudentAccount($conn, $student_id, $current_school_id)) {
         $_SESSION['success'] = "Student account unlocked successfully!";
     } else {
         $_SESSION['error'] = "Error unlocking student account.";
@@ -714,9 +773,9 @@ if (isset($_GET['unlock_account']) && !empty($_GET['unlock_account'])) {
 if (isset($_GET['reset_password']) && !empty($_GET['reset_password'])) {
     $student_id = intval($_GET['reset_password']);
     
-    $student_sql = "SELECT first_name, last_name, parent_phone, admission_number FROM students WHERE id = ?";
+    $student_sql = "SELECT first_name, last_name, parent_phone, admission_number FROM students WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($student_sql);
-    $stmt->bind_param("i", $student_id);
+    $stmt->bind_param("ii", $student_id, $current_school_id);
     $stmt->execute();
     $student_result = $stmt->get_result();
     $student = $student_result->fetch_assoc();
@@ -728,14 +787,14 @@ if (isset($_GET['reset_password']) && !empty($_GET['reset_password'])) {
     } else {
         $hashed_password = password_hash($student['parent_phone'], PASSWORD_DEFAULT);
         
-        $update_sql = "UPDATE students SET password = ?, updated_at = CURRENT_TIMESTAMP, updated_by_admin = ? WHERE id = ?";
+        $update_sql = "UPDATE students SET password = ?, updated_at = CURRENT_TIMESTAMP, updated_by_admin = ? WHERE id = ? AND school_id = ?";
         $stmt = $conn->prepare($update_sql);
-        $stmt->bind_param("sii", $hashed_password, $admin_id, $student_id);
+        $stmt->bind_param("siii", $hashed_password, $admin_id, $student_id, $current_school_id);
         
         if ($stmt->execute()) {
             // Reset failed attempts and unlock
-            mysqli_query($conn, "UPDATE students SET failed_login_attempts = 0, locked_until = NULL WHERE id = $student_id");
-            mysqli_query($conn, "DELETE FROM student_login_attempts WHERE identifier = '{$student['admission_number']}'");
+            mysqli_query($conn, "UPDATE students SET failed_login_attempts = 0, locked_until = NULL WHERE id = $student_id AND school_id = $current_school_id");
+            mysqli_query($conn, "DELETE FROM student_login_attempts WHERE identifier = '{$student['admission_number']}' AND school_id = $current_school_id");
             
             $display_phone = substr($student['parent_phone'], -4);
             $_SESSION['success'] = "Password reset successfully for {$student['first_name']} {$student['last_name']}! New password is parent phone number (ending with ...$display_phone)";
@@ -754,7 +813,7 @@ if (isset($_GET['reset_password']) && !empty($_GET['reset_password'])) {
 
 // Handle Promote All
 if (isset($_GET['promote_form_six']) && $_GET['promote_form_six'] == 1) {
-    $result = promoteFormFiveToSix($conn, $admin_id);
+    $result = promoteFormFiveToSix($conn, $admin_id, $current_school_id, $current_school_code);
     
     if ($result['success']) {
         $_SESSION['success'] = "Form Five students promoted to Form Six! Current Form Six marked as graduates.";
@@ -769,7 +828,7 @@ if (isset($_GET['promote_form_six']) && $_GET['promote_form_six'] == 1) {
 // Handle Regenerate Index
 if (isset($_GET['regenerate_index']) && $_GET['regenerate_index'] == 1) {
     try {
-        regenerateAllIndexNumbers($conn);
+        regenerateAllIndexNumbers($conn, $current_school_code, $current_school_id);
         $_SESSION['success'] = "Index numbers regenerated successfully!";
     } catch (Exception $e) {
         $_SESSION['error'] = "Error regenerating index numbers: " . $e->getMessage();
@@ -783,49 +842,53 @@ if (isset($_GET['auto_unlock_all']) && $_GET['auto_unlock_all'] == 1) {
     $sql = "UPDATE students SET 
             failed_login_attempts = 0, 
             locked_until = NULL 
-            WHERE locked_until IS NOT NULL AND locked_until <= NOW()";
-    
-    if (mysqli_query($conn, $sql)) {
-        $affected = mysqli_affected_rows($conn);
-        $_SESSION['success'] = "$affected expired locked accounts have been auto-unlocked.";
-    } else {
-        $_SESSION['error'] = "Error auto-unlocking accounts.";
-    }
+            WHERE locked_until IS NOT NULL AND locked_until <= NOW() AND school_id = ?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("i", $current_school_id);
+    $stmt->execute();
+    $affected = $stmt->affected_rows;
+    $_SESSION['success'] = "$affected expired locked accounts have been auto-unlocked.";
     header("Location: students.php");
     exit();
 }
 
-// ==================== GET STUDENT DATA ====================
+// ==================== GET STUDENT DATA (with school_id) ====================
 
 $current_class = $_GET['class'] ?? '';
 
 $sql_form_five = "SELECT * FROM students 
-                 WHERE class = 'Form Five' AND is_leaver = FALSE
+                 WHERE class = 'Form Five' AND is_leaver = FALSE AND school_id = ?
                  ORDER BY FIELD(combination, 'HGE', 'HGL', 'HGK', 'HKL', 'KLF', 'EGM', 'HLF', 'HGF'),
                           CASE WHEN sex = 'Female' THEN 1 ELSE 2 END,
                           first_name, last_name";
-$result_form_five = mysqli_query($conn, $sql_form_five);
+$stmt = $conn->prepare($sql_form_five);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$result_form_five = $stmt->get_result();
 $students_form_five = [];
-if ($result_form_five && mysqli_num_rows($result_form_five) > 0) {
-    while ($row = mysqli_fetch_assoc($result_form_five)) {
+if ($result_form_five && $result_form_five->num_rows > 0) {
+    while ($row = $result_form_five->fetch_assoc()) {
         $students_form_five[] = $row;
     }
 }
 
 $sql_form_six = "SELECT * FROM students 
-                WHERE class = 'Form Six' AND is_leaver = FALSE
+                WHERE class = 'Form Six' AND is_leaver = FALSE AND school_id = ?
                 ORDER BY FIELD(combination, 'HGE', 'HGL', 'HGK', 'HKL', 'KLF', 'EGM', 'HLF', 'HGF'),
                          CASE WHEN sex = 'Female' THEN 1 ELSE 2 END,
                          first_name, last_name";
-$result_form_six = mysqli_query($conn, $sql_form_six);
+$stmt = $conn->prepare($sql_form_six);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$result_form_six = $stmt->get_result();
 $students_form_six = [];
-if ($result_form_six && mysqli_num_rows($result_form_six) > 0) {
-    while ($row = mysqli_fetch_assoc($result_form_six)) {
+if ($result_form_six && $result_form_six->num_rows > 0) {
+    while ($row = $result_form_six->fetch_assoc()) {
         $students_form_six[] = $row;
     }
 }
 
-// Get statistics
+// Get statistics (with school_id)
 $stats_sql = "SELECT 
     COUNT(*) as total_students,
     SUM(CASE WHEN class = 'Form Five' AND is_leaver = FALSE THEN 1 ELSE 0 END) as form_five_count,
@@ -835,10 +898,12 @@ $stats_sql = "SELECT
     SUM(CASE WHEN sex = 'Female' AND is_leaver = FALSE THEN 1 ELSE 0 END) as female_count,
     SUM(CASE WHEN status = 1 AND is_leaver = FALSE THEN 1 ELSE 0 END) as active_count,
     SUM(CASE WHEN status = 0 AND is_leaver = FALSE THEN 1 ELSE 0 END) as inactive_count
-    FROM students";
-
-$stats_result = mysqli_query($conn, $stats_sql);
-$stats = mysqli_fetch_assoc($stats_result);
+    FROM students WHERE school_id = ?";
+$stmt = $conn->prepare($stats_sql);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$stats_result = $stmt->get_result();
+$stats = $stats_result->fetch_assoc();
 
 // Include header and sidebar
 include '../controller/header.php';
@@ -853,7 +918,7 @@ include '../controller/sidebar.php';
     <div class="container-fluid">
         <!-- Page Title -->
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="page-title">Student Management</h2>
+            <h2 class="page-title">Student Management - <?php echo htmlspecialchars($current_school_code); ?></h2>
             <div class="dropdown d-md-block d-none">
                 <button class="btn btn-primary dropdown-toggle" type="button" id="actionsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
                     <i class="fas fa-cog me-2"></i>Actions
@@ -1051,7 +1116,7 @@ include '../controller/sidebar.php';
                                 <th>Account</th>
                                 <th>Lock Info</th>
                                 <th>Actions</th>
-                             </tr>
+                              </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($students_form_five)): ?>
@@ -1060,9 +1125,9 @@ include '../controller/sidebar.php';
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($students_form_five as $index => $student): 
-                                    $is_locked = isStudentAccountLocked($conn, $student['id']);
-                                    $lock_info = getStudentLockInfo($conn, $student['id']);
-                                    $lock_expiry = getStudentLockExpiry($conn, $student['id']);
+                                    $is_locked = isStudentAccountLocked($conn, $student['id'], $current_school_id);
+                                    $lock_info = getStudentLockInfo($conn, $student['id'], $current_school_id);
+                                    $lock_expiry = getStudentLockExpiry($conn, $student['id'], $current_school_id);
                                     
                                     $remaining_minutes = 0;
                                     if ($lock_expiry) {
@@ -1226,7 +1291,7 @@ include '../controller/sidebar.php';
                                 <th>Account</th>
                                 <th>Lock Info</th>
                                 <th>Actions</th>
-                             </tr>
+                              </tr>
                         </thead>
                         <tbody>
                             <?php if (empty($students_form_six)): ?>
@@ -1235,9 +1300,9 @@ include '../controller/sidebar.php';
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($students_form_six as $index => $student): 
-                                    $is_locked = isStudentAccountLocked($conn, $student['id']);
-                                    $lock_info = getStudentLockInfo($conn, $student['id']);
-                                    $lock_expiry = getStudentLockExpiry($conn, $student['id']);
+                                    $is_locked = isStudentAccountLocked($conn, $student['id'], $current_school_id);
+                                    $lock_info = getStudentLockInfo($conn, $student['id'], $current_school_id);
+                                    $lock_expiry = getStudentLockExpiry($conn, $student['id'], $current_school_id);
                                     
                                     $remaining_minutes = 0;
                                     if ($lock_expiry) {
@@ -1446,10 +1511,10 @@ include '../controller/sidebar.php';
             </div>
             <div class="modal-body text-center">
                 <i class="fas fa-list-ol fa-3x text-info mb-3"></i>
-                <h5 class="mb-3">Regenerate all index numbers?</h5>
+                <h5 class="mb-3">Regenerate all index numbers for <?php echo htmlspecialchars($current_school_code); ?>?</h5>
                 <div class="alert alert-info">
                     <i class="fas fa-info-circle me-2"></i>
-                    This will reorder all students and assign new index numbers.
+                    This will reorder all students and assign new index numbers with format: <strong><?php echo htmlspecialchars($current_school_code); ?>-XXXX</strong>
                 </div>
             </div>
             <div class="modal-footer justify-content-center">

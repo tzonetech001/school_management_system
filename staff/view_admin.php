@@ -1,5 +1,5 @@
 <?php
-// view_admin.php - AJAX endpoint to fetch specific admin details
+// view_admin.php - AJAX endpoint to fetch specific admin details (WITH SCHOOL ID FILTERING)
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -20,10 +20,22 @@ if (!isset($_GET['id']) || empty($_GET['id'])) {
 $admin_id = intval($_GET['id']);
 $current_admin_id = $_SESSION['admin_id'];
 
-// Get current user's roles for permission check
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
-$stmt = $conn->prepare($user_roles_sql);
+// ========== GET CURRENT SCHOOL ID ==========
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
 $stmt->bind_param("i", $current_admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+
+// Get current user's roles (filter by school_id)
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
+$stmt = $conn->prepare($user_roles_sql);
+$stmt->bind_param("ii", $current_admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -46,7 +58,7 @@ if (!$has_permission) {
     exit();
 }
 
-// Fetch the specific admin details
+// Fetch the specific admin details (WITH SCHOOL ID FILTERING)
 $sql = "SELECT a.*, 
         GROUP_CONCAT(DISTINCT CONCAT(ar.role_name, IF(ara.is_primary = 1, ' (Primary)', '')) 
         ORDER BY ara.is_primary DESC, ar.role_name SEPARATOR ', ') as roles_with_type,
@@ -55,32 +67,32 @@ $sql = "SELECT a.*,
         FROM admins a
         LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
         LEFT JOIN admin_roles ar ON ara.role_id = ar.id
-        WHERE a.id = ?
+        WHERE a.id = ? AND a.school_id = ?
         GROUP BY a.id";
 
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $admin_id);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $result = $stmt->get_result();
 
 if (!$result || $result->num_rows == 0) {
-    echo '<div class="alert alert-danger">Teacher not found.</div>';
+    echo '<div class="alert alert-danger">Teacher not found or you don\'t have permission to view this teacher.</div>';
     exit();
 }
 
 $admin = $result->fetch_assoc();
 
-// Get lock status
-function getAdminLockInfoForView($conn, $admin_id) {
-    $sql = "SELECT locked_until, failed_login_attempts FROM admins WHERE id = ?";
+// Get lock status (with school_id filtering)
+function getAdminLockInfoForView($conn, $admin_id, $school_id) {
+    $sql = "SELECT locked_until, failed_login_attempts FROM admins WHERE id = ? AND school_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("i", $admin_id);
+    $stmt->bind_param("ii", $admin_id, $school_id);
     $stmt->execute();
     $result = $stmt->get_result();
     return $result->fetch_assoc();
 }
 
-$lock_info = getAdminLockInfoForView($conn, $admin_id);
+$lock_info = getAdminLockInfoForView($conn, $admin_id, $current_school_id);
 $is_locked = false;
 $remaining_minutes = 0;
 
@@ -103,8 +115,11 @@ if (!file_exists($profile_image) || empty($admin['profile_image'])) {
 
 // Load theme colors for consistent styling
 $theme_settings = [];
-$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $current_admin_id";
-$result_theme = mysqli_query($conn, $query);
+$query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = ? AND school_id = ?";
+$stmt = $conn->prepare($query);
+$stmt->bind_param("ii", $current_admin_id, $current_school_id);
+$stmt->execute();
+$result_theme = $stmt->get_result();
 if ($result_theme && mysqli_num_rows($result_theme) > 0) {
     while ($row = mysqli_fetch_assoc($result_theme)) {
         if ($row !== null && isset($row['setting_key']) && isset($row['setting_value'])) {

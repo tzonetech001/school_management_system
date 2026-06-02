@@ -1,5 +1,5 @@
 <?php
-// edit_admin.php
+// edit_admin.php - WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -9,10 +9,22 @@ $success = '';
 // Check if user has permission (Head Master or Second Master only)
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
-// Get current user's roles
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
-$stmt = $conn->prepare($user_roles_sql);
+// ========== GET CURRENT SCHOOL ID ==========
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
 $stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+
+// Get current user's roles (filter by school_id)
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
+$stmt = $conn->prepare($user_roles_sql);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -23,7 +35,7 @@ while ($row = $user_roles_result->fetch_assoc()) {
 // Check if user has Head Master (1) or Second Master (2) role
 $has_permission = false;
 foreach ($user_role_ids as $role_id) {
-    if ($role_id == 1 || $role_id == 2) { // Head Master or Second Master
+    if ($role_id == 1 || $role_id == 2) {
         $has_permission = true;
         break;
     }
@@ -35,27 +47,33 @@ if (!$has_permission) {
     exit();
 }
 
-// Load user's theme settings
+// Load user's theme settings (filter by school_id)
 $colors = [];
 $preferences = [];
 
 if (isset($_SESSION['admin_id'])) {
-    $admin_id = $_SESSION['admin_id'];
+    $current_admin_id = $_SESSION['admin_id'];
     
     // Get theme colors
-    $color_query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $admin_id";
-    $color_result = mysqli_query($conn, $color_query);
+    $color_query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = ? AND school_id = ?";
+    $stmt = $conn->prepare($color_query);
+    $stmt->bind_param("ii", $current_admin_id, $current_school_id);
+    $stmt->execute();
+    $color_result = $stmt->get_result();
     if ($color_result) {
-        while ($row = mysqli_fetch_assoc($color_result)) {
+        while ($row = $color_result->fetch_assoc()) {
             $colors[$row['setting_key']] = $row['setting_value'];
         }
     }
     
     // Get preferences
-    $pref_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = $admin_id";
-    $pref_result = mysqli_query($conn, $pref_query);
+    $pref_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = ? AND school_id = ?";
+    $stmt = $conn->prepare($pref_query);
+    $stmt->bind_param("ii", $current_admin_id, $current_school_id);
+    $stmt->execute();
+    $pref_result = $stmt->get_result();
     if ($pref_result) {
-        while ($row = mysqli_fetch_assoc($pref_result)) {
+        while ($row = $pref_result->fetch_assoc()) {
             $preferences[$row['preference_key']] = $row['preference_value'];
         }
     }
@@ -154,17 +172,17 @@ if ($edit_id == $admin_id) {
     exit();
 }
 
-// Get admin details with current roles
+// ========== GET ADMIN DETAILS WITH SCHOOL ID VERIFICATION ==========
 $sql = "SELECT a.*, 
         GROUP_CONCAT(DISTINCT ara.role_id) as role_ids,
         ara.is_primary as primary_role_id
         FROM admins a
         LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
-        WHERE a.id = ?
+        WHERE a.id = ? AND a.school_id = ?
         GROUP BY a.id";
 
 $stmt = $conn->prepare($sql);
-$stmt->bind_param("i", $edit_id);
+$stmt->bind_param("ii", $edit_id, $current_school_id);
 $stmt->execute();
 $result = $stmt->get_result();
 
@@ -188,33 +206,30 @@ if ($result && $result->num_rows > 0) {
         }
     }
     
-    // Check if account is locked
-    function isAdminAccountLocked($conn, $admin_id) {
-        $email_sql = "SELECT email FROM admins WHERE id = ?";
-        $stmt = $conn->prepare($email_sql);
-        $stmt->bind_param("i", $admin_id);
+    // Check if account is locked (with school_id)
+    function isAdminAccountLockedForEdit($conn, $admin_id, $school_id) {
+        $sql = "SELECT locked_until, failed_login_attempts FROM admins WHERE id = ? AND school_id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("ii", $admin_id, $school_id);
         $stmt->execute();
-        $email_result = $stmt->get_result();
-        $admin = $email_result->fetch_assoc();
+        $result = $stmt->get_result();
+        $admin = $result->fetch_assoc();
         
         if (!$admin) return false;
         
-        $sql = "SELECT * FROM admin_login_attempts 
-                WHERE identifier = ?
-                AND attempt_time > DATE_SUB(NOW(), INTERVAL 24 HOUR)
-                AND success = 0";
-        
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("s", $admin['email']);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        return $result->num_rows >= 5;
+        if ($admin['locked_until'] !== null && $admin['locked_until'] != '') {
+            $locked_until = strtotime($admin['locked_until']);
+            $now = time();
+            if ($locked_until > $now) {
+                return true;
+            }
+        }
+        return false;
     }
     
-    $is_locked = isAdminAccountLocked($conn, $edit_id);
+    $is_locked = isAdminAccountLockedForEdit($conn, $edit_id, $current_school_id);
 } else {
-    $_SESSION['error'] = "Teacher not found.";
+    $_SESSION['error'] = "Teacher not found or you don't have permission to edit this teacher.";
     header("Location: admins.php");
     exit();
 }
@@ -231,7 +246,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     // Handle phone number - add 255 prefix
     $phone_input = mysqli_real_escape_string($conn, trim($_POST['phone_number'] ?? ''));
-    $phone_number = '255' . $phone_input; // Add prefix to store full number
+    $phone_number = '255' . $phone_input;
     
     $nida = mysqli_real_escape_string($conn, trim($_POST['nida'] ?? ''));
     $selected_roles = $_POST['roles'] ?? [];
@@ -253,7 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Invalid email format.";
     }
     
-    // Validate phone number format (255 followed by 9 digits = 12 characters total)
+    // Validate phone number format
     $phone_regex = '/^255\d{9}$/';
     if (!preg_match($phone_regex, $phone_number)) {
         $error = "Invalid phone number format. Must be 255 followed by 9 digits (e.g., 255712345678).";
@@ -268,11 +283,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = "Please select a primary role.";
     }
     
-    // Check if email already exists for ANOTHER admin
+    // Check if email already exists for ANOTHER admin in SAME SCHOOL
     if (empty($error)) {
-        $check_email_sql = "SELECT id FROM admins WHERE email = ? AND id != ?";
+        $check_email_sql = "SELECT id FROM admins WHERE email = ? AND id != ? AND school_id = ?";
         $stmt = $conn->prepare($check_email_sql);
-        $stmt->bind_param("si", $email, $edit_id);
+        $stmt->bind_param("sii", $email, $edit_id, $current_school_id);
         $stmt->execute();
         $check_result = $stmt->get_result();
         if ($check_result->num_rows > 0) {
@@ -280,11 +295,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    // Check if phone already exists for ANOTHER admin
+    // Check if phone already exists for ANOTHER admin in SAME SCHOOL
     if (empty($error)) {
-        $check_phone_sql = "SELECT id FROM admins WHERE phone_number = ? AND id != ?";
+        $check_phone_sql = "SELECT id FROM admins WHERE phone_number = ? AND id != ? AND school_id = ?";
         $stmt = $conn->prepare($check_phone_sql);
-        $stmt->bind_param("si", $phone_number, $edit_id);
+        $stmt->bind_param("sii", $phone_number, $edit_id, $current_school_id);
         $stmt->execute();
         $check_result = $stmt->get_result();
         if ($check_result->num_rows > 0) {
@@ -292,11 +307,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     }
     
-    // Check if NIDA already exists for ANOTHER admin (only if NIDA is provided)
+    // Check if NIDA already exists for ANOTHER admin in SAME SCHOOL (only if NIDA is provided)
     if (empty($error) && !empty($nida)) {
-        $check_nida_sql = "SELECT id FROM admins WHERE nida = ? AND id != ?";
+        $check_nida_sql = "SELECT id FROM admins WHERE nida = ? AND id != ? AND school_id = ?";
         $stmt = $conn->prepare($check_nida_sql);
-        $stmt->bind_param("si", $nida, $edit_id);
+        $stmt->bind_param("sii", $nida, $edit_id, $current_school_id);
         $stmt->execute();
         $check_result = $stmt->get_result();
         if ($check_result->num_rows > 0) {
@@ -322,9 +337,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         nida = NULL,
                         status = ?,
                         updated_at = NOW()
-                        WHERE id = ?";
+                        WHERE id = ? AND school_id = ?";
                 $stmt = $conn->prepare($sql);
-                $stmt->bind_param("sssssssii", $first_name, $middle_name, $last_name, $sex, $email, $check_number, $phone_number, $status, $edit_id);
+                $stmt->bind_param("sssssssiii", $first_name, $middle_name, $last_name, $sex, $email, $check_number, $phone_number, $status, $edit_id, $current_school_id);
             } else {
                 $sql = "UPDATE admins SET 
                         first_name = ?, 
@@ -337,9 +352,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         nida = ?,
                         status = ?,
                         updated_at = NOW()
-                        WHERE id = ?";
+                        WHERE id = ? AND school_id = ?";
                 $stmt = $conn->prepare($sql);
-                $stmt->bind_param("ssssssssii", $first_name, $middle_name, $last_name, $sex, $email, $check_number, $phone_number, $nida, $status, $edit_id);
+                $stmt->bind_param("ssssssssiii", $first_name, $middle_name, $last_name, $sex, $email, $check_number, $phone_number, $nida, $status, $edit_id, $current_school_id);
             }
             
             if ($stmt->execute()) {
@@ -366,6 +381,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Commit transaction
                 mysqli_commit($conn);
+                
+                // Log the update
+                $log_sql = "INSERT INTO admin_logs (admin_id, action, description, ip_address, school_id) 
+                           VALUES (?, 'edit_teacher', ?, ?, ?)";
+                $log_stmt = $conn->prepare($log_sql);
+                $description = "Edited teacher: $first_name $last_name (ID: $edit_id)";
+                $ip_address = $_SERVER['REMOTE_ADDR'];
+                $log_stmt->bind_param("issi", $admin_id, $description, $ip_address, $current_school_id);
+                $log_stmt->execute();
                 
                 $_SESSION['success'] = "Teacher details updated successfully!";
                 header("Location: admins.php");
@@ -989,7 +1013,7 @@ $sidebarClass = ($preferences['sidebar_collapsed'] == '1') ? 'sidebar-hidden' : 
         <div class="page-header">
             <div class="d-flex justify-content-between align-items-center flex-wrap">
                 <div class="d-flex align-items-center mb-2 mb-sm-0">
-                    <a href="admins.php" class="btn btn-back me-3">
+                    <a href="admins.php" class="btn-back me-3">
                         <i class="fas fa-arrow-left"></i> <span class="d-none d-sm-inline">Back to Staff List</span>
                     </a>
                     <h2 class="mb-0">

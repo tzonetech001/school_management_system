@@ -1,5 +1,5 @@
 <?php
-// edit_notification.php
+// edit_notification.php - WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -12,18 +12,34 @@ if (!isset($_SESSION['admin_id'])) {
 $admin_id = $_SESSION['admin_id'];
 $is_admin = false;
 
+// ========== GET CURRENT SCHOOL ID AND SCHOOL CODE ==========
+$school_query = "SELECT a.school_id, s.school_code 
+                 FROM admins a 
+                 JOIN schools s ON a.school_id = s.id 
+                 WHERE a.id = ?";
+$stmt = $conn->prepare($school_query);
+$stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+$current_school_code = $current_admin_data['school_code'] ?? 'MVZ001';
+
 // Get admin info and check if they are admin (Head Master or Second Master)
 $admin_sql = "SELECT a.*, 
              GROUP_CONCAT(DISTINCT ar.role_name) as roles
              FROM admins a
              LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
              LEFT JOIN admin_roles ar ON ara.role_id = ar.id
-             WHERE a.id = $admin_id
+             WHERE a.id = ? AND a.school_id = ?
              GROUP BY a.id";
-$admin_result = mysqli_query($conn, $admin_sql);
+$stmt = $conn->prepare($admin_sql);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
+$stmt->execute();
+$admin_result = $stmt->get_result();
 
-if ($admin_result && mysqli_num_rows($admin_result) > 0) {
-    $admin_info = mysqli_fetch_assoc($admin_result);
+if ($admin_result && $admin_result->num_rows > 0) {
+    $admin_info = $admin_result->fetch_assoc();
     $admin_roles = explode(',', $admin_info['roles']);
     $is_admin = in_array('Head Master', $admin_roles) || in_array('Second Master', $admin_roles);
 }
@@ -37,22 +53,25 @@ if (!isset($_GET['id'])) {
 
 $notification_id = mysqli_real_escape_string($conn, $_GET['id']);
 
-// Get notification details
+// Get notification details (with school_id verification)
 $sql = "SELECT n.*, 
        CONCAT(a.first_name, ' ', a.last_name) as author_name,
        a.profile_image as author_image
        FROM notifications n
        JOIN admins a ON n.admin_id = a.id
-       WHERE n.id = $notification_id AND n.status = 'active'";
-$result = mysqli_query($conn, $sql);
+       WHERE n.id = ? AND n.status = 'active' AND n.school_id = ?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("ii", $notification_id, $current_school_id);
+$stmt->execute();
+$result = $stmt->get_result();
 
-if (!$result || mysqli_num_rows($result) == 0) {
-    $_SESSION['error'] = "Notification not found";
+if (!$result || $result->num_rows == 0) {
+    $_SESSION['error'] = "Notification not found or you don't have permission.";
     header("Location: notifications.php");
     exit();
 }
 
-$notification = mysqli_fetch_assoc($result);
+$notification = $result->fetch_assoc();
 
 // Check if user can edit this notification (owner or admin)
 if ($notification['admin_id'] != $admin_id && !$is_admin) {
@@ -75,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $file_type = $notification['file_type'];
     $file_size = $notification['file_size'];
     
-    if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] == 0) {
+    if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] == 0 && $_FILES['attachment']['size'] > 0) {
         $allowed_types = [
             'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
             'video/mp4', 'video/mpeg', 'video/quicktime', 'video/webm', 'video/avi',
@@ -107,8 +126,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             
             // Generate unique filename
             $file_ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-            $safe_filename = preg_replace('/[^a-zA-Z0-9.-]/', '_', $file['name']);
-            $file_name = uniqid() . '_' . $safe_filename;
+            $safe_filename = preg_replace('/[^a-zA-Z0-9.-]/', '_', pathinfo($file['name'], PATHINFO_FILENAME));
+            $file_name = uniqid() . '_' . $safe_filename . '.' . $file_ext;
             $file_path = $upload_dir . $file_name;
             
             // Determine file type category
@@ -158,25 +177,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $file_size = null;
     }
     
-    // Update notification
+    // Update notification (with school_id verification)
     $sql = "UPDATE notifications SET 
-            title = '$title',
-            description = '$description',
-            visibility = '$visibility',
-            priority = '$priority',
-            file_path = " . ($file_path ? "'$file_path'" : "NULL") . ",
-            file_name = " . ($file_name ? "'$file_name'" : "NULL") . ",
-            file_type = " . ($file_type ? "'$file_type'" : "NULL") . ",
-            file_size = " . ($file_size ? "$file_size" : "NULL") . ",
+            title = ?,
+            description = ?,
+            visibility = ?,
+            priority = ?,
+            file_path = ?,
+            file_name = ?,
+            file_type = ?,
+            file_size = ?,
             updated_at = NOW()
-            WHERE id = $notification_id";
+            WHERE id = ? AND school_id = ?";
     
-    if (mysqli_query($conn, $sql)) {
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ssssssssii", 
+        $title, $description, $visibility, $priority,
+        $file_path, $file_name, $file_type, $file_size,
+        $notification_id, $current_school_id);
+    
+    if ($stmt->execute()) {
         $_SESSION['success'] = "Notification updated successfully!";
         header("Location: notifications.php");
         exit();
     } else {
-        $_SESSION['error'] = "Error updating notification: " . mysqli_error($conn);
+        $_SESSION['error'] = "Error updating notification: " . $stmt->error;
         header("Location: edit_notification.php?id=$notification_id");
         exit();
     }
@@ -216,7 +241,7 @@ if ($notification['file_path']) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Notification - Muyovozi High School</title>
+    <title>Edit Notification - School System</title>
     
     <!-- Include header -->
     <?php include '../controller/header.php'; ?>
@@ -446,7 +471,6 @@ if ($notification['file_path']) {
     </style>
 </head>
 <body>
-   
     
     <div class="main-content">
         <div class="container-fluid">
@@ -454,6 +478,7 @@ if ($notification['file_path']) {
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h2 class="page-title">
                     <i class="fas fa-edit me-2"></i>Edit Notification
+                    <small class="text-muted ms-2">School: <?php echo htmlspecialchars($current_school_code); ?></small>
                 </h2>
                 <div>
                     <a href="notifications.php" class="btn btn-outline-secondary back-button">

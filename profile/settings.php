@@ -4,25 +4,95 @@ if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
 
-// Check if user is logged in
-if (!isset($_SESSION['admin_id'])) {
-    header("Location: ../index.php");
-    exit();
-}
-
 require_once '../controller/db_connect.php';
 
 // Enable error reporting for debugging (remove in production)
 error_reporting(E_ALL);
-ini_set('display_errors', 0); // Turn off display errors, log them instead
+ini_set('display_errors', 0);
 ini_set('log_errors', 1);
 
-// Initialize variables
-$success_message = '';
-$error_message = '';
+// Check if user is logged in (either admin or super admin)
+$is_super_admin = false;
+$admin_id = null;
+$school_id = null;
+$super_admin_id = null;
 
-// Default theme colors
-$default_colors = [
+// First check if super admin is logged in (from super_admins table)
+if (isset($_SESSION['super_admin_id'])) {
+    $is_super_admin = true;
+    $super_admin_id = $_SESSION['super_admin_id'];
+    
+    // Get super admin info
+    $super_query = "SELECT * FROM super_admins WHERE id = $super_admin_id AND status = 1";
+    $super_result = mysqli_query($conn, $super_query);
+    $super_admin = mysqli_fetch_assoc($super_result);
+    
+    if (!$super_admin) {
+        session_destroy();
+        header("Location: ../super_admin/login.php");
+        exit();
+    }
+    
+    // Get selected school from session or default to 1
+    $school_id = isset($_SESSION['selected_school_id']) ? $_SESSION['selected_school_id'] : 1;
+    
+} elseif (isset($_SESSION['admin_id'])) {
+    // Regular admin logged in
+    $is_super_admin = false;
+    $admin_id = $_SESSION['admin_id'];
+    
+    // Get admin info
+    $admin_query = "SELECT * FROM admins WHERE id = $admin_id";
+    $admin_result = mysqli_query($conn, $admin_query);
+    $admin = mysqli_fetch_assoc($admin_result);
+    
+    if (!$admin || $admin['status'] != 1) {
+        session_destroy();
+        header("Location: ../index.php");
+        exit();
+    }
+    
+    $school_id = $admin['school_id'] ?? 1;
+} else {
+    // No user logged in
+    header("Location: ../index.php");
+    exit();
+}
+
+// Handle school selection for super admin
+if ($is_super_admin && isset($_POST['select_school'])) {
+    $new_school_id = intval($_POST['school_id']);
+    $_SESSION['selected_school_id'] = $new_school_id;
+    $school_id = $new_school_id;
+    header("Location: settings.php");
+    exit();
+}
+
+// Get school system defaults
+$school_query = "SELECT system_theme, system_preferences, allowed_customization, logo_path, school_name, school_code, address, phone, email, school_motto FROM schools WHERE id = $school_id";
+$school_result = mysqli_query($conn, $school_query);
+$school_data = mysqli_fetch_assoc($school_result);
+
+if (!$school_data) {
+    // School not found, redirect to first available
+    $default_school = mysqli_query($conn, "SELECT id FROM schools LIMIT 1");
+    if ($default_school && mysqli_num_rows($default_school) > 0) {
+        $default = mysqli_fetch_assoc($default_school);
+        $school_id = $default['id'];
+        $_SESSION['selected_school_id'] = $school_id;
+        header("Location: settings.php");
+        exit();
+    }
+    die("No school found in database");
+}
+
+// Parse system defaults
+$system_theme = json_decode($school_data['system_theme'] ?? '', true);
+$system_preferences = json_decode($school_data['system_preferences'] ?? '', true);
+$allowed_customization = json_decode($school_data['allowed_customization'] ?? '{"theme":true,"preferences":true}', true);
+
+// Default colors (fallback)
+$default_colors = $system_theme ?: [
     'primary' => '#3B9DB3',
     'primary_dark' => '#2d7c8f',
     'primary_light' => '#8bc5d6',
@@ -43,6 +113,80 @@ $default_colors = [
     'aqua_blue' => '#4dd2ff'
 ];
 
+// Default preferences (fallback)
+$pref_defaults = $system_preferences ?: [
+    'sidebar_collapsed' => '0',
+    'font_size' => '16',
+    'animations' => '1',
+    'compact_mode' => '0',
+    'background_opacity' => '65',
+    'background_option' => 'image',
+    'animation_speed' => 'normal'
+];
+
+// Check if tables exist and create if not (only for regular admins)
+if (!$is_super_admin) {
+    $table_check = mysqli_query($conn, "SHOW TABLES LIKE 'theme_settings'");
+    if ($table_check && mysqli_num_rows($table_check) == 0) {
+        mysqli_query($conn, "CREATE TABLE IF NOT EXISTS theme_settings (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            admin_id INT NOT NULL,
+            setting_key VARCHAR(100) NOT NULL,
+            setting_value TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_admin_setting (admin_id, setting_key),
+            FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
+        )");
+        
+        mysqli_query($conn, "CREATE TABLE IF NOT EXISTS user_preferences (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            admin_id INT NOT NULL,
+            preference_key VARCHAR(100) NOT NULL,
+            preference_value TEXT,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            UNIQUE KEY unique_admin_preference (admin_id, preference_key),
+            FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
+        )");
+    }
+}
+
+// Load user's custom settings (only for regular admins)
+$user_theme = [];
+$user_preferences = [];
+
+if (!$is_super_admin && $admin_id) {
+    $theme_query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $admin_id";
+    $theme_result = mysqli_query($conn, $theme_query);
+    if ($theme_result) {
+        while ($row = mysqli_fetch_assoc($theme_result)) {
+            $user_theme[$row['setting_key']] = $row['setting_value'];
+        }
+    }
+
+    $prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = $admin_id";
+    $prefs_result = mysqli_query($conn, $prefs_query);
+    if ($prefs_result) {
+        while ($row = mysqli_fetch_assoc($prefs_result)) {
+            $user_preferences[$row['preference_key']] = $row['preference_value'];
+        }
+    }
+}
+
+// Merge: User settings override system defaults
+$colors = $default_colors;
+foreach ($user_theme as $key => $value) {
+    if (array_key_exists($key, $colors) && $value !== null) {
+        $colors[$key] = $value;
+    }
+}
+
+$preferences = $pref_defaults;
+foreach ($user_preferences as $key => $value) {
+    if (array_key_exists($key, $preferences) && $value !== null) {
+        $preferences[$key] = $value;
+    }
+}
+
 // Background options
 $background_options = [
     'image' => 'School Image',
@@ -59,37 +203,26 @@ $background_colors = [
     'dark_light' => '#2d2d2d'
 ];
 
-$admin_id = $_SESSION['admin_id'];
+// Font sizes
+$font_sizes = [
+    '10' => '10px',
+    '12' => '12px',
+    '14' => '14px',
+    '16' => '16px',
+    '18' => '18px'
+];
 
-// Check if theme_settings table exists and create if not
-$table_check = mysqli_query($conn, "SHOW TABLES LIKE 'theme_settings'");
-if ($table_check && mysqli_num_rows($table_check) == 0) {
-    // Create theme_settings table
-    $create_table = "CREATE TABLE IF NOT EXISTS theme_settings (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        admin_id INT NOT NULL,
-        setting_key VARCHAR(100) NOT NULL,
-        setting_value TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_admin_setting (admin_id, setting_key),
-        FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
-    )";
-    mysqli_query($conn, $create_table);
-    
-    // Create user_preferences table for additional settings
-    $create_prefs = "CREATE TABLE IF NOT EXISTS user_preferences (
-        id INT AUTO_INCREMENT PRIMARY KEY,
-        admin_id INT NOT NULL,
-        preference_key VARCHAR(100) NOT NULL,
-        preference_value TEXT,
-        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY unique_admin_preference (admin_id, preference_key),
-        FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
-    )";
-    mysqli_query($conn, $create_prefs);
+// Get all schools for super admin dropdown
+$all_schools = [];
+if ($is_super_admin) {
+    $schools_query = "SELECT id, school_name, school_code FROM schools ORDER BY school_name";
+    $schools_result = mysqli_query($conn, $schools_query);
+    while ($row = mysqli_fetch_assoc($schools_result)) {
+        $all_schools[] = $row;
+    }
 }
 
-// Handle AJAX requests first - before any HTML output
+// Handle AJAX requests
 if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) == 'xmlhttprequest') {
     header('Content-Type: application/json');
     
@@ -97,11 +230,61 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQ
         if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $response = ['success' => false, 'message' => ''];
             
-            // Debug: Log received POST data
-            error_log("AJAX POST Data: " . print_r($_POST, true));
+            // SUPER ADMIN: Save system defaults for selected school
+            if ($is_super_admin && isset($_POST['save_system_defaults'])) {
+                $system_theme_data = [];
+                $color_keys = ['primary', 'primary_dark', 'primary_light', 'light', 'white', 'gray', 
+                               'text', 'text_light', 'border', 'success', 'danger', 'warning', 'info',
+                               'coral', 'forest_green', 'lime_green', 'sky_blue', 'aqua_blue'];
+                
+                foreach ($color_keys as $key) {
+                    $post_key = $key . '_color';
+                    if (isset($_POST[$post_key]) && !empty($_POST[$post_key])) {
+                        $system_theme_data[$key] = $_POST[$post_key];
+                    }
+                }
+                
+                $system_prefs_data = [
+                    'sidebar_collapsed' => $_POST['sidebar_collapsed'] ?? '0',
+                    'font_size' => $_POST['font_size'] ?? '16',
+                    'animations' => $_POST['animations'] ?? '1',
+                    'compact_mode' => $_POST['compact_mode'] ?? '0',
+                    'background_opacity' => $_POST['background_opacity'] ?? '65',
+                    'background_option' => $_POST['background_option'] ?? 'image',
+                    'animation_speed' => $_POST['animation_speed'] ?? 'normal'
+                ];
+                
+                $allowed = [
+                    'theme' => isset($_POST['allow_theme_custom']) ? true : false,
+                    'preferences' => isset($_POST['allow_prefs_custom']) ? true : false
+                ];
+                
+                $system_theme_json = mysqli_real_escape_string($conn, json_encode($system_theme_data));
+                $system_prefs_json = mysqli_real_escape_string($conn, json_encode($system_prefs_data));
+                $allowed_json = mysqli_real_escape_string($conn, json_encode($allowed));
+                
+                $update_school = "UPDATE schools SET 
+                                  system_theme = '$system_theme_json',
+                                  system_preferences = '$system_prefs_json',
+                                  allowed_customization = '$allowed_json'
+                                  WHERE id = $school_id";
+                
+                if (mysqli_query($conn, $update_school)) {
+                    // Option to apply to all users in this school
+                    if (isset($_POST['apply_to_all']) && $_POST['apply_to_all'] == '1') {
+                        // Clear all user settings for this school
+                        mysqli_query($conn, "DELETE FROM theme_settings WHERE admin_id IN (SELECT id FROM admins WHERE school_id = $school_id)");
+                        mysqli_query($conn, "DELETE FROM user_preferences WHERE admin_id IN (SELECT id FROM admins WHERE school_id = $school_id)");
+                    }
+                    $response['success'] = true;
+                    $response['message'] = "System defaults for " . htmlspecialchars($school_data['school_name']) . " updated successfully!";
+                } else {
+                    $response['message'] = "Error updating system defaults: " . mysqli_error($conn);
+                }
+            }
             
-            if (isset($_POST['save_theme'])) {
-                // Save all colors
+            // Regular user save theme (only if allowed and not super admin)
+            if (!$is_super_admin && isset($_POST['save_theme']) && ($allowed_customization['theme'] ?? true)) {
                 $color_keys = [
                     'primary', 'primary_dark', 'primary_light', 'light', 'white', 'gray',
                     'text', 'text_light', 'border', 'success', 'danger', 'warning', 'info',
@@ -116,20 +299,11 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQ
                         
                         $check = mysqli_query($conn, "SELECT id FROM theme_settings WHERE admin_id = $admin_id AND setting_key = '$key'");
                         if ($check && mysqli_num_rows($check) > 0) {
-                            $update = "UPDATE theme_settings SET setting_value = '$value' WHERE admin_id = $admin_id AND setting_key = '$key'";
-                            if (mysqli_query($conn, $update)) {
-                                $saved_count++;
-                            } else {
-                                error_log("Error updating $key: " . mysqli_error($conn));
-                            }
+                            mysqli_query($conn, "UPDATE theme_settings SET setting_value = '$value' WHERE admin_id = $admin_id AND setting_key = '$key'");
                         } else {
-                            $insert = "INSERT INTO theme_settings (admin_id, setting_key, setting_value) VALUES ($admin_id, '$key', '$value')";
-                            if (mysqli_query($conn, $insert)) {
-                                $saved_count++;
-                            } else {
-                                error_log("Error inserting $key: " . mysqli_error($conn));
-                            }
+                            mysqli_query($conn, "INSERT INTO theme_settings (admin_id, setting_key, setting_value) VALUES ($admin_id, '$key', '$value')");
                         }
+                        $saved_count++;
                     }
                 }
                 
@@ -137,7 +311,8 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQ
                 $response['message'] = "$saved_count theme colors saved successfully!";
             }
             
-            if (isset($_POST['save_preferences'])) {
+            // Regular user save preferences (only if allowed and not super admin)
+            if (!$is_super_admin && isset($_POST['save_preferences']) && ($allowed_customization['preferences'] ?? true)) {
                 $pref_keys = [
                     'sidebar_collapsed', 'font_size', 'animations', 
                     'compact_mode', 'background_opacity', 'background_option',
@@ -146,54 +321,27 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQ
                 
                 $saved_count = 0;
                 foreach ($pref_keys as $key) {
-                    if (isset($_POST[$key])) {
-                        $value = mysqli_real_escape_string($conn, $_POST[$key]);
-                    } else {
-                        $value = '0';
-                    }
+                    $value = isset($_POST[$key]) ? mysqli_real_escape_string($conn, $_POST[$key]) : '0';
                     
                     $check = mysqli_query($conn, "SELECT id FROM user_preferences WHERE admin_id = $admin_id AND preference_key = '$key'");
                     if ($check && mysqli_num_rows($check) > 0) {
-                        $update = "UPDATE user_preferences SET preference_value = '$value' WHERE admin_id = $admin_id AND preference_key = '$key'";
-                        if (mysqli_query($conn, $update)) {
-                            $saved_count++;
-                        } else {
-                            error_log("Error updating preference $key: " . mysqli_error($conn));
-                        }
+                        mysqli_query($conn, "UPDATE user_preferences SET preference_value = '$value' WHERE admin_id = $admin_id AND preference_key = '$key'");
                     } else {
-                        $insert = "INSERT INTO user_preferences (admin_id, preference_key, preference_value) VALUES ($admin_id, '$key', '$value')";
-                        if (mysqli_query($conn, $insert)) {
-                            $saved_count++;
-                        } else {
-                            error_log("Error inserting preference $key: " . mysqli_error($conn));
-                        }
+                        mysqli_query($conn, "INSERT INTO user_preferences (admin_id, preference_key, preference_value) VALUES ($admin_id, '$key', '$value')");
                     }
+                    $saved_count++;
                 }
                 
                 $response['success'] = true;
                 $response['message'] = "$saved_count preferences saved successfully!";
             }
             
-            if (isset($_POST['reset_default'])) {
-                // Reset to default colors
-                $reset_count = 0;
-                foreach ($default_colors as $key => $value) {
-                    $check = mysqli_query($conn, "SELECT id FROM theme_settings WHERE admin_id = $admin_id AND setting_key = '$key'");
-                    if ($check && mysqli_num_rows($check) > 0) {
-                        $update = "UPDATE theme_settings SET setting_value = '$value' WHERE admin_id = $admin_id AND setting_key = '$key'";
-                        if (mysqli_query($conn, $update)) {
-                            $reset_count++;
-                        }
-                    } else {
-                        $insert = "INSERT INTO theme_settings (admin_id, setting_key, setting_value) VALUES ($admin_id, '$key', '$value')";
-                        if (mysqli_query($conn, $insert)) {
-                            $reset_count++;
-                        }
-                    }
-                }
-                
+            // Reset to system default (for regular admins only)
+            if (!$is_super_admin && isset($_POST['reset_to_system_default'])) {
+                mysqli_query($conn, "DELETE FROM theme_settings WHERE admin_id = $admin_id");
+                mysqli_query($conn, "DELETE FROM user_preferences WHERE admin_id = $admin_id");
                 $response['success'] = true;
-                $response['message'] = "Reset to default theme successfully!";
+                $response['message'] = "Reset to school defaults successfully!";
             }
             
             echo json_encode($response);
@@ -208,15 +356,64 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQ
 
 // Regular form submission (non-AJAX)
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_SERVER['HTTP_X_REQUESTED_WITH'])) {
-    if (isset($_POST['save_theme'])) {
-        // Save all colors
+    // SUPER ADMIN: Save system defaults (non-AJAX fallback)
+    if ($is_super_admin && isset($_POST['save_system_defaults'])) {
+        $system_theme_data = [];
+        $color_keys = ['primary', 'primary_dark', 'primary_light', 'light', 'white', 'gray', 
+                       'text', 'text_light', 'border', 'success', 'danger', 'warning', 'info',
+                       'coral', 'forest_green', 'lime_green', 'sky_blue', 'aqua_blue'];
+        
+        foreach ($color_keys as $key) {
+            $post_key = $key . '_color';
+            if (isset($_POST[$post_key])) {
+                $system_theme_data[$key] = $_POST[$post_key];
+            }
+        }
+        
+        $system_prefs_data = [
+            'sidebar_collapsed' => $_POST['sidebar_collapsed'] ?? '0',
+            'font_size' => $_POST['font_size'] ?? '16',
+            'animations' => $_POST['animations'] ?? '1',
+            'compact_mode' => $_POST['compact_mode'] ?? '0',
+            'background_opacity' => $_POST['background_opacity'] ?? '65',
+            'background_option' => $_POST['background_option'] ?? 'image',
+            'animation_speed' => $_POST['animation_speed'] ?? 'normal'
+        ];
+        
+        $allowed = [
+            'theme' => isset($_POST['allow_theme_custom']),
+            'preferences' => isset($_POST['allow_prefs_custom'])
+        ];
+        
+        $system_theme_json = mysqli_real_escape_string($conn, json_encode($system_theme_data));
+        $system_prefs_json = mysqli_real_escape_string($conn, json_encode($system_prefs_data));
+        $allowed_json = mysqli_real_escape_string($conn, json_encode($allowed));
+        
+        $update_school = "UPDATE schools SET 
+                          system_theme = '$system_theme_json',
+                          system_preferences = '$system_prefs_json',
+                          allowed_customization = '$allowed_json'
+                          WHERE id = $school_id";
+        
+        if (mysqli_query($conn, $update_school)) {
+            if (isset($_POST['apply_to_all_users'])) {
+                mysqli_query($conn, "DELETE FROM theme_settings WHERE admin_id IN (SELECT id FROM admins WHERE school_id = $school_id)");
+                mysqli_query($conn, "DELETE FROM user_preferences WHERE admin_id IN (SELECT id FROM admins WHERE school_id = $school_id)");
+            }
+            $_SESSION['success'] = "System defaults for " . htmlspecialchars($school_data['school_name']) . " updated successfully!";
+        }
+        header("Location: settings.php");
+        exit();
+    }
+    
+    // Regular user save theme (only if not super admin)
+    if (!$is_super_admin && isset($_POST['save_theme']) && ($allowed_customization['theme'] ?? true)) {
         $color_keys = [
             'primary', 'primary_dark', 'primary_light', 'light', 'white', 'gray',
             'text', 'text_light', 'border', 'success', 'danger', 'warning', 'info',
             'coral', 'forest_green', 'lime_green', 'sky_blue', 'aqua_blue'
         ];
         
-        $saved_count = 0;
         foreach ($color_keys as $key) {
             $post_key = $key . '_color';
             if (isset($_POST[$post_key]) && !empty($_POST[$post_key])) {
@@ -224,152 +421,72 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_SERVER['HTTP_X_REQUESTED_W
                 
                 $check = mysqli_query($conn, "SELECT id FROM theme_settings WHERE admin_id = $admin_id AND setting_key = '$key'");
                 if ($check && mysqli_num_rows($check) > 0) {
-                    if (mysqli_query($conn, "UPDATE theme_settings SET setting_value = '$value' WHERE admin_id = $admin_id AND setting_key = '$key'")) {
-                        $saved_count++;
-                    }
+                    mysqli_query($conn, "UPDATE theme_settings SET setting_value = '$value' WHERE admin_id = $admin_id AND setting_key = '$key'");
                 } else {
-                    if (mysqli_query($conn, "INSERT INTO theme_settings (admin_id, setting_key, setting_value) VALUES ($admin_id, '$key', '$value')")) {
-                        $saved_count++;
-                    }
+                    mysqli_query($conn, "INSERT INTO theme_settings (admin_id, setting_key, setting_value) VALUES ($admin_id, '$key', '$value')");
                 }
             }
         }
         
-        $_SESSION['success'] = "$saved_count theme colors saved successfully!";
+        $_SESSION['success'] = "Theme colors saved successfully!";
         header("Location: settings.php");
         exit();
     }
     
-    if (isset($_POST['save_preferences'])) {
+    // Regular user save preferences (only if not super admin)
+    if (!$is_super_admin && isset($_POST['save_preferences']) && ($allowed_customization['preferences'] ?? true)) {
         $pref_keys = [
             'sidebar_collapsed', 'font_size', 'animations', 
             'compact_mode', 'background_opacity', 'background_option',
             'animation_speed'
         ];
         
-        $saved_count = 0;
         foreach ($pref_keys as $key) {
-            if (isset($_POST[$key])) {
-                $value = mysqli_real_escape_string($conn, $_POST[$key]);
-            } else {
-                $value = '0';
-            }
+            $value = isset($_POST[$key]) ? mysqli_real_escape_string($conn, $_POST[$key]) : '0';
             
             $check = mysqli_query($conn, "SELECT id FROM user_preferences WHERE admin_id = $admin_id AND preference_key = '$key'");
             if ($check && mysqli_num_rows($check) > 0) {
-                if (mysqli_query($conn, "UPDATE user_preferences SET preference_value = '$value' WHERE admin_id = $admin_id AND preference_key = '$key'")) {
-                    $saved_count++;
-                }
+                mysqli_query($conn, "UPDATE user_preferences SET preference_value = '$value' WHERE admin_id = $admin_id AND preference_key = '$key'");
             } else {
-                if (mysqli_query($conn, "INSERT INTO user_preferences (admin_id, preference_key, preference_value) VALUES ($admin_id, '$key', '$value')")) {
-                    $saved_count++;
-                }
+                mysqli_query($conn, "INSERT INTO user_preferences (admin_id, preference_key, preference_value) VALUES ($admin_id, '$key', '$value')");
             }
         }
         
-        $_SESSION['success'] = "$saved_count preferences saved successfully!";
+        $_SESSION['success'] = "Preferences saved successfully!";
         header("Location: settings.php");
         exit();
     }
     
-    if (isset($_POST['reset_default'])) {
-        // Reset to default colors
-        foreach ($default_colors as $key => $value) {
-            $check = mysqli_query($conn, "SELECT id FROM theme_settings WHERE admin_id = $admin_id AND setting_key = '$key'");
-            if ($check && mysqli_num_rows($check) > 0) {
-                mysqli_query($conn, "UPDATE theme_settings SET setting_value = '$value' WHERE admin_id = $admin_id AND setting_key = '$key'");
-            } else {
-                mysqli_query($conn, "INSERT INTO theme_settings (admin_id, setting_key, setting_value) VALUES ($admin_id, '$key', '$value')");
-            }
-        }
-        
-        $_SESSION['success'] = "Reset to default theme successfully!";
+    // Reset to system default (for regular admins only)
+    if (!$is_super_admin && isset($_POST['reset_to_system_default'])) {
+        mysqli_query($conn, "DELETE FROM theme_settings WHERE admin_id = $admin_id");
+        mysqli_query($conn, "DELETE FROM user_preferences WHERE admin_id = $admin_id");
+        $_SESSION['success'] = "Reset to school defaults successfully!";
         header("Location: settings.php");
         exit();
     }
-}
-
-// Load current settings
-$theme_settings = [];
-$settings_query = "SELECT setting_key, setting_value FROM theme_settings WHERE admin_id = $admin_id";
-$settings_result = mysqli_query($conn, $settings_query);
-if ($settings_result && mysqli_num_rows($settings_result) > 0) {
-    while ($row = mysqli_fetch_assoc($settings_result)) {
-        if ($row !== null && isset($row['setting_key']) && isset($row['setting_value'])) {
-            $theme_settings[$row['setting_key']] = $row['setting_value'];
-        }
-    }
-}
-
-// Load user preferences
-$preferences = [];
-$prefs_query = "SELECT preference_key, preference_value FROM user_preferences WHERE admin_id = $admin_id";
-$prefs_result = mysqli_query($conn, $prefs_query);
-if ($prefs_result && mysqli_num_rows($prefs_result) > 0) {
-    while ($row = mysqli_fetch_assoc($prefs_result)) {
-        if ($row !== null && isset($row['preference_key']) && isset($row['preference_value'])) {
-            $preferences[$row['preference_key']] = $row['preference_value'];
-        }
-    }
-}
-
-// Merge with defaults
-$colors = $default_colors;
-if (!empty($theme_settings) && is_array($theme_settings)) {
-    foreach ($theme_settings as $key => $value) {
-        if (array_key_exists($key, $colors) && $value !== null) {
-            $colors[$key] = $value;
-        }
-    }
-}
-
-// Font sizes
-$font_sizes = [
-    '10' => '10px',
-    '12' => '12px',
-    '14' => '14px',
-    '16' => '16px',
-    '18' => '18px'
-];
-
-// Get preferences with defaults
-$pref_defaults = [
-    'sidebar_collapsed' => '0',
-    'font_size' => '16',
-    'animations' => '1',
-    'compact_mode' => '0',
-    'background_opacity' => '65',
-    'background_option' => 'image',
-    'animation_speed' => 'normal'
-];
-
-foreach ($pref_defaults as $key => $default) {
-    if (!isset($preferences[$key]) || $preferences[$key] === null) {
-        $preferences[$key] = $default;
-    }
-}
-
-// Get admin info for header
-$admin_sql = "SELECT * FROM admins WHERE id = $admin_id";
-$admin_result = mysqli_query($conn, $admin_sql);
-$admin = null;
-if ($admin_result && mysqli_num_rows($admin_result) > 0) {
-    $admin = mysqli_fetch_assoc($admin_result);
 }
 
 // Determine background style
 $bg_style = '';
 $bg_option = isset($preferences['background_option']) ? $preferences['background_option'] : 'image';
 $bg_opacity = isset($preferences['background_opacity']) ? $preferences['background_opacity'] / 100 : 0.65;
+$school_logo = $school_data['logo_path'] ?? '../muyovozi.png';
+$school_name = $school_data['school_name'] ?? 'Muyovozi High School';
 
 if ($bg_option === 'image') {
-    $bg_style = "linear-gradient(rgba(255,255,255,{$bg_opacity}), rgba(255,255,255,{$bg_opacity})), url('../muyovozi.png') no-repeat center center fixed";
+    $bg_style = "linear-gradient(rgba(255,255,255,{$bg_opacity}), rgba(255,255,255,{$bg_opacity})), url('{$school_logo}') no-repeat center center fixed";
     $bg_size = 'cover';
 } else {
     $bg_color = isset($background_colors[$bg_option]) ? $background_colors[$bg_option] : '#e9ecef';
     $bg_style = $bg_color;
     $bg_size = 'auto';
 }
+
+// Get session messages
+$success_message = $_SESSION['success'] ?? '';
+$error_message = $_SESSION['error'] ?? '';
+unset($_SESSION['success'], $_SESSION['error']);
 ?>
 
 <!DOCTYPE html>
@@ -377,7 +494,7 @@ if ($bg_option === 'image') {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Theme Settings - Muyovozi High School</title>
+    <title>Theme Settings - <?php echo htmlspecialchars($school_name); ?></title>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -390,37 +507,37 @@ if ($bg_option === 'image') {
     
     <style>
         :root {
-            --primary-color: <?php echo isset($colors['primary']) ? $colors['primary'] : '#3B9DB3'; ?>;
-            --primary-dark: <?php echo isset($colors['primary_dark']) ? $colors['primary_dark'] : '#2d7c8f'; ?>;
-            --primary-light: <?php echo isset($colors['primary_light']) ? $colors['primary_light'] : '#8bc5d6'; ?>;
-            --light-color: <?php echo isset($colors['light']) ? $colors['light'] : '#f8f9fa'; ?>;
-            --white: <?php echo isset($colors['white']) ? $colors['white'] : '#ffffff'; ?>;
-            --gray: <?php echo isset($colors['gray']) ? $colors['gray'] : '#e9ecef'; ?>;
-            --text-color: <?php echo isset($colors['text']) ? $colors['text'] : '#333333'; ?>;
-            --text-light: <?php echo isset($colors['text_light']) ? $colors['text_light'] : '#666666'; ?>;
-            --border-color: <?php echo isset($colors['border']) ? $colors['border'] : '#e0e0e0'; ?>;
-            --success-color: <?php echo isset($colors['success']) ? $colors['success'] : '#28a745'; ?>;
-            --danger-color: <?php echo isset($colors['danger']) ? $colors['danger'] : '#dc3545'; ?>;
-            --warning-color: <?php echo isset($colors['warning']) ? $colors['warning'] : '#ffc107'; ?>;
-            --info-color: <?php echo isset($colors['info']) ? $colors['info'] : '#17a2b8'; ?>;
-            --coral-color: <?php echo isset($colors['coral']) ? $colors['coral'] : '#FF7F50'; ?>;
-            --forest-green: <?php echo isset($colors['forest_green']) ? $colors['forest_green'] : '#2E7D32'; ?>;
-            --lime-green: <?php echo isset($colors['lime_green']) ? $colors['lime_green'] : '#63E07E'; ?>;
-            --sky-blue: <?php echo isset($colors['sky_blue']) ? $colors['sky_blue'] : '#66d9ff'; ?>;
-            --aqua-blue: <?php echo isset($colors['aqua_blue']) ? $colors['aqua_blue'] : '#4dd2ff'; ?>;
+            --primary-color: <?php echo $colors['primary'] ?? '#3B9DB3'; ?>;
+            --primary-dark: <?php echo $colors['primary_dark'] ?? '#2d7c8f'; ?>;
+            --primary-light: <?php echo $colors['primary_light'] ?? '#8bc5d6'; ?>;
+            --light-color: <?php echo $colors['light'] ?? '#f8f9fa'; ?>;
+            --white: <?php echo $colors['white'] ?? '#ffffff'; ?>;
+            --gray: <?php echo $colors['gray'] ?? '#e9ecef'; ?>;
+            --text-color: <?php echo $colors['text'] ?? '#333333'; ?>;
+            --text-light: <?php echo $colors['text_light'] ?? '#666666'; ?>;
+            --border-color: <?php echo $colors['border'] ?? '#e0e0e0'; ?>;
+            --success-color: <?php echo $colors['success'] ?? '#28a745'; ?>;
+            --danger-color: <?php echo $colors['danger'] ?? '#dc3545'; ?>;
+            --warning-color: <?php echo $colors['warning'] ?? '#ffc107'; ?>;
+            --info-color: <?php echo $colors['info'] ?? '#17a2b8'; ?>;
+            --coral-color: <?php echo $colors['coral'] ?? '#FF7F50'; ?>;
+            --forest-green: <?php echo $colors['forest_green'] ?? '#2E7D32'; ?>;
+            --lime-green: <?php echo $colors['lime_green'] ?? '#63E07E'; ?>;
+            --sky-blue: <?php echo $colors['sky_blue'] ?? '#66d9ff'; ?>;
+            --aqua-blue: <?php echo $colors['aqua_blue'] ?? '#4dd2ff'; ?>;
             --font-size-base: <?php 
-                $fs = isset($preferences['font_size']) ? $preferences['font_size'] : '16';
-                echo isset($font_sizes[$fs]) ? $font_sizes[$fs] : '16px'; 
+                $fs = $preferences['font_size'] ?? '16';
+                echo $font_sizes[$fs] ?? '16px'; 
             ?>;
-            --spacing-base: <?php echo (isset($preferences['compact_mode']) && $preferences['compact_mode'] === '1') ? '0.75rem' : '1rem'; ?>;
+            --spacing-base: <?php echo ($preferences['compact_mode'] ?? '0') === '1' ? '0.75rem' : '1rem'; ?>;
             --animation-speed: <?php 
-                $speed = isset($preferences['animation_speed']) ? $preferences['animation_speed'] : 'normal';
+                $speed = $preferences['animation_speed'] ?? 'normal';
                 echo $speed === 'slow' ? '0.5s' : ($speed === 'fast' ? '0.15s' : '0.3s'); 
             ?>;
         }
 
         * {
-            transition: <?php echo (isset($preferences['animations']) && $preferences['animations'] === '1') ? 'all var(--animation-speed) ease' : 'none'; ?>;
+            transition: <?php echo ($preferences['animations'] ?? '1') === '1' ? 'all var(--animation-speed) ease' : 'none'; ?>;
         }
 
         body {
@@ -434,20 +551,17 @@ if ($bg_option === 'image') {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
 
-       
-       
-
-        @media (min-width: 992px) {
-            .main-content.sidebar-open {
-                margin-left: 250px;
-            }
-            
-            .main-content.sidebar-collapsed {
-                margin-left: 70px;
-            }
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+            transition: all var(--animation-speed) ease;
         }
 
-        <?php if (isset($preferences['compact_mode']) && $preferences['compact_mode'] === '1'): ?>
+        .main-content.sidebar-collapsed {
+            margin-left: 70px;
+        }
+
+        <?php if (($preferences['compact_mode'] ?? '0') === '1'): ?>
         .card-body {
             padding: 0.75rem !important;
         }
@@ -715,7 +829,41 @@ if ($bg_option === 'image') {
             flex: 1;
         }
 
-        /* Toast notifications like students.php */
+        .system-badge {
+            background: #ffc107;
+            color: #856404;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .restricted-badge {
+            background: #dc3545;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 20px;
+            font-size: 11px;
+            margin-left: 10px;
+        }
+
+        .school-selector {
+            background: linear-gradient(135deg, var(--primary-light), var(--primary-color));
+            border-radius: 10px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            color: white;
+        }
+
+        .school-selector select {
+            background: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 8px;
+            margin-left: 10px;
+        }
+
         .colored-toast.swal2-icon-success {
             background-color: #28a745 !important;
         }
@@ -738,23 +886,64 @@ if ($bg_option === 'image') {
     </style>
 </head>
 <body>
-    <!-- Header (Fixed) -->
+    <!-- Header (Same for both) -->
     <?php include '../controller/header.php'; ?>
     
-    <!-- Sidebar -->
-    <?php include '../controller/sidebar.php'; ?>
+    <!-- Sidebar (Different based on user type) -->
+    <?php if ($is_super_admin): ?>
+        <?php include '../super/sidebar.php'; ?>
+    <?php else: ?>
+        <?php include '../controller/sidebar.php'; ?>
+    <?php endif; ?>
     
     <!-- Main Content -->
-    <main class="main-content <?php echo (isset($preferences['sidebar_collapsed']) && $preferences['sidebar_collapsed'] === '1') ? 'sidebar-collapsed' : 'sidebar-open'; ?>">
+    <main class="main-content <?php echo ($preferences['sidebar_collapsed'] ?? '0') === '1' ? 'sidebar-collapsed' : 'sidebar-open'; ?>">
         <div class="container-fluid settings-container">
+            
+            <?php if ($is_super_admin): ?>
+            <!-- School Selector for Super Admin -->
+            <div class="school-selector">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <i class="fas fa-building me-2"></i>
+                        <strong>Currently Managing:</strong> 
+                        <span class="ms-2"><?php echo htmlspecialchars($school_data['school_name']); ?> (<?php echo htmlspecialchars($school_data['school_code']); ?>)</span>
+                    </div>
+                    <form method="POST" action="" class="d-inline">
+                        <select name="school_id" class="form-select d-inline-block w-auto" onchange="this.form.submit()">
+                            <?php foreach ($all_schools as $school): ?>
+                                <option value="<?php echo $school['id']; ?>" <?php echo $school['id'] == $school_id ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($school['school_name']); ?> (<?php echo htmlspecialchars($school['school_code']); ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <input type="hidden" name="select_school" value="1">
+                    </form>
+                </div>
+                <div class="mt-2 small">
+                    <i class="fas fa-info-circle me-1"></i>
+                    You are configuring default theme for this school. School admins can customize their own theme.
+                </div>
+            </div>
+            <?php endif; ?>
+            
             <!-- Page Header -->
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
                     <h2 class="mb-1" style="color: var(--text-color);">
                         <i class="fas fa-palette me-2" style="color: var(--primary-color);"></i>
                         Theme Settings
+                        <?php if ($is_super_admin): ?>
+                            <span class="badge bg-warning text-dark ms-2">Super Admin</span>
+                        <?php endif; ?>
                     </h2>
-                    <p class="text-muted mb-0">Customize the appearance of your dashboard</p>
+                    <p class="text-muted mb-0">
+                        <?php if ($is_super_admin): ?>
+                            Configure <strong><?php echo htmlspecialchars($school_data['school_name']); ?></strong> default theme
+                        <?php else: ?>
+                            Customize your personal dashboard appearance
+                        <?php endif; ?>
+                    </p>
                 </div>
                 <div>
                     <button class="btn btn-outline-primary me-2" onclick="previewChanges()">
@@ -766,15 +955,13 @@ if ($bg_option === 'image') {
                 </div>
             </div>
 
-            <!-- Session Messages (for non-AJAX) -->
-            <?php if (isset($_SESSION['success'])): ?>
-                <div id="successMessage" data-message="<?php echo htmlspecialchars($_SESSION['success']); ?>"></div>
-                <?php unset($_SESSION['success']); ?>
+            <!-- Session Messages -->
+            <?php if ($success_message): ?>
+                <div id="successMessage" data-message="<?php echo htmlspecialchars($success_message); ?>"></div>
             <?php endif; ?>
             
-            <?php if (isset($_SESSION['error'])): ?>
-                <div id="errorMessage" data-message="<?php echo htmlspecialchars($_SESSION['error']); ?>"></div>
-                <?php unset($_SESSION['error']); ?>
+            <?php if ($error_message): ?>
+                <div id="errorMessage" data-message="<?php echo htmlspecialchars($error_message); ?>"></div>
             <?php endif; ?>
 
             <!-- Theme Presets -->
@@ -859,30 +1046,50 @@ if ($bg_option === 'image') {
             <div class="settings-card">
                 <div class="card-header">
                     <i class="fas fa-sliders-h"></i>
-                    Customize Theme
+                    <?php echo $is_super_admin ? 'School Default Theme Configuration' : 'Customize Your Theme'; ?>
                 </div>
                 <div class="card-body">
                     <ul class="nav nav-tabs" id="settingsTabs" role="tablist">
                         <li class="nav-item" role="presentation">
                             <button class="nav-link active" id="colors-tab" data-bs-toggle="tab" data-bs-target="#colors" type="button" role="tab">
                                 <i class="fas fa-paint-brush me-2"></i>Colors
+                                <?php if (!$is_super_admin && !($allowed_customization['theme'] ?? true)): ?>
+                                    <span class="restricted-badge">Locked</span>
+                                <?php endif; ?>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="layout-tab" data-bs-toggle="tab" data-bs-target="#layout" type="button" role="tab">
                                 <i class="fas fa-layout me-2"></i>Layout
+                                <?php if (!$is_super_admin && !($allowed_customization['preferences'] ?? true)): ?>
+                                    <span class="restricted-badge">Locked</span>
+                                <?php endif; ?>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="typography-tab" data-bs-toggle="tab" data-bs-target="#typography" type="button" role="tab">
                                 <i class="fas fa-font me-2"></i>Typography
+                                <?php if (!$is_super_admin && !($allowed_customization['preferences'] ?? true)): ?>
+                                    <span class="restricted-badge">Locked</span>
+                                <?php endif; ?>
                             </button>
                         </li>
                         <li class="nav-item" role="presentation">
                             <button class="nav-link" id="background-tab" data-bs-toggle="tab" data-bs-target="#background" type="button" role="tab">
                                 <i class="fas fa-image me-2"></i>Background
+                                <?php if (!$is_super_admin && !($allowed_customization['preferences'] ?? true)): ?>
+                                    <span class="restricted-badge">Locked</span>
+                                <?php endif; ?>
                             </button>
                         </li>
+                        <?php if ($is_super_admin): ?>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="system-tab" data-bs-toggle="tab" data-bs-target="#system" type="button" role="tab">
+                                <i class="fas fa-server me-2"></i>School Defaults
+                                <span class="system-badge">Super Admin</span>
+                            </button>
+                        </li>
+                        <?php endif; ?>
                     </ul>
 
                     <form method="POST" action="" id="themeForm">
@@ -899,12 +1106,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Primary Color</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['primary']) ? $colors['primary'] : '#3B9DB3'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['primary'] ?? '#3B9DB3'; ?>;" 
                                                      onclick="document.getElementById('primary_picker').click()"></div>
                                                 <input type="text" class="form-control" id="primary_color" name="primary_color" 
-                                                       value="<?php echo isset($colors['primary']) ? $colors['primary'] : '#3B9DB3'; ?>" readonly>
+                                                       value="<?php echo $colors['primary'] ?? '#3B9DB3'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="primary_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['primary']) ? $colors['primary'] : '#3B9DB3'; ?>" onchange="updateColorInput('primary', this.value)">
+                                                       value="<?php echo $colors['primary'] ?? '#3B9DB3'; ?>" onchange="updateColorInput('primary', this.value)">
                                             </div>
                                         </div>
 
@@ -912,12 +1120,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Primary Dark</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['primary_dark']) ? $colors['primary_dark'] : '#2d7c8f'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['primary_dark'] ?? '#2d7c8f'; ?>;" 
                                                      onclick="document.getElementById('primary_dark_picker').click()"></div>
                                                 <input type="text" class="form-control" id="primary_dark_color" name="primary_dark_color" 
-                                                       value="<?php echo isset($colors['primary_dark']) ? $colors['primary_dark'] : '#2d7c8f'; ?>" readonly>
+                                                       value="<?php echo $colors['primary_dark'] ?? '#2d7c8f'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="primary_dark_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['primary_dark']) ? $colors['primary_dark'] : '#2d7c8f'; ?>" onchange="updateColorInput('primary_dark', this.value)">
+                                                       value="<?php echo $colors['primary_dark'] ?? '#2d7c8f'; ?>" onchange="updateColorInput('primary_dark', this.value)">
                                             </div>
                                         </div>
 
@@ -925,12 +1134,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Primary Light</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['primary_light']) ? $colors['primary_light'] : '#8bc5d6'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['primary_light'] ?? '#8bc5d6'; ?>;" 
                                                      onclick="document.getElementById('primary_light_picker').click()"></div>
                                                 <input type="text" class="form-control" id="primary_light_color" name="primary_light_color" 
-                                                       value="<?php echo isset($colors['primary_light']) ? $colors['primary_light'] : '#8bc5d6'; ?>" readonly>
+                                                       value="<?php echo $colors['primary_light'] ?? '#8bc5d6'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="primary_light_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['primary_light']) ? $colors['primary_light'] : '#8bc5d6'; ?>" onchange="updateColorInput('primary_light', this.value)">
+                                                       value="<?php echo $colors['primary_light'] ?? '#8bc5d6'; ?>" onchange="updateColorInput('primary_light', this.value)">
                                             </div>
                                         </div>
 
@@ -938,12 +1148,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Coral Color</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['coral']) ? $colors['coral'] : '#FF7F50'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['coral'] ?? '#FF7F50'; ?>;" 
                                                      onclick="document.getElementById('coral_picker').click()"></div>
                                                 <input type="text" class="form-control" id="coral_color" name="coral_color" 
-                                                       value="<?php echo isset($colors['coral']) ? $colors['coral'] : '#FF7F50'; ?>" readonly>
+                                                       value="<?php echo $colors['coral'] ?? '#FF7F50'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="coral_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['coral']) ? $colors['coral'] : '#FF7F50'; ?>" onchange="updateColorInput('coral', this.value)">
+                                                       value="<?php echo $colors['coral'] ?? '#FF7F50'; ?>" onchange="updateColorInput('coral', this.value)">
                                             </div>
                                         </div>
 
@@ -951,12 +1162,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Forest Green</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['forest_green']) ? $colors['forest_green'] : '#2E7D32'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['forest_green'] ?? '#2E7D32'; ?>;" 
                                                      onclick="document.getElementById('forest_green_picker').click()"></div>
                                                 <input type="text" class="form-control" id="forest_green_color" name="forest_green_color" 
-                                                       value="<?php echo isset($colors['forest_green']) ? $colors['forest_green'] : '#2E7D32'; ?>" readonly>
+                                                       value="<?php echo $colors['forest_green'] ?? '#2E7D32'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="forest_green_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['forest_green']) ? $colors['forest_green'] : '#2E7D32'; ?>" onchange="updateColorInput('forest_green', this.value)">
+                                                       value="<?php echo $colors['forest_green'] ?? '#2E7D32'; ?>" onchange="updateColorInput('forest_green', this.value)">
                                             </div>
                                         </div>
 
@@ -964,12 +1176,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Lime Green</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['lime_green']) ? $colors['lime_green'] : '#63E07E'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['lime_green'] ?? '#63E07E'; ?>;" 
                                                      onclick="document.getElementById('lime_green_picker').click()"></div>
                                                 <input type="text" class="form-control" id="lime_green_color" name="lime_green_color" 
-                                                       value="<?php echo isset($colors['lime_green']) ? $colors['lime_green'] : '#63E07E'; ?>" readonly>
+                                                       value="<?php echo $colors['lime_green'] ?? '#63E07E'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="lime_green_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['lime_green']) ? $colors['lime_green'] : '#63E07E'; ?>" onchange="updateColorInput('lime_green', this.value)">
+                                                       value="<?php echo $colors['lime_green'] ?? '#63E07E'; ?>" onchange="updateColorInput('lime_green', this.value)">
                                             </div>
                                         </div>
 
@@ -977,12 +1190,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Sky Blue</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['sky_blue']) ? $colors['sky_blue'] : '#66d9ff'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['sky_blue'] ?? '#66d9ff'; ?>;" 
                                                      onclick="document.getElementById('sky_blue_picker').click()"></div>
                                                 <input type="text" class="form-control" id="sky_blue_color" name="sky_blue_color" 
-                                                       value="<?php echo isset($colors['sky_blue']) ? $colors['sky_blue'] : '#66d9ff'; ?>" readonly>
+                                                       value="<?php echo $colors['sky_blue'] ?? '#66d9ff'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="sky_blue_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['sky_blue']) ? $colors['sky_blue'] : '#66d9ff'; ?>" onchange="updateColorInput('sky_blue', this.value)">
+                                                       value="<?php echo $colors['sky_blue'] ?? '#66d9ff'; ?>" onchange="updateColorInput('sky_blue', this.value)">
                                             </div>
                                         </div>
 
@@ -990,12 +1204,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Aqua Blue</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['aqua_blue']) ? $colors['aqua_blue'] : '#4dd2ff'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['aqua_blue'] ?? '#4dd2ff'; ?>;" 
                                                      onclick="document.getElementById('aqua_blue_picker').click()"></div>
                                                 <input type="text" class="form-control" id="aqua_blue_color" name="aqua_blue_color" 
-                                                       value="<?php echo isset($colors['aqua_blue']) ? $colors['aqua_blue'] : '#4dd2ff'; ?>" readonly>
+                                                       value="<?php echo $colors['aqua_blue'] ?? '#4dd2ff'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="aqua_blue_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['aqua_blue']) ? $colors['aqua_blue'] : '#4dd2ff'; ?>" onchange="updateColorInput('aqua_blue', this.value)">
+                                                       value="<?php echo $colors['aqua_blue'] ?? '#4dd2ff'; ?>" onchange="updateColorInput('aqua_blue', this.value)">
                                             </div>
                                         </div>
                                     </div>
@@ -1009,12 +1224,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Text Color</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['text']) ? $colors['text'] : '#333333'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['text'] ?? '#333333'; ?>;" 
                                                      onclick="document.getElementById('text_picker').click()"></div>
                                                 <input type="text" class="form-control" id="text_color" name="text_color" 
-                                                       value="<?php echo isset($colors['text']) ? $colors['text'] : '#333333'; ?>" readonly>
+                                                       value="<?php echo $colors['text'] ?? '#333333'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="text_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['text']) ? $colors['text'] : '#333333'; ?>" onchange="updateColorInput('text', this.value)">
+                                                       value="<?php echo $colors['text'] ?? '#333333'; ?>" onchange="updateColorInput('text', this.value)">
                                             </div>
                                         </div>
 
@@ -1022,12 +1238,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Light Text</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['text_light']) ? $colors['text_light'] : '#666666'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['text_light'] ?? '#666666'; ?>;" 
                                                      onclick="document.getElementById('text_light_picker').click()"></div>
                                                 <input type="text" class="form-control" id="text_light_color" name="text_light_color" 
-                                                       value="<?php echo isset($colors['text_light']) ? $colors['text_light'] : '#666666'; ?>" readonly>
+                                                       value="<?php echo $colors['text_light'] ?? '#666666'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="text_light_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['text_light']) ? $colors['text_light'] : '#666666'; ?>" onchange="updateColorInput('text_light', this.value)">
+                                                       value="<?php echo $colors['text_light'] ?? '#666666'; ?>" onchange="updateColorInput('text_light', this.value)">
                                             </div>
                                         </div>
 
@@ -1035,12 +1252,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Border Color</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['border']) ? $colors['border'] : '#e0e0e0'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['border'] ?? '#e0e0e0'; ?>;" 
                                                      onclick="document.getElementById('border_picker').click()"></div>
                                                 <input type="text" class="form-control" id="border_color" name="border_color" 
-                                                       value="<?php echo isset($colors['border']) ? $colors['border'] : '#e0e0e0'; ?>" readonly>
+                                                       value="<?php echo $colors['border'] ?? '#e0e0e0'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="border_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['border']) ? $colors['border'] : '#e0e0e0'; ?>" onchange="updateColorInput('border', this.value)">
+                                                       value="<?php echo $colors['border'] ?? '#e0e0e0'; ?>" onchange="updateColorInput('border', this.value)">
                                             </div>
                                         </div>
 
@@ -1048,12 +1266,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Success Color</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['success']) ? $colors['success'] : '#28a745'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['success'] ?? '#28a745'; ?>;" 
                                                      onclick="document.getElementById('success_picker').click()"></div>
                                                 <input type="text" class="form-control" id="success_color" name="success_color" 
-                                                       value="<?php echo isset($colors['success']) ? $colors['success'] : '#28a745'; ?>" readonly>
+                                                       value="<?php echo $colors['success'] ?? '#28a745'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="success_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['success']) ? $colors['success'] : '#28a745'; ?>" onchange="updateColorInput('success', this.value)">
+                                                       value="<?php echo $colors['success'] ?? '#28a745'; ?>" onchange="updateColorInput('success', this.value)">
                                             </div>
                                         </div>
 
@@ -1061,12 +1280,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Danger Color</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['danger']) ? $colors['danger'] : '#dc3545'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['danger'] ?? '#dc3545'; ?>;" 
                                                      onclick="document.getElementById('danger_picker').click()"></div>
                                                 <input type="text" class="form-control" id="danger_color" name="danger_color" 
-                                                       value="<?php echo isset($colors['danger']) ? $colors['danger'] : '#dc3545'; ?>" readonly>
+                                                       value="<?php echo $colors['danger'] ?? '#dc3545'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="danger_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['danger']) ? $colors['danger'] : '#dc3545'; ?>" onchange="updateColorInput('danger', this.value)">
+                                                       value="<?php echo $colors['danger'] ?? '#dc3545'; ?>" onchange="updateColorInput('danger', this.value)">
                                             </div>
                                         </div>
 
@@ -1074,12 +1294,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Warning Color</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['warning']) ? $colors['warning'] : '#ffc107'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['warning'] ?? '#ffc107'; ?>;" 
                                                      onclick="document.getElementById('warning_picker').click()"></div>
                                                 <input type="text" class="form-control" id="warning_color" name="warning_color" 
-                                                       value="<?php echo isset($colors['warning']) ? $colors['warning'] : '#ffc107'; ?>" readonly>
+                                                       value="<?php echo $colors['warning'] ?? '#ffc107'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="warning_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['warning']) ? $colors['warning'] : '#ffc107'; ?>" onchange="updateColorInput('warning', this.value)">
+                                                       value="<?php echo $colors['warning'] ?? '#ffc107'; ?>" onchange="updateColorInput('warning', this.value)">
                                             </div>
                                         </div>
 
@@ -1087,12 +1308,13 @@ if ($bg_option === 'image') {
                                         <div class="mb-4">
                                             <label class="form-label">Info Color</label>
                                             <div class="color-input-group">
-                                                <div class="color-preview" style="background: <?php echo isset($colors['info']) ? $colors['info'] : '#17a2b8'; ?>;" 
+                                                <div class="color-preview" style="background: <?php echo $colors['info'] ?? '#17a2b8'; ?>;" 
                                                      onclick="document.getElementById('info_picker').click()"></div>
                                                 <input type="text" class="form-control" id="info_color" name="info_color" 
-                                                       value="<?php echo isset($colors['info']) ? $colors['info'] : '#17a2b8'; ?>" readonly>
+                                                       value="<?php echo $colors['info'] ?? '#17a2b8'; ?>" readonly
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['theme'] ?? true)) ? 'disabled' : ''; ?>>
                                                 <input type="color" id="info_picker" style="display: none;" 
-                                                       value="<?php echo isset($colors['info']) ? $colors['info'] : '#17a2b8'; ?>" onchange="updateColorInput('info', this.value)">
+                                                       value="<?php echo $colors['info'] ?? '#17a2b8'; ?>" onchange="updateColorInput('info', this.value)">
                                             </div>
                                         </div>
                                     </div>
@@ -1111,7 +1333,8 @@ if ($bg_option === 'image') {
                                                     <div class="form-check form-switch">
                                                         <input class="form-check-input" type="checkbox" id="sidebar_collapsed" 
                                                                name="sidebar_collapsed" value="1" 
-                                                               <?php echo (isset($preferences['sidebar_collapsed']) && $preferences['sidebar_collapsed'] === '1') ? 'checked' : ''; ?>>
+                                                               <?php echo ($preferences['sidebar_collapsed'] ?? '0') === '1' ? 'checked' : ''; ?>
+                                                               <?php echo (!$is_super_admin && !($allowed_customization['preferences'] ?? true)) ? 'disabled' : ''; ?>>
                                                         <label class="form-check-label" for="sidebar_collapsed">
                                                             <strong>Collapsed Sidebar</strong>
                                                             <p class="text-muted small mb-0">Sidebar will be collapsed by default on desktop (hover to expand)</p>
@@ -1123,7 +1346,8 @@ if ($bg_option === 'image') {
                                                     <div class="form-check form-switch">
                                                         <input class="form-check-input" type="checkbox" id="compact_mode" 
                                                                name="compact_mode" value="1" 
-                                                               <?php echo (isset($preferences['compact_mode']) && $preferences['compact_mode'] === '1') ? 'checked' : ''; ?>>
+                                                               <?php echo ($preferences['compact_mode'] ?? '0') === '1' ? 'checked' : ''; ?>
+                                                               <?php echo (!$is_super_admin && !($allowed_customization['preferences'] ?? true)) ? 'disabled' : ''; ?>>
                                                         <label class="form-check-label" for="compact_mode">
                                                             <strong>Compact Mode</strong>
                                                             <p class="text-muted small mb-0">Reduce spacing for more content</p>
@@ -1143,7 +1367,8 @@ if ($bg_option === 'image') {
                                                     <div class="form-check form-switch">
                                                         <input class="form-check-input" type="checkbox" id="animations" 
                                                                name="animations" value="1" 
-                                                               <?php echo (isset($preferences['animations']) && $preferences['animations'] === '1') ? 'checked' : ''; ?>>
+                                                               <?php echo ($preferences['animations'] ?? '1') === '1' ? 'checked' : ''; ?>
+                                                               <?php echo (!$is_super_admin && !($allowed_customization['preferences'] ?? true)) ? 'disabled' : ''; ?>>
                                                         <label class="form-check-label" for="animations">
                                                             <strong>Enable Animations</strong>
                                                             <p class="text-muted small mb-0">Smooth transitions and effects</p>
@@ -1153,10 +1378,11 @@ if ($bg_option === 'image') {
 
                                                 <div class="mb-4">
                                                     <label class="form-label"><strong>Animation Speed</strong></label>
-                                                    <select class="form-select" id="animation_speed" name="animation_speed">
-                                                        <option value="slow" <?php echo (isset($preferences['animation_speed']) && $preferences['animation_speed'] === 'slow') ? 'selected' : ''; ?>>Slow (0.5s)</option>
-                                                        <option value="normal" <?php echo (!isset($preferences['animation_speed']) || $preferences['animation_speed'] === 'normal') ? 'selected' : ''; ?>>Normal (0.3s)</option>
-                                                        <option value="fast" <?php echo (isset($preferences['animation_speed']) && $preferences['animation_speed'] === 'fast') ? 'selected' : ''; ?>>Fast (0.15s)</option>
+                                                    <select class="form-select" id="animation_speed" name="animation_speed"
+                                                            <?php echo (!$is_super_admin && !($allowed_customization['preferences'] ?? true)) ? 'disabled' : ''; ?>>
+                                                        <option value="slow" <?php echo ($preferences['animation_speed'] ?? 'normal') === 'slow' ? 'selected' : ''; ?>>Slow (0.5s)</option>
+                                                        <option value="normal" <?php echo ($preferences['animation_speed'] ?? 'normal') === 'normal' ? 'selected' : ''; ?>>Normal (0.3s)</option>
+                                                        <option value="fast" <?php echo ($preferences['animation_speed'] ?? 'normal') === 'fast' ? 'selected' : ''; ?>>Fast (0.15s)</option>
                                                     </select>
                                                 </div>
                                             </div>
@@ -1176,14 +1402,16 @@ if ($bg_option === 'image') {
                                                 
                                                 <div class="d-flex flex-wrap">
                                                     <?php foreach ($font_sizes as $size => $label): ?>
-                                                    <div class="font-size-badge <?php echo (isset($preferences['font_size']) && $preferences['font_size'] === $size) ? 'active' : ''; ?>" 
-                                                         onclick="setFontSize('<?php echo $size; ?>', this)">
+                                                    <div class="font-size-badge <?php echo ($preferences['font_size'] ?? '16') === $size ? 'active' : ''; ?>" 
+                                                         onclick="setFontSize('<?php echo $size; ?>', this)"
+                                                         <?php echo (!$is_super_admin && !($allowed_customization['preferences'] ?? true)) ? 'style="opacity:0.5;cursor:not-allowed;"' : ''; ?>>
                                                         <?php echo $label; ?>
                                                     </div>
                                                     <?php endforeach; ?>
                                                 </div>
                                                 
-                                                <input type="hidden" id="font_size" name="font_size" value="<?php echo isset($preferences['font_size']) ? $preferences['font_size'] : '16'; ?>">
+                                                <input type="hidden" id="font_size" name="font_size" value="<?php echo $preferences['font_size'] ?? '16'; ?>"
+                                                       <?php echo (!$is_super_admin && !($allowed_customization['preferences'] ?? true)) ? 'disabled' : ''; ?>>
                                                 
                                                 <div class="mt-4 p-3 border rounded">
                                                     <h6>Preview:</h6>
@@ -1209,12 +1437,13 @@ if ($bg_option === 'image') {
                                                     <label class="form-label"><strong>Background Type</strong></label>
                                                     <p class="text-muted small mb-2">Select your background preference</p>
                                                     
-                                                    <select class="form-select" id="background_option" name="background_option" onchange="updateBackgroundPreview()">
-                                                        <option value="image" <?php echo (isset($preferences['background_option']) && $preferences['background_option'] === 'image') ? 'selected' : ''; ?>>School Image</option>
-                                                        <option value="gray" <?php echo (isset($preferences['background_option']) && $preferences['background_option'] === 'gray') ? 'selected' : ''; ?>>Gray</option>
-                                                        <option value="eye_care" <?php echo (isset($preferences['background_option']) && $preferences['background_option'] === 'eye_care') ? 'selected' : ''; ?>>Eye Care</option>
-                                                        <option value="milk" <?php echo (isset($preferences['background_option']) && $preferences['background_option'] === 'milk') ? 'selected' : ''; ?>>Milk</option>
-                                                        <option value="dark_light" <?php echo (isset($preferences['background_option']) && $preferences['background_option'] === 'dark_light') ? 'selected' : ''; ?>>Dark-Light</option>
+                                                    <select class="form-select" id="background_option" name="background_option" onchange="updateBackgroundPreview()"
+                                                            <?php echo (!$is_super_admin && !($allowed_customization['preferences'] ?? true)) ? 'disabled' : ''; ?>>
+                                                        <option value="image" <?php echo ($preferences['background_option'] ?? 'image') === 'image' ? 'selected' : ''; ?>>School Image</option>
+                                                        <option value="gray" <?php echo ($preferences['background_option'] ?? 'image') === 'gray' ? 'selected' : ''; ?>>Gray</option>
+                                                        <option value="eye_care" <?php echo ($preferences['background_option'] ?? 'image') === 'eye_care' ? 'selected' : ''; ?>>Eye Care</option>
+                                                        <option value="milk" <?php echo ($preferences['background_option'] ?? 'image') === 'milk' ? 'selected' : ''; ?>>Milk</option>
+                                                        <option value="dark_light" <?php echo ($preferences['background_option'] ?? 'image') === 'dark_light' ? 'selected' : ''; ?>>Dark-Light</option>
                                                     </select>
                                                 </div>
 
@@ -1223,11 +1452,12 @@ if ($bg_option === 'image') {
                                                     <p class="text-muted small mb-2">Adjust the transparency of the background</p>
                                                     <input type="range" class="range-slider" id="background_opacity" 
                                                            name="background_opacity" min="0" max="100" 
-                                                           value="<?php echo isset($preferences['background_opacity']) ? $preferences['background_opacity'] : '65'; ?>"
-                                                           oninput="updateOpacity(this.value)">
+                                                           value="<?php echo $preferences['background_opacity'] ?? '65'; ?>"
+                                                           oninput="updateOpacity(this.value)"
+                                                           <?php echo (!$is_super_admin && !($allowed_customization['preferences'] ?? true)) ? 'disabled' : ''; ?>>
                                                     <div class="d-flex justify-content-between mt-2">
                                                         <span>Transparent</span>
-                                                        <span id="opacityValue"><?php echo isset($preferences['background_opacity']) ? $preferences['background_opacity'] : '65'; ?>%</span>
+                                                        <span id="opacityValue"><?php echo $preferences['background_opacity'] ?? '65'; ?>%</span>
                                                         <span>Opaque</span>
                                                     </div>
                                                 </div>
@@ -1242,24 +1472,95 @@ if ($bg_option === 'image') {
                                     </div>
                                 </div>
                             </div>
+
+                            <?php if ($is_super_admin): ?>
+                            <!-- System Defaults Tab (Super Admin Only) -->
+                            <div class="tab-pane fade" id="system" role="tabpanel">
+                                <div class="row">
+                                    <div class="col-12">
+                                        <div class="card">
+                                            <div class="card-body">
+                                                <h6 class="mb-3 text-warning">
+                                                    <i class="fas fa-exclamation-triangle me-2"></i>
+                                                    School Default Settings - <?php echo htmlspecialchars($school_data['school_name']); ?>
+                                                </h6>
+                                                <p class="text-muted mb-4">
+                                                    These settings will be applied as defaults for ALL users in <strong><?php echo htmlspecialchars($school_data['school_name']); ?></strong>.
+                                                    School admins can override these unless you restrict customization below.
+                                                </p>
+                                                
+                                                <div class="mb-4">
+                                                    <label class="form-label"><strong>Restrict User Customization</strong></label>
+                                                    <div class="row">
+                                                        <div class="col-md-6">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" id="allow_theme_custom" 
+                                                                       name="allow_theme_custom" value="1"
+                                                                       <?php echo ($allowed_customization['theme'] ?? true) ? 'checked' : ''; ?>>
+                                                                <label class="form-check-label">Allow school admins to customize colors</label>
+                                                            </div>
+                                                        </div>
+                                                        <div class="col-md-6">
+                                                            <div class="form-check">
+                                                                <input class="form-check-input" type="checkbox" id="allow_prefs_custom" 
+                                                                       name="allow_prefs_custom" value="1"
+                                                                       <?php echo ($allowed_customization['preferences'] ?? true) ? 'checked' : ''; ?>>
+                                                                <label class="form-check-label">Allow school admins to customize preferences</label>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="mb-4">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="checkbox" id="apply_to_all_users" name="apply_to_all_users" value="1">
+                                                        <label class="form-check-label">
+                                                            <strong>Apply these defaults to ALL existing admins in this school</strong>
+                                                            <p class="text-muted small mb-0">This will overwrite all admins' current settings</p>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                                
+                                                <hr>
+                                                
+                                                <div class="alert alert-info">
+                                                    <i class="fas fa-info-circle me-2"></i>
+                                                    <strong>Note:</strong> School-specific logo and background image will be used from school settings.
+                                                </div>
+                                                
+                                                <div class="mt-3">
+                                                    <button type="button" class="btn btn-warning" onclick="saveSystemDefaults()">
+                                                        <i class="fas fa-save me-2"></i>Save as School Defaults
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <?php endif; ?>
                         </div>
 
                         <!-- Hidden submit buttons -->
                         <button type="submit" name="save_theme" id="saveTheme" style="display: none;"></button>
                         <button type="submit" name="save_preferences" id="savePreferences" style="display: none;"></button>
-                        <button type="submit" name="reset_default" id="resetDefault" style="display: none;"></button>
+                        <?php if ($is_super_admin): ?>
+                        <button type="submit" name="save_system_defaults" id="saveSystemDefaultsBtn" style="display: none;"></button>
+                        <?php endif; ?>
                     </form>
                 </div>
             </div>
 
             <!-- Save Actions -->
             <div class="save-actions">
-                <button type="button" class="btn btn-secondary" onclick="window.location.href='../muyo/dashboard.php'">
+                <button type="button" class="btn btn-secondary" onclick="window.location.href='dashboard.php'">
                     <i class="fas fa-times me-2"></i>Cancel
                 </button>
-                <button type="button" class="btn btn-outline-primary" onclick="resetToDefault()">
-                    <i class="fas fa-undo me-2"></i>Reset Default
+                <?php if (!$is_super_admin): ?>
+                <button type="button" class="btn btn-outline-info" onclick="resetToSystemDefault()">
+                    <i class="fas fa-undo-alt me-2"></i>Reset to School Defaults
                 </button>
+                <?php endif; ?>
                 <button type="button" class="btn btn-primary btn-save" onclick="saveAll()">
                     <i class="fas fa-save me-2"></i>Save All Changes
                 </button>
@@ -1290,7 +1591,7 @@ if ($bg_option === 'image') {
             '18': '18px'
         };
 
-        // Show SweetAlert2 notifications (like students.php)
+        // Show SweetAlert2 notifications
         document.addEventListener('DOMContentLoaded', function() {
             const successMessage = document.getElementById('successMessage');
             const errorMessage = document.getElementById('errorMessage');
@@ -1359,12 +1660,13 @@ if ($bg_option === 'image') {
 
         // Update background preview
         function updateBackgroundPreview() {
-            const option = document.getElementById('background_option').value;
-            const opacity = document.getElementById('background_opacity').value / 100;
+            const option = document.getElementById('background_option')?.value || 'image';
+            const opacity = (document.getElementById('background_opacity')?.value || 65) / 100;
             const preview = document.getElementById('backgroundPreview');
+            const schoolLogo = '<?php echo $school_logo; ?>';
             
             if (option === 'image') {
-                preview.style.background = `linear-gradient(rgba(255,255,255,${opacity}), rgba(255,255,255,${opacity})), url('../muyovozi.png') no-repeat center center`;
+                preview.style.background = `linear-gradient(rgba(255,255,255,${opacity}), rgba(255,255,255,${opacity})), url('${schoolLogo}') no-repeat center center`;
                 preview.style.backgroundSize = 'cover';
             } else {
                 const color = bgColors[option] || '#e9ecef';
@@ -1375,18 +1677,21 @@ if ($bg_option === 'image') {
 
         // Set font size
         function setFontSize(size, element) {
-            document.getElementById('font_size').value = size;
-            
-            // Update active class
-            document.querySelectorAll('.font-size-badge').forEach(badge => {
-                badge.classList.remove('active');
-            });
-            if (element) {
-                element.classList.add('active');
+            const fontSizeInput = document.getElementById('font_size');
+            if (fontSizeInput && !fontSizeInput.disabled) {
+                fontSizeInput.value = size;
+                
+                // Update active class
+                document.querySelectorAll('.font-size-badge').forEach(badge => {
+                    badge.classList.remove('active');
+                });
+                if (element) {
+                    element.classList.add('active');
+                }
+                
+                // Preview font size
+                document.documentElement.style.setProperty('--font-size-base', fontSizes[size]);
             }
-            
-            // Preview font size
-            document.documentElement.style.setProperty('--font-size-base', fontSizes[size]);
         }
 
         // Apply preset themes
@@ -1497,10 +1802,11 @@ if ($bg_option === 'image') {
             };
             
             const colors = presets[preset];
+            if (!colors) return;
             
             for (let [key, value] of Object.entries(colors)) {
                 const element = document.getElementById(key + '_color');
-                if (element) {
+                if (element && !element.disabled) {
                     element.value = value;
                     
                     const picker = document.getElementById(key + '_picker');
@@ -1535,7 +1841,6 @@ if ($bg_option === 'image') {
 
         // Save all changes via AJAX
         function saveAll() {
-            // Show loading
             Swal.fire({
                 title: 'Saving...',
                 text: 'Please wait while we save your settings',
@@ -1545,31 +1850,28 @@ if ($bg_option === 'image') {
                 }
             });
 
-            // Collect all form data
             const form = document.getElementById('themeForm');
             const formData = new FormData(form);
             
-            // Add submit buttons
+            <?php if (!$is_super_admin): ?>
             formData.append('save_theme', '1');
             formData.append('save_preferences', '1');
+            <?php endif; ?>
             
-            // Add checkbox values manually (since unchecked checkboxes aren't sent)
-            if (!document.getElementById('sidebar_collapsed').checked) {
+            // Add checkbox values manually
+            const sidebarCollapsed = document.getElementById('sidebar_collapsed');
+            if (sidebarCollapsed && !sidebarCollapsed.checked) {
                 formData.set('sidebar_collapsed', '0');
             }
-            if (!document.getElementById('compact_mode').checked) {
+            const compactMode = document.getElementById('compact_mode');
+            if (compactMode && !compactMode.checked) {
                 formData.set('compact_mode', '0');
             }
-            if (!document.getElementById('animations').checked) {
+            const animations = document.getElementById('animations');
+            if (animations && !animations.checked) {
                 formData.set('animations', '0');
             }
             
-            // Debug: Log form data
-            for (let pair of formData.entries()) {
-                console.log(pair[0] + ': ' + pair[1]);
-            }
-            
-            // Send AJAX request
             fetch(window.location.href, {
                 method: 'POST',
                 body: formData,
@@ -1577,45 +1879,26 @@ if ($bg_option === 'image') {
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('Network response was not ok: ' + response.status);
-                }
-                return response.text(); // Get as text first to debug
-            })
-            .then(text => {
-                console.log('Raw response:', text);
-                try {
-                    const data = JSON.parse(text);
-                    if (data.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Success!',
-                            text: data.message || 'Settings saved successfully!',
-                            timer: 3000,
-                            timerProgressBar: true,
-                            showConfirmButton: false,
-                            toast: true,
-                            position: 'top-end'
-                        }).then(() => {
-                            // Reload to apply all changes
-                            window.location.reload();
-                        });
-                    } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Error!',
-                            text: data.message || 'Error saving settings',
-                            confirmButtonText: 'OK',
-                            confirmButtonColor: '#d33'
-                        });
-                    }
-                } catch (e) {
-                    console.error('JSON parse error:', e, 'Response:', text);
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    Swal.fire({
+                        icon: 'success',
+                        title: 'Success!',
+                        text: data.message,
+                        timer: 3000,
+                        timerProgressBar: true,
+                        showConfirmButton: false,
+                        toast: true,
+                        position: 'top-end'
+                    }).then(() => {
+                        window.location.reload();
+                    });
+                } else {
                     Swal.fire({
                         icon: 'error',
                         title: 'Error!',
-                        text: 'Invalid server response. Please try again.',
+                        text: data.message || 'Error saving settings',
                         confirmButtonText: 'OK',
                         confirmButtonColor: '#d33'
                     });
@@ -1626,10 +1909,138 @@ if ($bg_option === 'image') {
                 Swal.fire({
                     icon: 'error',
                     title: 'Error!',
-                    text: 'An error occurred while saving settings: ' + error.message,
+                    text: 'An error occurred while saving settings',
                     confirmButtonText: 'OK',
                     confirmButtonColor: '#d33'
                 });
+            });
+        }
+
+        <?php if ($is_super_admin): ?>
+        // Super admin: Save system defaults for selected school
+        function saveSystemDefaults() {
+            Swal.fire({
+                title: 'Save School Defaults?',
+                text: 'These settings will be applied as defaults for all admins in this school.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                confirmButtonText: 'Yes, save defaults!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Saving...',
+                        text: 'Please wait',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    const form = document.getElementById('themeForm');
+                    const formData = new FormData(form);
+                    formData.append('save_system_defaults', '1');
+                    
+                    const applyToAll = document.getElementById('apply_to_all_users');
+                    if (applyToAll && applyToAll.checked) {
+                        formData.append('apply_to_all', '1');
+                    }
+                    
+                    const allowTheme = document.getElementById('allow_theme_custom');
+                    if (allowTheme && !allowTheme.checked) {
+                        formData.append('allow_theme_custom', '0');
+                    }
+                    
+                    const allowPrefs = document.getElementById('allow_prefs_custom');
+                    if (allowPrefs && !allowPrefs.checked) {
+                        formData.append('allow_prefs_custom', '0');
+                    }
+                    
+                    fetch(window.location.href, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Success!',
+                                text: data.message,
+                                timer: 3000,
+                                showConfirmButton: false
+                            }).then(() => {
+                                window.location.reload();
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error!',
+                                text: data.message
+                            });
+                        }
+                    });
+                }
+            });
+        }
+        <?php endif; ?>
+
+        // Reset to system default (for regular admins only)
+        function resetToSystemDefault() {
+            Swal.fire({
+                title: 'Reset to School Defaults?',
+                text: 'This will reset all your custom settings to your school\'s default theme.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33',
+                confirmButtonText: 'Yes, reset!',
+                cancelButtonText: 'Cancel'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    Swal.fire({
+                        title: 'Resetting...',
+                        text: 'Please wait',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    const formData = new FormData();
+                    formData.append('reset_to_system_default', '1');
+                    
+                    fetch(window.location.href, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest'
+                        }
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            Swal.fire({
+                                icon: 'success',
+                                title: 'Success!',
+                                text: data.message,
+                                timer: 3000,
+                                showConfirmButton: false
+                            }).then(() => {
+                                window.location.reload();
+                            });
+                        } else {
+                            Swal.fire({
+                                icon: 'error',
+                                title: 'Error!',
+                                text: data.message
+                            });
+                        }
+                    });
+                }
             });
         }
 
@@ -1638,8 +2049,7 @@ if ($bg_option === 'image') {
             updatePreview();
             updateBackgroundPreview();
             
-            // Apply font size to root
-            const fontSize = document.getElementById('font_size').value;
+            const fontSize = document.getElementById('font_size')?.value || '16';
             document.documentElement.style.setProperty('--font-size-base', fontSizes[fontSize]);
             
             Swal.fire({
@@ -1653,37 +2063,7 @@ if ($bg_option === 'image') {
             });
         }
 
-        // Reset to default
-        function resetToDefault() {
-            Swal.fire({
-                title: 'Reset to Default?',
-                text: 'All your custom settings will be lost. This cannot be undone.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#3085d6',
-                cancelButtonColor: '#d33',
-                confirmButtonText: 'Yes, reset it!',
-                cancelButtonText: 'Cancel'
-            }).then((result) => {
-                if (result.isConfirmed) {
-                    // Create form and submit
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = window.location.href;
-                    
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'reset_default';
-                    input.value = '1';
-                    
-                    form.appendChild(input);
-                    document.body.appendChild(form);
-                    form.submit();
-                }
-            });
-        }
-
-        // Initialize with current settings
+        // Initialize
         document.addEventListener('DOMContentLoaded', function() {
             updatePreview();
             

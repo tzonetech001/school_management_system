@@ -1,18 +1,35 @@
 <?php
-// edit_admin.php
+// discipline.php - Discipline Management WITH SCHOOL ID FILTERING
 session_start();
 require_once '../controller/db_connect.php';
 
 $error = '';
 $success = '';
 
-// Check if user has permission (Head Master or Second Master only)
+// Check if user is logged in
+if (!isset($_SESSION['admin_id'])) {
+    header("Location: login.php");
+    exit();
+}
+
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
-// Get current user's roles
-$user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
-$stmt = $conn->prepare($user_roles_sql);
+// ========== GET CURRENT SCHOOL ID ==========
+$school_query = "SELECT school_id FROM admins WHERE id = ?";
+$stmt = $conn->prepare($school_query);
 $stmt->bind_param("i", $admin_id);
+$stmt->execute();
+$school_result = $stmt->get_result();
+$current_admin_data = $school_result->fetch_assoc();
+$current_school_id = $current_admin_data['school_id'] ?? 1;
+
+// Get current user's roles (with school_id)
+$user_roles_sql = "SELECT ara.role_id 
+                   FROM admin_role_assignments ara
+                   JOIN admins a ON ara.admin_id = a.id
+                   WHERE ara.admin_id = ? AND a.school_id = ?";
+$stmt = $conn->prepare($user_roles_sql);
+$stmt->bind_param("ii", $admin_id, $current_school_id);
 $stmt->execute();
 $user_roles_result = $stmt->get_result();
 $user_role_ids = [];
@@ -20,7 +37,7 @@ while ($row = $user_roles_result->fetch_assoc()) {
     $user_role_ids[] = $row['role_id'];
 }
 
-// Check if user has Head Master (1) or Second Master (2) role
+// Check if user has Head Master (1), Second Master (2), or Discipline Master (4) role
 $has_permission = false;
 foreach ($user_role_ids as $role_id) {
     if ($role_id == 1 || $role_id == 2 || $role_id == 4) { 
@@ -30,20 +47,9 @@ foreach ($user_role_ids as $role_id) {
 }
 
 if (!$has_permission) {
-    $_SESSION['error'] = "You don't have permission to view staff members.";
-    header("Location:  ../404.php");
+    $_SESSION['error'] = "You don't have permission to view discipline records.";
+    header("Location: ../404.php");
     exit();
-}
-
-
-// Get all roles from database (excluding Super Admin if it exists)
-$roles = [];
-$roles_sql = "SELECT * FROM admin_roles WHERE role_name != 'Super Admin' ORDER BY role_name";
-$roles_result = mysqli_query($conn, $roles_sql);
-if ($roles_result && mysqli_num_rows($roles_result) > 0) {
-    while ($row = mysqli_fetch_assoc($roles_result)) {
-        $roles[] = $row;
-    }
 }
 
 // Handle POST actions (add, delete, bulk actions)
@@ -59,11 +65,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $follow_up_required = isset($_POST['follow_up_required']) ? 1 : 0;
         $follow_up_due_date = !empty($_POST['follow_up_due_date']) ? $_POST['follow_up_due_date'] : NULL;
         
-        // Validate student exists and is not deleted
-        $check_student_sql = "SELECT id, is_leaver FROM students WHERE id = '$student_id' AND status = 1";
-        $check_result = mysqli_query($conn, $check_student_sql);
+        // Validate student exists in SAME SCHOOL and is not deleted
+        $check_student_sql = "SELECT id, is_leaver FROM students WHERE id = ? AND status = 1 AND school_id = ?";
+        $stmt = $conn->prepare($check_student_sql);
+        $stmt->bind_param("ii", $student_id, $current_school_id);
+        $stmt->execute();
+        $check_result = $stmt->get_result();
         
-        if (!$check_result || mysqli_num_rows($check_result) == 0) {
+        if (!$check_result || $check_result->num_rows == 0) {
             $_SESSION['error'] = "Selected student not found or has been deleted.";
             header("Location: discipline.php");
             exit();
@@ -124,65 +133,75 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             }
         }
         
-        // Insert record
+        // Insert record (with school_id)
         $sql = "INSERT INTO discipline_records 
                 (student_id, list_type, record_type, short_note, file_path, file_type, 
                 file_name, file_size, recorded_by, is_visible_to_student, severity_level,
-                follow_up_required, follow_up_due_date) 
-                VALUES ('$student_id', '$list_type', '$record_type', '$short_note', 
-                " . ($file_path ? "'$file_path'" : "NULL") . ", 
-                " . ($file_type ? "'$file_type'" : "NULL") . ", 
-                " . ($file_name ? "'$file_name'" : "NULL") . ", 
-                " . ($file_size ? "$file_size" : "NULL") . ", 
-                '$admin_id', '$is_visible_to_student', '$severity_level',
-                '$follow_up_required', " . ($follow_up_due_date ? "'$follow_up_due_date'" : "NULL") . ")";
+                follow_up_required, follow_up_due_date, school_id) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         
-        if (mysqli_query($conn, $sql)) {
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("issssssiiisssi", 
+            $student_id, $list_type, $record_type, $short_note, 
+            $file_path, $file_type, $file_name, $file_size, 
+            $admin_id, $is_visible_to_student, $severity_level,
+            $follow_up_required, $follow_up_due_date, $current_school_id);
+        
+        if ($stmt->execute()) {
             $_SESSION['success'] = "Discipline record added successfully!";
         } else {
-            $_SESSION['error'] = "Error adding record: " . mysqli_error($conn);
+            $_SESSION['error'] = "Error adding record: " . $stmt->error;
         }
         
         header("Location: discipline.php");
         exit();
     }
     
-    // Delete single record
+    // Delete single record (with school_id verification)
     if (isset($_POST['delete_record'])) {
         $record_id = mysqli_real_escape_string($conn, $_POST['record_id']);
         
-        // Check if record exists
+        // Check if record exists and belongs to current school
         $check_sql = "SELECT dr.*, s.is_leaver 
                      FROM discipline_records dr
                      JOIN students s ON dr.student_id = s.id
-                     WHERE dr.id = $record_id";
-        $check_result = mysqli_query($conn, $check_sql);
+                     WHERE dr.id = ? AND dr.school_id = ?";
+        $stmt = $conn->prepare($check_sql);
+        $stmt->bind_param("ii", $record_id, $current_school_id);
+        $stmt->execute();
+        $check_result = $stmt->get_result();
         
-        if (!$check_result || mysqli_num_rows($check_result) == 0) {
-            $_SESSION['error'] = "Record not found or has been deleted.";
+        if (!$check_result || $check_result->num_rows == 0) {
+            $_SESSION['error'] = "Record not found or you don't have permission.";
             header("Location: discipline.php");
             exit();
         }
         
-        $record = mysqli_fetch_assoc($check_result);
+        $record = $check_result->fetch_assoc();
         
         // Only allow deletion if student is not deleted
         if ($record['is_leaver'] == 0) {
             // Get file path before deleting
-            $file_sql = "SELECT file_path FROM discipline_records WHERE id = $record_id";
-            $file_result = mysqli_query($conn, $file_sql);
-            if ($file_row = mysqli_fetch_assoc($file_result)) {
+            $file_sql = "SELECT file_path FROM discipline_records WHERE id = ? AND school_id = ?";
+            $stmt = $conn->prepare($file_sql);
+            $stmt->bind_param("ii", $record_id, $current_school_id);
+            $stmt->execute();
+            $file_result = $stmt->get_result();
+            if ($file_row = $file_result->fetch_assoc()) {
                 if ($file_row['file_path'] && file_exists($file_row['file_path'])) {
                     unlink($file_row['file_path']);
                 }
             }
             
             // Delete record
-            $delete_sql = "DELETE FROM discipline_records WHERE id = $record_id";
-            if (mysqli_query($conn, $delete_sql)) {
+            $delete_sql = "DELETE FROM discipline_records WHERE id = ? AND school_id = ?";
+            $stmt = $conn->prepare($delete_sql);
+            $stmt->bind_param("ii", $record_id, $current_school_id);
+            
+            if ($stmt->execute()) {
                 $_SESSION['success'] = "Record deleted successfully!";
             } else {
-                $_SESSION['error'] = "Error deleting record: " . mysqli_error($conn);
+                $_SESSION['error'] = "Error deleting record: " . $stmt->error;
             }
         } else {
             $_SESSION['error'] = "Cannot delete record for a student who has left the school.";
@@ -192,19 +211,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         exit();
     }
     
-    // Bulk delete
+    // Bulk delete (with school_id verification)
     if (isset($_POST['bulk_delete']) && isset($_POST['selected_records'])) {
-        $selected_ids = implode(',', array_map('intval', $_POST['selected_records']));
+        $selected_ids = array_map('intval', $_POST['selected_records']);
+        $placeholders = implode(',', array_fill(0, count($selected_ids), '?'));
         
-        // Check which records belong to active students
+        // Check which records belong to active students in current school
         $check_sql = "SELECT dr.id 
                      FROM discipline_records dr
                      JOIN students s ON dr.student_id = s.id
-                     WHERE dr.id IN ($selected_ids) AND s.is_leaver = 0";
-        $check_result = mysqli_query($conn, $check_sql);
+                     WHERE dr.id IN ($placeholders) AND s.is_leaver = 0 AND dr.school_id = ?";
+        $stmt = $conn->prepare($check_sql);
+        $types = str_repeat('i', count($selected_ids)) . 'i';
+        $params = array_merge($selected_ids, [$current_school_id]);
+        $stmt->bind_param($types, ...$params);
+        $stmt->execute();
+        $check_result = $stmt->get_result();
         
         $valid_ids = [];
-        while ($row = mysqli_fetch_assoc($check_result)) {
+        while ($row = $check_result->fetch_assoc()) {
             $valid_ids[] = $row['id'];
         }
         
@@ -217,42 +242,51 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $valid_ids_str = implode(',', $valid_ids);
         
         // Get file paths before deleting
-        $files_sql = "SELECT file_path FROM discipline_records WHERE id IN ($valid_ids_str)";
-        $files_result = mysqli_query($conn, $files_sql);
-        while ($file_row = mysqli_fetch_assoc($files_result)) {
+        $files_sql = "SELECT file_path FROM discipline_records WHERE id IN ($valid_ids_str) AND school_id = ?";
+        $stmt = $conn->prepare($files_sql);
+        $stmt->bind_param("i", $current_school_id);
+        $stmt->execute();
+        $files_result = $stmt->get_result();
+        while ($file_row = $files_result->fetch_assoc()) {
             if ($file_row['file_path'] && file_exists($file_row['file_path'])) {
                 unlink($file_row['file_path']);
             }
         }
         
         // Delete records
-        $bulk_delete_sql = "DELETE FROM discipline_records WHERE id IN ($valid_ids_str)";
-        if (mysqli_query($conn, $bulk_delete_sql)) {
+        $bulk_delete_sql = "DELETE FROM discipline_records WHERE id IN ($valid_ids_str) AND school_id = ?";
+        $stmt = $conn->prepare($bulk_delete_sql);
+        $stmt->bind_param("i", $current_school_id);
+        
+        if ($stmt->execute()) {
             $_SESSION['success'] = count($valid_ids) . " records deleted successfully!";
         } else {
-            $_SESSION['error'] = "Error deleting records: " . mysqli_error($conn);
+            $_SESSION['error'] = "Error deleting records: " . $stmt->error;
         }
         
         header("Location: discipline.php");
         exit();
     }
     
-    // Update follow-up status
+    // Update follow-up status (with school_id verification)
     if (isset($_POST['update_followup'])) {
         $record_id = mysqli_real_escape_string($conn, $_POST['record_id']);
         $follow_up_completed = isset($_POST['follow_up_completed']) ? 1 : 0;
         $follow_up_notes = mysqli_real_escape_string($conn, $_POST['follow_up_notes']);
         
         $update_sql = "UPDATE discipline_records SET 
-                      follow_up_completed = '$follow_up_completed',
-                      follow_up_notes = '$follow_up_notes',
+                      follow_up_completed = ?,
+                      follow_up_notes = ?,
                       updated_at = CURRENT_TIMESTAMP
-                      WHERE id = $record_id";
+                      WHERE id = ? AND school_id = ?";
         
-        if (mysqli_query($conn, $update_sql)) {
+        $stmt = $conn->prepare($update_sql);
+        $stmt->bind_param("isii", $follow_up_completed, $follow_up_notes, $record_id, $current_school_id);
+        
+        if ($stmt->execute()) {
             $_SESSION['success'] = "Follow-up updated successfully!";
         } else {
-            $_SESSION['error'] = "Error updating follow-up: " . mysqli_error($conn);
+            $_SESSION['error'] = "Error updating follow-up: " . $stmt->error;
         }
         
         header("Location: discipline.php");
@@ -267,29 +301,41 @@ $filter_status = $_GET['status'] ?? 'active';
 $filter_severity = $_GET['severity'] ?? 'all';
 $show_leavers = isset($_GET['show_leavers']) ? true : false;
 
-// Build WHERE conditions
-$where_conditions = [];
+// Build WHERE conditions (with school_id)
+$where_conditions = ["dr.school_id = ?"];
+$params = [$current_school_id];
+$param_types = "i";
+
 if ($filter_list_type != 'all') {
-    $where_conditions[] = "dr.list_type = '$filter_list_type'";
+    $where_conditions[] = "dr.list_type = ?";
+    $params[] = $filter_list_type;
+    $param_types .= "s";
 }
 if ($filter_status != 'all') {
-    $where_conditions[] = "dr.status = '$filter_status'";
+    $where_conditions[] = "dr.status = ?";
+    $params[] = $filter_status;
+    $param_types .= "s";
 }
 if ($filter_severity != 'all') {
-    $where_conditions[] = "dr.severity_level = '$filter_severity'";
+    $where_conditions[] = "dr.severity_level = ?";
+    $params[] = $filter_severity;
+    $param_types .= "s";
 }
 if (!$show_leavers) {
-    $where_conditions[] = "s.is_leaver = FALSE";
+    $where_conditions[] = "s.is_leaver = 0";
 }
 if (!empty($filter_student)) {
-    $where_conditions[] = "(s.index_number LIKE '%$filter_student%' OR 
-                          CONCAT(s.first_name, ' ', s.last_name) LIKE '%$filter_student%' OR
-                          s.admission_number LIKE '%$filter_student%')";
+    $where_conditions[] = "(s.index_number LIKE ? OR CONCAT(s.first_name, ' ', s.last_name) LIKE ? OR s.admission_number LIKE ?)";
+    $search_term = "%$filter_student%";
+    $params[] = $search_term;
+    $params[] = $search_term;
+    $params[] = $search_term;
+    $param_types .= "sss";
 }
 
-$where_clause = !empty($where_conditions) ? "WHERE " . implode(" AND ", $where_conditions) : "";
+$where_clause = "WHERE " . implode(" AND ", $where_conditions);
 
-// Get discipline records with student info - Updated to include student status
+// Get discipline records with student info (with school_id)
 $sql = "SELECT dr.*, 
        s.index_number, 
        CONCAT(s.first_name, ' ', s.last_name) as student_name,
@@ -299,6 +345,7 @@ $sql = "SELECT dr.*,
        s.is_leaver,
        s.graduation_status,
        s.status as student_status,
+       s.school_id as student_school_id,
        CONCAT(a.first_name, ' ', a.last_name) as recorded_by_name,
        a.profile_image as recorded_by_image
        FROM discipline_records dr
@@ -307,7 +354,10 @@ $sql = "SELECT dr.*,
        $where_clause
        ORDER BY dr.created_at DESC, dr.severity_level DESC";
 
-$result = mysqli_query($conn, $sql);
+$stmt = $conn->prepare($sql);
+$stmt->bind_param($param_types, ...$params);
+$stmt->execute();
+$result = $stmt->get_result();
 $discipline_records = [];
 if ($result && mysqli_num_rows($result) > 0) {
     while ($row = mysqli_fetch_assoc($result)) {
@@ -315,7 +365,7 @@ if ($result && mysqli_num_rows($result) > 0) {
     }
 }
 
-// Get statistics with error handling
+// Get statistics with error handling (with school_id)
 $stats = [
     'total_records' => 0,
     'white_count' => 0,
@@ -327,31 +377,26 @@ $stats = [
 
 $stats_sql = "SELECT 
     COUNT(*) as total_records,
-    SUM(CASE WHEN list_type = 'white' THEN 1 ELSE 0 END) as white_count,
-    SUM(CASE WHEN list_type = 'black' THEN 1 ELSE 0 END) as black_count,
-    SUM(CASE WHEN severity_level = 'critical' AND dr.status = 'active' THEN 1 ELSE 0 END) as critical_count,
-    SUM(CASE WHEN follow_up_required = 1 AND follow_up_completed = 0 THEN 1 ELSE 0 END) as pending_followups,
-    COUNT(DISTINCT student_id) as affected_students
+    SUM(CASE WHEN dr.list_type = 'white' THEN 1 ELSE 0 END) as white_count,
+    SUM(CASE WHEN dr.list_type = 'black' THEN 1 ELSE 0 END) as black_count,
+    SUM(CASE WHEN dr.severity_level = 'critical' AND dr.status = 'active' THEN 1 ELSE 0 END) as critical_count,
+    SUM(CASE WHEN dr.follow_up_required = 1 AND dr.follow_up_completed = 0 THEN 1 ELSE 0 END) as pending_followups,
+    COUNT(DISTINCT dr.student_id) as affected_students
     FROM discipline_records dr
     JOIN students s ON dr.student_id = s.id
-    WHERE dr.status = 'active' AND s.status = 1";
+    WHERE dr.status = 'active' AND s.status = 1 AND dr.school_id = ?";
     
-$stats_result = mysqli_query($conn, $stats_sql);
+$stmt = $conn->prepare($stats_sql);
+$stmt->bind_param("i", $current_school_id);
+$stmt->execute();
+$stats_result = $stmt->get_result();
 if ($stats_result) {
-    $stats = mysqli_fetch_assoc($stats_result);
-    // Ensure all keys exist even if null
-    $stats = array_merge([
-        'total_records' => 0,
-        'white_count' => 0,
-        'black_count' => 0,
-        'critical_count' => 0,
-        'pending_followups' => 0,
-        'affected_students' => 0
-    ], $stats ?: []);
+    $stats_data = $stats_result->fetch_assoc();
+    if ($stats_data) {
+        $stats = array_merge($stats, $stats_data);
+    }
 } else {
-    // Log error for debugging
-    error_log("Statistics query failed: " . mysqli_error($conn));
-    $_SESSION['error'] = "Error loading statistics. Please contact administrator.";
+    error_log("Statistics query failed: " . $conn->error);
 }
 
 // Function to get file icon
@@ -398,7 +443,7 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discipline Management - Muyovozi High School</title>
+    <title>Discipline Management - School System</title>
     <?php include '../controller/header.php'; ?>
     <?php include '../controller/sidebar.php'; ?>
     <!-- SweetAlert2 for confirmation dialogs -->
@@ -634,7 +679,7 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
                             <i class="fas fa-check-circle fa-2x me-3"></i>
                             <div>
                                 <h5 class="mb-1">Success!</h5>
-                                <p class="mb-0"><?php echo $_SESSION['success']; ?></p>
+                                <p class="mb-0"><?php echo htmlspecialchars($_SESSION['success']); ?></p>
                             </div>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -650,7 +695,7 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
                             <i class="fas fa-exclamation-circle fa-2x me-3"></i>
                             <div>
                                 <h5 class="mb-1">Error!</h5>
-                                <p class="mb-0"><?php echo $_SESSION['error']; ?></p>
+                                <p class="mb-0"><?php echo htmlspecialchars($_SESSION['error']); ?></p>
                             </div>
                         </div>
                         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
@@ -820,41 +865,41 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
                                             <?php echo ucfirst($record['severity_level']); ?>
                                         </span>
                                     </td>
-                                <td class="align-middle">
-    <div class="small">
-        <?php echo nl2br(htmlspecialchars(substr($record['short_note'], 0, 100))); ?>
-        <?php if (strlen($record['short_note']) > 100): ?>...<?php endif; ?>
-        <?php if ($record['file_path'] && file_exists($record['file_path'])): ?>
-            <div class="mt-2">
-                <?php 
-                $filename = basename($record['file_path']);
-                $file_url = '../uploads/discipline/' . $filename;
-                ?>
-                
-                <?php if ($record['file_type'] === 'image'): ?>
-                    <img src="<?php echo $file_url; ?>" 
-                         class="rounded" 
-                         style="width: 80px; height: 80px; object-fit: cover; cursor: pointer;"
-                         onclick="previewFile('<?php echo $file_url; ?>', 'image')"
-                         alt="Image"
-                         title="Click to view">
-                <?php else: ?>
-                    <a href="<?php echo $file_url; ?>" 
-                       target="_blank"
-                       class="text-decoration-none d-block"
-                       title="View file">
-                        <i class="fas <?php echo getDisciplineFileIcon($record['file_type']); ?> fa-2x 
-                            <?php echo $record['file_type'] === 'document' ? 'text-danger' : 
-                                    ($record['file_type'] === 'video' ? 'text-primary' : 
-                                    ($record['file_type'] === 'audio' ? 'text-warning' : 'text-secondary')); ?>">
-                        </i>
-                        <div class="small mt-1"><?php echo htmlspecialchars($record['file_name']); ?></div>
-                    </a>
-                <?php endif; ?>
-            </div>
-        <?php endif; ?>
-    </div>
-</td>
+                                    <td class="align-middle">
+                                        <div class="small">
+                                            <?php echo nl2br(htmlspecialchars(substr($record['short_note'], 0, 100))); ?>
+                                            <?php if (strlen($record['short_note']) > 100): ?>...<?php endif; ?>
+                                            <?php if ($record['file_path'] && file_exists($record['file_path'])): ?>
+                                                <div class="mt-2">
+                                                    <?php 
+                                                    $filename = basename($record['file_path']);
+                                                    $file_url = '../uploads/discipline/' . $filename;
+                                                    ?>
+                                                    
+                                                    <?php if ($record['file_type'] === 'image'): ?>
+                                                        <img src="<?php echo $file_url; ?>" 
+                                                             class="rounded" 
+                                                             style="width: 80px; height: 80px; object-fit: cover; cursor: pointer;"
+                                                             onclick="previewFile('<?php echo $file_url; ?>', 'image')"
+                                                             alt="Image"
+                                                             title="Click to view">
+                                                    <?php else: ?>
+                                                        <a href="<?php echo $file_url; ?>" 
+                                                           target="_blank"
+                                                           class="text-decoration-none d-block"
+                                                           title="View file">
+                                                            <i class="fas <?php echo getDisciplineFileIcon($record['file_type']); ?> fa-2x 
+                                                                <?php echo $record['file_type'] === 'document' ? 'text-danger' : 
+                                                                        ($record['file_type'] === 'video' ? 'text-primary' : 
+                                                                        ($record['file_type'] === 'audio' ? 'text-warning' : 'text-secondary')); ?>">
+                                                            </i>
+                                                            <div class="small mt-1"><?php echo htmlspecialchars($record['file_name']); ?></div>
+                                                        </a>
+                                                    <?php endif; ?>
+                                                </div>
+                                            <?php endif; ?>
+                                        </div>
+                                    </td>
                                     <td class="align-middle">
                                         <?php if ($record['follow_up_required']): ?>
                                             <?php if ($record['follow_up_completed']): ?>
@@ -919,7 +964,7 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
                 </div>
             </div>
             
-            <!-- Pagination -->
+            <!-- Pagination (simple for now, can be enhanced) -->
             <?php if (count($discipline_records) > 20): ?>
                 <div class="d-flex justify-content-center mt-4">
                     <nav aria-label="Discipline records pagination">
@@ -1041,7 +1086,6 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
                                     <label class="form-label">Record Type *</label>
                                     <select name="record_type" class="form-select" id="recordTypeSelect" required>
                                         <option value="">Select Record Type</option>
-                                        <!-- Options will be populated by JavaScript -->
                                     </select>
                                 </div>
                                 
@@ -1204,7 +1248,7 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
             }
         }
         
-        // Student search functionality
+        // Student search functionality (with school_id automatically handled by backend)
         let searchTimeout;
         document.getElementById('studentSearchInput').addEventListener('input', function() {
             clearTimeout(searchTimeout);
@@ -1270,7 +1314,7 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
         });
         
         // Select student from table
-        function selectStudentFromTable(studentId, studentName, indexNumber, studentClass, combination, isLeaver) {
+        window.selectStudentFromTable = function(studentId, studentName, indexNumber, studentClass, combination, isLeaver) {
             document.getElementById('selectedStudentId').value = studentId;
             document.getElementById('selectedStudentName').textContent = studentName;
             document.getElementById('selectedStudentIndex').textContent = indexNumber;
@@ -1288,11 +1332,13 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
             document.querySelectorAll('.student-row-select').forEach(row => {
                 row.classList.remove('selected');
             });
-            event.target.closest('tr').classList.add('selected');
-        }
+            if (event && event.target) {
+                event.target.closest('tr').classList.add('selected');
+            }
+        };
         
         // Clear student selection
-        function clearStudentSelection() {
+        window.clearStudentSelection = function() {
             document.getElementById('selectedStudentId').value = '';
             document.getElementById('selectedStudentSummary').style.display = 'none';
             document.getElementById('studentSearchInput').value = '';
@@ -1307,7 +1353,7 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
             document.querySelectorAll('.student-row-select').forEach(row => {
                 row.classList.remove('selected');
             });
-        }
+        };
         
         // File size validation
         document.querySelector('input[name="discipline_file"]').addEventListener('change', function() {
@@ -1316,7 +1362,7 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
             
             if (this.files[0] && this.files[0].size > maxSize) {
                 warningDiv.style.display = 'block';
-                this.value = ''; // Clear the file input
+                this.value = '';
             } else {
                 warningDiv.style.display = 'none';
             }
@@ -1369,14 +1415,14 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
         });
         
         // Follow-up modal
-        function showFollowUpModal(recordId) {
+        window.showFollowUpModal = function(recordId) {
             document.getElementById('followUpRecordId').value = recordId;
             const modal = new bootstrap.Modal(document.getElementById('followUpModal'));
             modal.show();
-        }
+        };
         
         // File preview
-        function previewFile(fileUrl, fileType) {
+        window.previewFile = function(fileUrl, fileType) {
             const contentDiv = document.getElementById('filePreviewContent');
             
             if (fileType === 'image') {
@@ -1441,7 +1487,7 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
             
             const modal = new bootstrap.Modal(document.getElementById('filePreviewModal'));
             modal.show();
-        }
+        };
         
         // Close student search when clicking outside
         document.addEventListener('click', function(e) {
@@ -1451,14 +1497,14 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
             if (!e.target.closest('#studentSearchResults') && 
                 !e.target.closest('#studentSearchInput') && 
                 !e.target.closest('#clearSearch')) {
-                searchContainer.style.display = 'none';
+                if (searchContainer) searchContainer.style.display = 'none';
             }
         });
         
         // Initialize record type options if list type is pre-selected
         document.addEventListener('DOMContentLoaded', function() {
             const listTypeSelect = document.querySelector('select[name="list_type"]');
-            if (listTypeSelect.value) {
+            if (listTypeSelect && listTypeSelect.value) {
                 updateRecordTypeOptions(listTypeSelect.value);
             }
             
@@ -1466,7 +1512,7 @@ function getStudentStatusBadge($is_leaver, $graduation_status, $student_status) 
             setTimeout(() => {
                 const alerts = document.querySelectorAll('.center-message');
                 alerts.forEach(alert => {
-                    alert.style.display = 'none';
+                    if (alert) alert.style.display = 'none';
                 });
             }, 5000);
         });
