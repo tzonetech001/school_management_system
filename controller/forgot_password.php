@@ -1,15 +1,10 @@
 <?php
-// forgot_password.php
+// forgot_password.php - Updated with Multi-School Support & No SMS
 session_start();
 require_once '../controller/db_connect.php';
 
 // Set timezone
 date_default_timezone_set('Africa/Dar_es_Salaam');
-
-// Beem Africa API Credentials
-define('BEEM_API_KEY', '5e3de5075687abf8');
-define('BEEM_SECRET_KEY', 'MDRhM2MxNGUxZGNmYmRjNDMzYzVmYjlkY2MyM2UxNTRmNjMyNzU2YTg2OGRjMmQ5YmMxZjdiODRkZTg2ZjQwYQ==');
-define('BEEM_SOURCE_ADDR', 'MUYOVOZI HS');
 
 $error = '';
 $success = '';
@@ -17,12 +12,9 @@ $step = 1;
 $user_type = '';
 $identifier = '';
 
-// Generate OTP function
-function generateOTP($length = 6) {
-    return str_pad(random_int(0, pow(10, $length) - 1), $length, '0', STR_PAD_LEFT);
-}
+// ==================== HELPER FUNCTIONS ====================
 
-// Format phone number to international format
+// Format phone number for validation only (no SMS sending)
 function formatPhoneNumber($phone) {
     $phone = preg_replace('/[^0-9]/', '', $phone);
     
@@ -43,67 +35,10 @@ function formatPhoneNumber($phone) {
     return $phone;
 }
 
-// Validate phone number
+// Validate phone number format
 function validatePhoneNumber($phone) {
     $phone = formatPhoneNumber($phone);
     return preg_match('/^255[67][0-9]{8}$/', $phone);
-}
-
-// Send SMS via Beem Africa API
-function sendSMS($phone_number, $message) {
-    $api_key = BEEM_API_KEY;
-    $secret_key = BEEM_SECRET_KEY;
-    
-    $phone_number = formatPhoneNumber($phone_number);
-    
-    if (!preg_match('/^255[67][0-9]{8}$/', $phone_number)) {
-        error_log("Invalid phone number: " . $phone_number);
-        return false;
-    }
-    
-    $postData = [
-        "source_addr" => "MUYOVOZI HS",
-        "encoding" => 0,
-        "message" => $message,
-        "recipients" => [
-            [
-                "recipient_id" => "1",
-                "dest_addr" => $phone_number
-            ]
-        ]
-    ];
-
-    $Url = 'https://apisms.beem.africa/v1/send';
-
-    $ch = curl_init($Url);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
-    curl_setopt_array($ch, [
-        CURLOPT_POST => TRUE,
-        CURLOPT_RETURNTRANSFER => TRUE,
-        CURLOPT_HTTPHEADER => [
-            'Authorization: Basic ' . base64_encode("$api_key:$secret_key"),
-            'Content-Type: application/json'
-        ],
-        CURLOPT_POSTFIELDS => json_encode($postData),
-        CURLOPT_TIMEOUT => 30
-    ]);
-
-    $response = curl_exec($ch);
-    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    
-    curl_close($ch);
-    
-    error_log("SMS Response Code: " . $http_code);
-    error_log("SMS Response: " . $response);
-    
-    return ($http_code == 200 || $http_code == 202);
-}
-
-// Send OTP via SMS
-function sendOTPviaSMS($phone_number, $otp, $name = '') {
-    $message = "MUYOVOZI HS: Your OTP is $otp. Valid for 10 minutes. Do not share this code.";
-    return sendSMS($phone_number, $message);
 }
 
 // Create password_resets table if not exists
@@ -119,19 +54,17 @@ function ensurePasswordResetsTable($conn) {
             email VARCHAR(100),
             phone VARCHAR(20),
             token VARCHAR(100) NOT NULL,
-            otp VARCHAR(10) NOT NULL,
             expires_at DATETIME NOT NULL,
             used TINYINT DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             INDEX idx_token (token),
-            INDEX idx_otp (otp),
             INDEX idx_user (user_type, user_id)
         )";
         $conn->query($sql);
     }
 }
 
-// Handle step 1: Request reset
+// ==================== STEP 1: Request Reset ====================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
     $identifier = trim($_POST['identifier']);
     
@@ -140,64 +73,107 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
     } else {
         ensurePasswordResetsTable($conn);
         
-        // Try staff first (email)
-        $staff_sql = "SELECT id, first_name, last_name, email, phone_number FROM admins 
-                     WHERE email = ? AND status = 1";
-        $stmt = $conn->prepare($staff_sql);
-        $stmt->bind_param("s", $identifier);
-        $stmt->execute();
-        $staff_result = $stmt->get_result();
-        
-        if ($staff_result && $staff_result->num_rows > 0) {
-            $user = $staff_result->fetch_assoc();
-            $user_type = 'staff';
+        // Check if identifier is email (admin or super admin)
+        if (filter_var($identifier, FILTER_VALIDATE_EMAIL)) {
+            // FIRST: Check Super Admin
+            $super_sql = "SELECT id, first_name, last_name, email, phone FROM super_admins 
+                         WHERE email = ? AND status = 1";
+            $stmt = $conn->prepare($super_sql);
+            $stmt->bind_param("s", $identifier);
+            $stmt->execute();
+            $super_result = $stmt->get_result();
             
-            // Check if phone number exists
-            if (empty($user['phone_number'])) {
-                $error = "No phone number found for this staff. Contact administrator.";
-            } else {
-                $otp = generateOTP();
-                $expiry = date('Y-m-d H:i:s', strtotime('+10 minutes'));
-                $token = bin2hex(random_bytes(32));
+            if ($super_result && $super_result->num_rows > 0) {
+                $user = $super_result->fetch_assoc();
+                $user_type = 'super_admin';
                 
-                // Delete old unused OTPs
-                $clean = "DELETE FROM password_resets WHERE user_id = ? AND user_type = 'staff' AND used = 0";
+                // Store in session for step 2 (phone verification)
+                $token = bin2hex(random_bytes(32));
+                $expiry = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+                
+                // Delete old unused tokens
+                $clean = "DELETE FROM password_resets WHERE user_id = ? AND user_type = 'super_admin' AND used = 0";
                 $clean_stmt = $conn->prepare($clean);
                 $clean_stmt->bind_param("i", $user['id']);
                 $clean_stmt->execute();
                 
-                $insert = "INSERT INTO password_resets (user_type, user_id, email, phone, token, otp, expires_at) 
-                          VALUES (?, ?, ?, ?, ?, ?, ?)";
+                $insert = "INSERT INTO password_resets (user_type, user_id, email, phone, token, expires_at) 
+                          VALUES (?, ?, ?, ?, ?, ?)";
                 $insert_stmt = $conn->prepare($insert);
-                $insert_stmt->bind_param("sisssss", $user_type, $user['id'], $user['email'], $user['phone_number'], $token, $otp, $expiry);
+                $insert_stmt->bind_param("sissss", $user_type, $user['id'], $user['email'], $user['phone'], $token, $expiry);
                 
                 if ($insert_stmt->execute()) {
-                    // Send SMS
-                    $sms_sent = sendOTPviaSMS($user['phone_number'], $otp, $user['first_name']);
+                    $_SESSION['reset_token'] = $token;
+                    $_SESSION['reset_user_type'] = 'super_admin';
+                    $_SESSION['reset_user_id'] = $user['id'];
+                    $_SESSION['reset_user_name'] = $user['first_name'] . ' ' . $user['last_name'];
+                    $_SESSION['reset_phone'] = $user['phone'];
                     
-                    if ($sms_sent) {
-                        $_SESSION['reset_token'] = $token;
-                        $_SESSION['reset_user_type'] = 'staff';
-                        $_SESSION['reset_user_id'] = $user['id'];
-                        $_SESSION['reset_phone'] = $user['phone_number'];
-                        
-                        $step = 2;
+                    $step = 2;
+                } else {
+                    $error = "Error processing request. Please try again.";
+                }
+            } 
+            // SECOND: Check Admin (Staff)
+            else {
+                $admin_sql = "SELECT a.id, a.first_name, a.last_name, a.email, a.phone_number, a.school_id, s.school_name
+                             FROM admins a
+                             JOIN schools s ON a.school_id = s.id
+                             WHERE a.email = ? AND a.status = 1 AND s.status = 'Active'";
+                $stmt = $conn->prepare($admin_sql);
+                $stmt->bind_param("s", $identifier);
+                $stmt->execute();
+                $admin_result = $stmt->get_result();
+                
+                if ($admin_result && $admin_result->num_rows > 0) {
+                    $user = $admin_result->fetch_assoc();
+                    $user_type = 'admin';
+                    
+                    if (empty($user['phone_number'])) {
+                        $error = "No phone number found for this account. Please contact school administrator.";
                     } else {
-                        $error = "Failed to send OTP via SMS. Please try again.";
-                        // Delete the inserted record
-                        $delete = "DELETE FROM password_resets WHERE token = ?";
-                        $delete_stmt = $conn->prepare($delete);
-                        $delete_stmt->bind_param("s", $token);
-                        $delete_stmt->execute();
+                        $token = bin2hex(random_bytes(32));
+                        $expiry = date('Y-m-d H:i:s', strtotime('+15 minutes'));
+                        
+                        // Delete old unused tokens
+                        $clean = "DELETE FROM password_resets WHERE user_id = ? AND user_type = 'admin' AND used = 0";
+                        $clean_stmt = $conn->prepare($clean);
+                        $clean_stmt->bind_param("i", $user['id']);
+                        $clean_stmt->execute();
+                        
+                        $insert = "INSERT INTO password_resets (user_type, user_id, email, phone, token, expires_at) 
+                                  VALUES (?, ?, ?, ?, ?, ?)";
+                        $insert_stmt = $conn->prepare($insert);
+                        $insert_stmt->bind_param("sissss", $user_type, $user['id'], $user['email'], $user['phone_number'], $token, $expiry);
+                        
+                        if ($insert_stmt->execute()) {
+                            $_SESSION['reset_token'] = $token;
+                            $_SESSION['reset_user_type'] = 'admin';
+                            $_SESSION['reset_user_id'] = $user['id'];
+                            $_SESSION['reset_user_name'] = $user['first_name'] . ' ' . $user['last_name'];
+                            $_SESSION['reset_phone'] = $user['phone_number'];
+                            $_SESSION['reset_school_id'] = $user['school_id'];
+                            $_SESSION['reset_school_name'] = $user['school_name'];
+                            
+                            $step = 2;
+                        } else {
+                            $error = "Error processing request. Please try again.";
+                        }
                     }
                 } else {
-                    $error = "Error generating OTP. Please try again.";
+                    $error = "Email not found in our records.";
                 }
             }
-        } else {
-            // Try student by admission number
-            $student_sql = "SELECT id, first_name, last_name, admission_number, parent_phone, date_of_birth
-                          FROM students WHERE admission_number = ? AND is_leaver = FALSE AND status = 1";
+        } 
+        // ELSE: Student by admission number
+        else {
+            $student_sql = "SELECT s.id, s.first_name, s.last_name, s.admission_number, s.parent_phone, s.date_of_birth, s.school_id, sc.school_name
+                          FROM students s
+                          JOIN schools sc ON s.school_id = sc.id
+                          WHERE s.admission_number = ? 
+                          AND (s.is_leaver = FALSE OR s.is_leaver IS NULL) 
+                          AND s.status = 1
+                          AND sc.status = 'Active'";
             $stmt = $conn->prepare($student_sql);
             $stmt->bind_param("s", $identifier);
             $stmt->execute();
@@ -207,7 +183,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
                 $user = $student_result->fetch_assoc();
                 $user_type = 'student';
                 
-                // For students, we don't send SMS, just store info for verification
                 $token = bin2hex(random_bytes(32));
                 
                 // Store student info in session
@@ -217,64 +192,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['request_reset'])) {
                 $_SESSION['reset_student_dob'] = $user['date_of_birth'];
                 $_SESSION['reset_student_phone'] = $user['parent_phone'];
                 $_SESSION['reset_student_name'] = $user['first_name'] . ' ' . $user['last_name'];
+                $_SESSION['reset_school_id'] = $user['school_id'];
+                $_SESSION['reset_school_name'] = $user['school_name'];
                 
                 $step = 2;
-                
             } else {
-                $error = "Account not found.";
+                $error = "Admission number not found.";
             }
         }
     }
 }
 
-// Handle step 2: Verify
+// ==================== STEP 2: Verify ====================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify'])) {
     $user_type = $_SESSION['reset_user_type'] ?? '';
     $token = $_SESSION['reset_token'] ?? '';
     
-    if ($user_type === 'staff') {
-        // Staff OTP verification
-        $otp = trim($_POST['otp'] ?? '');
+    if ($user_type === 'super_admin' || $user_type === 'admin') {
+        // Staff/Super Admin Phone Verification
+        $phone = preg_replace('/[^0-9]/', '', $_POST['phone'] ?? '');
+        $stored_phone = $_SESSION['reset_phone'] ?? '';
         
-        if (empty($otp)) {
-            $error = "Please enter OTP.";
-        } elseif (empty($token)) {
-            $error = "Session expired. Please start over.";
-            $step = 1;
-        } else {
-            // Get the reset record
-            $sql = "SELECT * FROM password_resets 
-                   WHERE token = ? AND user_type = 'staff' AND used = 0 AND expires_at > NOW()";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("s", $token);
-            $stmt->execute();
-            $result = $stmt->get_result();
-            
-            if ($result && $result->num_rows > 0) {
-                $reset_data = $result->fetch_assoc();
-                
-                if ((string)$reset_data['otp'] === (string)$otp) {
-                    // Mark as used
-                    $update = "UPDATE password_resets SET used = 1 WHERE id = ?";
-                    $update_stmt = $conn->prepare($update);
-                    $update_stmt->bind_param("i", $reset_data['id']);
-                    
-                    if ($update_stmt->execute()) {
-                        $_SESSION['reset_authorized'] = true;
-                        $_SESSION['reset_user_id'] = $reset_data['user_id'];
-                        
-                        $step = 3;
-                    } else {
-                        $error = "Error updating record.";
-                    }
-                } else {
-                    $error = "Invalid OTP.";
-                }
-            } else {
-                $error = "Invalid or expired OTP. Please request a new one.";
+        $formatted_input = formatPhoneNumber($phone);
+        $formatted_stored = formatPhoneNumber($stored_phone);
+        
+        if (empty($phone)) {
+            $error = "Please enter your phone number.";
+        } elseif ($formatted_input === $formatted_stored) {
+            // Mark token as verified
+            if (!empty($token)) {
+                $update = "UPDATE password_resets SET used = 1 WHERE token = ? AND user_type = ?";
+                $update_stmt = $conn->prepare($update);
+                $update_stmt->bind_param("ss", $token, $user_type);
+                $update_stmt->execute();
             }
+            
+            $_SESSION['reset_authorized'] = true;
+            $step = 3;
+        } else {
+            $error = "Phone number does not match our records.";
         }
-    } elseif ($user_type === 'student') {
+    } 
+    elseif ($user_type === 'student') {
         // Student verification using DOB and parent phone
         $dob = $_POST['dob'] ?? '';
         $parent_phone = preg_replace('/\D/', '', $_POST['parent_phone'] ?? '');
@@ -289,8 +248,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify'])) {
             $error = "Please enter both Date of Birth and Parent Phone number.";
         } elseif ($dob == $stored_dob && $formatted_parent == $formatted_stored) {
             $_SESSION['reset_authorized'] = true;
-            $_SESSION['reset_user_id'] = $_SESSION['reset_user_id'];
-            
             $step = 3;
         } else {
             $error = "Verification failed. Date of Birth or Parent Phone number is incorrect.";
@@ -298,7 +255,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['verify'])) {
     }
 }
 
-// Handle step 3: Set new password
+// ==================== STEP 3: Set New Password ====================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['set_password'])) {
     if (!isset($_SESSION['reset_authorized']) || $_SESSION['reset_authorized'] !== true) {
         header("Location: forgot_password.php");
@@ -319,7 +276,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['set_password'])) {
     } else {
         $hashed = password_hash($new_password, PASSWORD_DEFAULT);
         
-        if ($user_type === 'staff') {
+        if ($user_type === 'super_admin') {
+            $update = "UPDATE super_admins SET password = ? WHERE id = ?";
+        } elseif ($user_type === 'admin') {
             $update = "UPDATE admins SET password = ? WHERE id = ?";
         } else {
             $update = "UPDATE students SET password = ? WHERE id = ?";
@@ -329,14 +288,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['set_password'])) {
         $stmt->bind_param("si", $hashed, $user_id);
         
         if ($stmt->execute()) {
-            // Clean up all tokens
+            // Clean up all tokens for this user
             $clean = "DELETE FROM password_resets WHERE user_id = ? AND user_type = ?";
             $clean_stmt = $conn->prepare($clean);
             $clean_stmt->bind_param("is", $user_id, $user_type);
             $clean_stmt->execute();
             
-            // Clear session
-            session_unset();
+            // Clear reset session
+            unset($_SESSION['reset_token']);
+            unset($_SESSION['reset_user_type']);
+            unset($_SESSION['reset_user_id']);
+            unset($_SESSION['reset_authorized']);
+            unset($_SESSION['reset_phone']);
+            unset($_SESSION['reset_student_dob']);
+            unset($_SESSION['reset_student_phone']);
+            unset($_SESSION['reset_student_name']);
+            unset($_SESSION['reset_school_id']);
+            unset($_SESSION['reset_school_name']);
+            unset($_SESSION['reset_user_name']);
             
             $_SESSION['reset_success'] = "Password reset successful. You can now login.";
             header("Location: ../mhs/login.php");
@@ -347,43 +316,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['set_password'])) {
     }
 }
 
-// Handle resend OTP for staff
-if (isset($_GET['resend_otp']) && isset($_SESSION['reset_token']) && $_SESSION['reset_user_type'] == 'staff') {
-    $token = $_SESSION['reset_token'];
-    
-    $sql = "SELECT pr.*, a.first_name, a.last_name, a.phone_number, a.email 
-            FROM password_resets pr
-            JOIN admins a ON pr.user_id = a.id
-            WHERE pr.token = ? AND pr.user_type = 'staff' AND pr.used = 0";
-    $stmt = $conn->prepare($sql);
-    $stmt->bind_param("s", $token);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result && $result->num_rows > 0) {
-        $data = $result->fetch_assoc();
-        
-        $new_otp = generateOTP();
-        $new_expiry = date('Y-m-d H:i:s', strtotime('+10 minutes'));
-        
-        $update = "UPDATE password_resets SET otp = ?, expires_at = ? WHERE id = ?";
-        $update_stmt = $conn->prepare($update);
-        $update_stmt->bind_param("ssi", $new_otp, $new_expiry, $data['id']);
-        
-        if ($update_stmt->execute()) {
-            if (validatePhoneNumber($data['phone_number'])) {
-                $sms_sent = sendOTPviaSMS($data['phone_number'], $new_otp, $data['first_name']);
-                if (!$sms_sent) {
-                    $error = "Failed to send new OTP. Please try again.";
-                }
-            }
-        }
-    }
-}
-
 // Restart
 if (isset($_GET['restart'])) {
-    session_unset();
+    unset($_SESSION['reset_token']);
+    unset($_SESSION['reset_user_type']);
+    unset($_SESSION['reset_user_id']);
+    unset($_SESSION['reset_authorized']);
+    unset($_SESSION['reset_phone']);
+    unset($_SESSION['reset_student_dob']);
+    unset($_SESSION['reset_student_phone']);
+    unset($_SESSION['reset_student_name']);
+    unset($_SESSION['reset_school_id']);
+    unset($_SESSION['reset_school_name']);
+    unset($_SESSION['reset_user_name']);
     $step = 1;
 }
 
@@ -403,7 +348,7 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Forgot Password - Muyovozi High School</title>
+    <title>Forgot Password - School Management System</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -537,23 +482,6 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
             box-shadow: 0 5px 15px rgba(59, 157, 179, 0.3);
         }
         
-        .btn-outline-reset {
-            background: transparent;
-            color: #3B9DB3;
-            border: 2px solid #3B9DB3;
-            border-radius: 10px;
-            padding: 10px;
-            font-weight: 500;
-            transition: all 0.3s;
-            text-decoration: none;
-            display: inline-block;
-        }
-        
-        .btn-outline-reset:hover {
-            background: #3B9DB3;
-            color: white;
-        }
-        
         .alert {
             border-radius: 10px;
             border: none;
@@ -566,17 +494,18 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
         .alert-danger { background: #f8d7da; color: #721c24; border-left: 4px solid #dc3545; }
         .alert-info { background: #d1ecf1; color: #0c5460; border-left: 4px solid #3B9DB3; }
         
-        .otp-input {
-            letter-spacing: 5px;
-            font-size: 1.3rem;
-            font-weight: 600;
+        .info-box {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
             text-align: center;
         }
         
-        .timer {
-            font-size: 0.85rem;
-            color: #dc3545;
-            font-weight: 600;
+        .info-box i {
+            font-size: 2rem;
+            color: #3B9DB3;
+            margin-bottom: 10px;
         }
         
         .link-back {
@@ -594,32 +523,18 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
             color: #3B9DB3;
         }
         
-        .resend-link {
-            text-align: center;
-            margin-top: 12px;
-        }
-        
-        .resend-link a {
+        /* School badge */
+        .school-badge {
+            background: #e9ecef;
+            border-radius: 20px;
+            padding: 5px 12px;
+            font-size: 0.75rem;
             color: #3B9DB3;
-            text-decoration: none;
-            font-size: 0.85rem;
+            display: inline-block;
+            margin-top: 5px;
         }
         
-        .info-box {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 15px;
-            margin: 15px 0;
-            text-align: center;
-        }
-        
-        .info-box i {
-            font-size: 2rem;
-            color: #3B9DB3;
-            margin-bottom: 10px;
-        }
-
-        /* Modern Loading Overlay */
+        /* Loading Overlay */
         .loading-overlay {
             position: fixed;
             top: 0;
@@ -628,7 +543,6 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
             height: 100%;
             background: rgba(255, 255, 255, 0.95);
             backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
             display: none;
             justify-content: center;
             align-items: center;
@@ -680,46 +594,32 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
             font-weight: 700;
         }
         
-        .loading-dots {
-            display: inline-block;
+        .input-group-text {
+            background: #f0f6fa;
+            border: 2px solid #e9ecef;
+            border-right: none;
         }
-        .loading-dots span {
-            animation: blink 1.4s infinite;
-            animation-fill-mode: both;
-        }
-        .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
-        .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
         
-        @keyframes blink {
-            0%, 20% { opacity: 0; }
-            50% { opacity: 1; }
-            100% { opacity: 0; }
+        .input-group .form-control {
+            border-left: none;
         }
     </style>
 </head>
 <body>
-    <!-- Loading Overlay with Modern Animation -->
+    <!-- Loading Overlay -->
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loader">
-            <div></div>
-            <div></div>
-            <div></div>
-            <div></div>
-            <div></div>
-            <div></div>
+            <div></div><div></div><div></div><div></div><div></div><div></div>
         </div>
         <div class="loading-text">
-            <span>Muyovozi High School</span> 
-            <span class="loading-dots">
-                <span>.</span><span>.</span><span>.</span>
-            </span>
+            <span>School Management System</span>
         </div>
     </div>
 
     <div class="reset-container">
         <div class="reset-header">
             <h2><i class="fas fa-key me-2"></i>Forgot Password?</h2>
-            <p>Reset your password</p>
+            <p>Reset your password securely</p>
         </div>
         
         <div class="reset-body">
@@ -743,14 +643,14 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
             <?php if (!empty($error)): ?>
                 <div class="alert alert-danger">
                     <i class="fas fa-exclamation-circle me-2"></i>
-                    <?php echo $error; ?>
+                    <?php echo htmlspecialchars($error); ?>
                 </div>
             <?php endif; ?>
             
             <?php if (!empty($success)): ?>
                 <div class="alert alert-success">
                     <i class="fas fa-check-circle me-2"></i>
-                    <?php echo $success; ?>
+                    <?php echo htmlspecialchars($success); ?>
                 </div>
             <?php endif; ?>
             
@@ -764,9 +664,11 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
                             <i class="fas fa-user me-1"></i>Username
                         </label>
                         <input type="text" class="form-control" name="identifier" 
-                               placeholder="Enter your email or admission number" required>
+                               placeholder="Enter your email or admission number" 
+                               value="<?php echo htmlspecialchars($identifier); ?>" required>
                         <small class="text-muted">
-                            Use your username
+                            Staff/Super Admin: Use your email address<br>
+                            Student: Use your admission number
                         </small>
                     </div>
                     
@@ -778,41 +680,49 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
             
             <!-- Step 2: Verify -->
             <?php if ($step == 2): ?>
-                <?php if (isset($_SESSION['reset_user_type']) && $_SESSION['reset_user_type'] == 'staff'): ?>
-                    <!-- Staff OTP Verification -->
+                <?php if (isset($_SESSION['reset_user_type']) && ($_SESSION['reset_user_type'] == 'admin' || $_SESSION['reset_user_type'] == 'super_admin')): ?>
+                    <!-- Staff/Super Admin Phone Verification -->
                     <div class="info-box">
-                        <i class="fas fa-mobile-alt"></i>
-                        <h6>OTP Sent to Phone</h6>
+                        <i class="fas fa-user-check"></i>
+                        <h6>Verify Your Identity</h6>
                         <p class="small text-muted mb-0">
-                            We've sent a 6-digit code to your phone number
-                            <?php echo isset($_SESSION['reset_phone']) ? '****' . substr($_SESSION['reset_phone'], -4) : ''; ?>
+                            Please enter your registered phone number
                         </p>
+                        <?php if (isset($_SESSION['reset_user_name'])): ?>
+                            <p class="small fw-bold mt-2 mb-0">
+                                Account: <?php echo htmlspecialchars($_SESSION['reset_user_name']); ?>
+                            </p>
+                        <?php endif; ?>
+                        <?php if (isset($_SESSION['reset_school_name'])): ?>
+                            <div class="school-badge">
+                                <i class="fas fa-building me-1"></i>
+                                <?php echo htmlspecialchars($_SESSION['reset_school_name']); ?>
+                            </div>
+                        <?php endif; ?>
                     </div>
                     
                     <form method="POST" id="step2Form">
                         <input type="hidden" name="verify" value="1">
                         
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Enter OTP Code</label>
-                            <input type="text" class="form-control otp-input" name="otp" 
-                                   maxlength="6" pattern="\d{6}" placeholder="______" 
-                                   inputmode="numeric" required>
+                            <label class="form-label fw-semibold">Phone Number</label>
+                            <div class="input-group">
+                                <span class="input-group-text">+255</span>
+                                <input type="tel" class="form-control" name="phone" 
+                                       placeholder="712345678" maxlength="9" 
+                                       pattern="[67][0-9]{8}" required>
+                            </div>
+                            <small class="text-muted">Format: 712345678 (9 digits starting with 6 or 7)</small>
                         </div>
                         
                         <button type="submit" class="btn-reset">
-                            <i class="fas fa-check-circle me-2"></i>Verify OTP
+                            <i class="fas fa-check-circle me-2"></i>Verify Phone
                         </button>
                         
-                        <div class="resend-link">
-                            <a href="?resend_otp=1" id="resendOtpLink">
-                                <i class="fas fa-redo-alt me-1"></i>Resend OTP
-                            </a>
-                        </div>
-                        
                         <div class="text-center mt-2">
-                            <!-- <a href="?restart=1" class="text-muted small">
+                            <a href="?restart=1" class="text-muted small">
                                 <i class="fas fa-arrow-left me-1"></i>Start over
-                            </a> -->
+                            </a>
                         </div>
                     </form>
                 <?php else: ?>
@@ -827,6 +737,12 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
                             <p class="small fw-bold mt-2 mb-0">
                                 Student: <?php echo htmlspecialchars($_SESSION['reset_student_name']); ?>
                             </p>
+                        <?php endif; ?>
+                        <?php if (isset($_SESSION['reset_school_name'])): ?>
+                            <div class="school-badge">
+                                <i class="fas fa-building me-1"></i>
+                                <?php echo htmlspecialchars($_SESSION['reset_school_name']); ?>
+                            </div>
                         <?php endif; ?>
                     </div>
                     
@@ -854,9 +770,9 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
                         </button>
                         
                         <div class="text-center mt-2">
-                            <!-- <a href="?restart=1" class="text-muted small">
+                            <a href="?restart=1" class="text-muted small">
                                 <i class="fas fa-arrow-left me-1"></i>Start over
-                            </a> -->
+                            </a>
                         </div>
                     </form>
                 <?php endif; ?>
@@ -868,6 +784,12 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
                     <i class="fas fa-check-circle text-success"></i>
                     <h6 class="text-success">Verification Successful</h6>
                     <p class="small text-muted mb-0">Please set your new password</p>
+                    <?php if (isset($_SESSION['reset_school_name'])): ?>
+                        <div class="school-badge mt-2">
+                            <i class="fas fa-building me-1"></i>
+                            <?php echo htmlspecialchars($_SESSION['reset_school_name']); ?>
+                        </div>
+                    <?php endif; ?>
                 </div>
                 
                 <form method="POST" id="step3Form">
@@ -901,30 +823,27 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
         </div>
     </div>
     
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // Loading overlay functionality
         const loadingOverlay = document.getElementById('loadingOverlay');
         
-        // Function to show loading overlay
         function showLoading(form) {
             if (form && form.checkValidity()) {
                 loadingOverlay.classList.add('active');
                 
                 const btn = form.querySelector('button[type="submit"]');
                 if(btn) {
-                    const originalHtml = btn.innerHTML;
                     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processing...';
                     btn.disabled = true;
-                    
-                    // Store original HTML to restore if needed (optional)
-                    btn.setAttribute('data-original-html', originalHtml);
                 }
+            } else if (form) {
+                form.reportValidity();
             }
         }
 
         // Add event listeners to all forms
         document.addEventListener('DOMContentLoaded', function() {
-            // Step 1 form
             const step1Form = document.getElementById('step1Form');
             if (step1Form) {
                 step1Form.addEventListener('submit', function(e) {
@@ -932,7 +851,6 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
                 });
             }
 
-            // Step 2 form
             const step2Form = document.getElementById('step2Form');
             if (step2Form) {
                 step2Form.addEventListener('submit', function(e) {
@@ -940,40 +858,14 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
                 });
             }
 
-            // Step 3 form
             const step3Form = document.getElementById('step3Form');
             if (step3Form) {
                 step3Form.addEventListener('submit', function(e) {
                     showLoading(this);
                 });
             }
-
-            // Resend OTP link
-            const resendLink = document.getElementById('resendOtpLink');
-            if (resendLink) {
-                resendLink.addEventListener('click', function(e) {
-                    loadingOverlay.classList.add('active');
-                });
-            }
-
-            // Start over link
-            const startOverLinks = document.querySelectorAll('a[href*="restart"]');
-            startOverLinks.forEach(link => {
-                link.addEventListener('click', function(e) {
-                    loadingOverlay.classList.add('active');
-                });
-            });
-
-            // Back to login link
-            const backLinks = document.querySelectorAll('a[href*="login.php"]');
-            backLinks.forEach(link => {
-                link.addEventListener('click', function(e) {
-                    loadingOverlay.classList.add('active');
-                });
-            });
         });
 
-        // Hide loading overlay if page load takes too long (fallback)
         window.addEventListener('load', function() {
             setTimeout(() => {
                 loadingOverlay.classList.remove('active');
@@ -986,19 +878,13 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
             this.value = this.value.replace(/\D/g, '').slice(0, 9);
         });
         <?php endif; ?>
-
-        // Prevent double form submission
-        let formSubmitted = false;
-        const forms = document.querySelectorAll('form');
-        forms.forEach(form => {
-            form.addEventListener('submit', function(e) {
-                if (formSubmitted) {
-                    e.preventDefault();
-                    return;
-                }
-                formSubmitted = true;
-            });
+        
+        // Phone number formatting for admin/super admin
+        <?php if ($step == 2 && isset($_SESSION['reset_user_type']) && ($_SESSION['reset_user_type'] == 'admin' || $_SESSION['reset_user_type'] == 'super_admin')): ?>
+        document.querySelector('input[name="phone"]')?.addEventListener('input', function(e) {
+            this.value = this.value.replace(/\D/g, '').slice(0, 9);
         });
+        <?php endif; ?>
 
         // Auto-hide alerts after 5 seconds
         const alerts = document.querySelectorAll('.alert');
@@ -1012,7 +898,5 @@ if (isset($_SESSION['reset_token']) && !isset($_GET['restart'])) {
             }, 5000);
         });
     </script>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

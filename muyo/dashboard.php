@@ -1,25 +1,27 @@
 <?php
-// dashboard.php
+// dashboard.php - FIXED: No output before session/headers
+// Remove ANY whitespace or characters before <?php
+
+// ==================== TURN OFF OUTPUT BUFFERING AND ERROR DISPLAY ====================
+error_reporting(E_ALL);
+ini_set('display_errors', 0); // Don't display errors to output
+ob_start(); // Start output buffering
+
 session_start();
 
 // ==================== SESSION VALIDATION ====================
 // Redirect if not logged in
 if (!isset($_SESSION['admin_id'])) {
-    // Clean any output buffers
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
+    ob_end_clean();
     header("Location: ../index.php");
     exit();
 }
-
-
 
 // Regenerate session ID periodically to prevent fixation
 if (!isset($_SESSION['last_regeneration'])) {
     session_regenerate_id(true);
     $_SESSION['last_regeneration'] = time();
-} elseif (time() - $_SESSION['last_regeneration'] > 1800) { // Regenerate every 30 minutes
+} elseif (time() - $_SESSION['last_regeneration'] > 1800) {
     session_regenerate_id(true);
     $_SESSION['last_regeneration'] = time();
 }
@@ -28,21 +30,53 @@ require_once '../controller/db_connect.php';
 
 // Verify admin still exists and is active
 $admin_id = $_SESSION['admin_id'];
-$verify_sql = "SELECT id, status FROM admins WHERE id = $admin_id AND status = 1";
+$verify_sql = "SELECT a.id, a.status, a.school_id, s.status as school_status, s.school_name 
+               FROM admins a
+               JOIN schools s ON a.school_id = s.id
+               WHERE a.id = $admin_id AND a.status = 1";
 $verify_result = mysqli_query($conn, $verify_sql);
+
 if (!$verify_result || mysqli_num_rows($verify_result) == 0) {
     // Admin no longer exists or is inactive
     session_destroy();
-    while (ob_get_level() > 0) {
-        ob_end_clean();
-    }
+    ob_end_clean();
     header("Location: ../index.php");
+    exit();
+}
+
+$admin_data = mysqli_fetch_assoc($verify_result);
+
+// ==================== CHECK SCHOOL STATUS ====================
+// If school is suspended, expired, or inactive, redirect to login with message
+if ($admin_data['school_status'] != 'Active') {
+    // Clear session
+    session_destroy();
+    
+    // Set message based on status
+    $message = '';
+    if ($admin_data['school_status'] == 'Suspended') {
+        $message = "Your school '{$admin_data['school_name']}' has been suspended. Please contact system administrator.";
+    } elseif ($admin_data['school_status'] == 'Expired') {
+        $message = "Your school subscription has expired. Please contact system administrator to renew.";
+    } else {
+        $message = "Your school account is inactive. Please contact system administrator.";
+    }
+    
+    // Store message in session to display on login page
+    session_start();
+    $_SESSION['login_error'] = $message;
+    session_write_close();
+    
+    ob_end_clean();
+    header("Location: ../mhs/login.php");
     exit();
 }
 
 // Get current admin info
 $admin_name = 'Guest';
 $admin_roles = [];
+$school_id = $admin_data['school_id'];
+$school_name = $admin_data['school_name'];
 
 if ($admin_id > 0) {
     $admin_sql = "SELECT a.*, 
@@ -59,6 +93,7 @@ if ($admin_id > 0) {
         $admin_roles = explode(',', $admin_info['roles'] ?? '');
     }
 }
+
 // Load user's theme settings from session or database
 $colors = [];
 $preferences = [];
@@ -174,41 +209,41 @@ $animation_speeds = [
 $animation_duration = isset($animation_speeds[$preferences['animation_speed']]) ? 
     $animation_speeds[$preferences['animation_speed']] : '0.3s';
 
-// Get real statistics from database
+// Get real statistics from database (with school_id filter)
 $stats_sql = "SELECT 
     -- Student counts
-    (SELECT COUNT(*) FROM students WHERE is_leaver = 0) as total_active_students,
-    (SELECT COUNT(*) FROM students WHERE class = 'Form Five' AND is_leaver = 0) as form_five_count,
-    (SELECT COUNT(*) FROM students WHERE class = 'Form Six' AND is_leaver = 0) as form_six_count,
-    (SELECT COUNT(*) FROM students WHERE is_leaver = 1) as leavers_count,
+    (SELECT COUNT(*) FROM students WHERE school_id = $school_id AND is_leaver = 0) as total_active_students,
+    (SELECT COUNT(*) FROM students WHERE school_id = $school_id AND class = 'Form Five' AND is_leaver = 0) as form_five_count,
+    (SELECT COUNT(*) FROM students WHERE school_id = $school_id AND class = 'Form Six' AND is_leaver = 0) as form_six_count,
+    (SELECT COUNT(*) FROM students WHERE school_id = $school_id AND is_leaver = 1) as leavers_count,
     
     -- Gender distribution
-    (SELECT COUNT(*) FROM students WHERE sex = 'Male' AND is_leaver = 0) as male_count,
-    (SELECT COUNT(*) FROM students WHERE sex = 'Female' AND is_leaver = 0) as female_count,
+    (SELECT COUNT(*) FROM students WHERE school_id = $school_id AND sex = 'Male' AND is_leaver = 0) as male_count,
+    (SELECT COUNT(*) FROM students WHERE school_id = $school_id AND sex = 'Female' AND is_leaver = 0) as female_count,
     
     -- Staff counts
-    (SELECT COUNT(*) FROM admins WHERE status = 1) as active_staff,
-    (SELECT COUNT(*) FROM admins WHERE status = 0) as inactive_staff,
+    (SELECT COUNT(*) FROM admins WHERE school_id = $school_id AND status = 1) as active_staff,
+    (SELECT COUNT(*) FROM admins WHERE school_id = $school_id AND status = 0) as inactive_staff,
     
     -- Dormitory occupancy
-    (SELECT SUM(current_occupancy) FROM dormitories) as total_dorm_occupancy,
-    (SELECT SUM(total_capacity) FROM dormitories) as total_dorm_capacity,
-    (SELECT COUNT(*) FROM dormitories WHERE status = 'Active') as active_dorms,
+    (SELECT COALESCE(SUM(current_occupancy), 0) FROM dormitories WHERE school_id = $school_id) as total_dorm_occupancy,
+    (SELECT COALESCE(SUM(total_capacity), 0) FROM dormitories WHERE school_id = $school_id) as total_dorm_capacity,
+    (SELECT COUNT(*) FROM dormitories WHERE school_id = $school_id AND status = 'Active') as active_dorms,
     
     -- Maintenance items
-    (SELECT COUNT(*) FROM maintenance_items WHERE status = 'available') as available_items,
-    (SELECT COUNT(*) FROM maintenance_items WHERE status = 'assigned') as assigned_items,
-    (SELECT COUNT(*) FROM maintenance_items WHERE status = 'damaged') as damaged_items,
+    (SELECT COUNT(*) FROM maintenance_items WHERE school_id = $school_id AND status = 'available') as available_items,
+    (SELECT COUNT(*) FROM maintenance_items WHERE school_id = $school_id AND status = 'assigned') as assigned_items,
+    (SELECT COUNT(*) FROM maintenance_items WHERE school_id = $school_id AND status = 'damaged') as damaged_items,
     
     -- Notifications
-    (SELECT COUNT(*) FROM notifications WHERE status = 'active') as total_notifications,
+    (SELECT COUNT(*) FROM notifications WHERE school_id = $school_id AND status = 'active') as total_notifications,
     
     -- Recent activities (last 7 days)
-    (SELECT COUNT(*) FROM admin_logs WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as recent_activities,
+    (SELECT COUNT(*) FROM admin_logs al WHERE al.school_id = $school_id AND al.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) as recent_activities,
     
     -- Locked accounts
-    (SELECT COUNT(*) FROM admins WHERE locked_until IS NOT NULL AND locked_until > NOW()) as locked_staff,
-    (SELECT COUNT(*) FROM students WHERE locked_until IS NOT NULL AND locked_until > NOW()) as locked_students";
+    (SELECT COUNT(*) FROM admins WHERE school_id = $school_id AND locked_until IS NOT NULL AND locked_until > NOW()) as locked_staff,
+    (SELECT COUNT(*) FROM students WHERE school_id = $school_id AND locked_until IS NOT NULL AND locked_until > NOW()) as locked_students";
 
 $stats_result = mysqli_query($conn, $stats_sql);
 $stats = mysqli_fetch_assoc($stats_result);
@@ -232,7 +267,8 @@ $academic_five_sql = "SELECT
     AVG(fr.eco) as avg_eco,
     AVG(fr.fren) as avg_fren
 FROM form_five_results fr
-WHERE fr.total_points IS NOT NULL";
+JOIN students s ON fr.student_id = s.id
+WHERE s.school_id = $school_id AND fr.total_points IS NOT NULL";
 $academic_five_result = mysqli_query($conn, $academic_five_sql);
 $academic_five = mysqli_fetch_assoc($academic_five_result);
 
@@ -255,7 +291,8 @@ $academic_six_sql = "SELECT
     AVG(fr.eco) as avg_eco,
     AVG(fr.fren) as avg_fren
 FROM form_six_results fr
-WHERE fr.total_points IS NOT NULL";
+JOIN students s ON fr.student_id = s.id
+WHERE s.school_id = $school_id AND fr.total_points IS NOT NULL";
 $academic_six_result = mysqli_query($conn, $academic_six_sql);
 $academic_six = mysqli_fetch_assoc($academic_six_result);
 
@@ -268,7 +305,7 @@ $exam_trend_sql = "SELECT
 FROM exam_types et
 LEFT JOIN form_five_results fr5 ON et.id = fr5.exam_type_id AND et.form_level = 'Form Five'
 LEFT JOIN form_six_results fr6 ON et.id = fr6.exam_type_id AND et.form_level = 'Form Six'
-WHERE et.is_active = 1 OR et.id IN (SELECT DISTINCT exam_type_id FROM form_five_results UNION SELECT DISTINCT exam_type_id FROM form_six_results)
+WHERE et.school_id = $school_id AND (et.is_active = 1 OR et.id IN (SELECT DISTINCT exam_type_id FROM form_five_results UNION SELECT DISTINCT exam_type_id FROM form_six_results))
 GROUP BY et.id
 ORDER BY et.year DESC, et.id DESC
 LIMIT 6";
@@ -290,7 +327,7 @@ $top_students_sql = "SELECT
     fr.division
 FROM students s
 JOIN form_five_results fr ON s.id = fr.student_id
-WHERE fr.total_points IS NOT NULL
+WHERE s.school_id = $school_id AND fr.total_points IS NOT NULL
 ORDER BY fr.total_points ASC, fr.average DESC
 LIMIT 5";
 $top_students_result = mysqli_query($conn, $top_students_sql);
@@ -311,7 +348,7 @@ if (count($top_students) < 5) {
         fr.division
     FROM students s
     JOIN form_six_results fr ON s.id = fr.student_id
-    WHERE fr.total_points IS NOT NULL
+    WHERE s.school_id = $school_id AND fr.total_points IS NOT NULL
     ORDER BY fr.total_points ASC, fr.average DESC
     LIMIT 5";
     $top_six_result = mysqli_query($conn, $top_six_sql);
@@ -367,9 +404,13 @@ $grade_distribution = [
     'D (50-59)' => 0, 'E (40-49)' => 0, 'S (35-39)' => 0, 'F (0-34)' => 0
 ];
 
-$grade_sql = "SELECT average FROM form_five_results WHERE average IS NOT NULL 
+$grade_sql = "SELECT average FROM form_five_results fr 
+              JOIN students s ON fr.student_id = s.id 
+              WHERE s.school_id = $school_id AND fr.average IS NOT NULL
               UNION ALL 
-              SELECT average FROM form_six_results WHERE average IS NOT NULL";
+              SELECT average FROM form_six_results fr 
+              JOIN students s ON fr.student_id = s.id 
+              WHERE s.school_id = $school_id AND fr.average IS NOT NULL";
 $grade_result = mysqli_query($conn, $grade_sql);
 while ($row = mysqli_fetch_assoc($grade_result)) {
     $avg = $row['average'];
@@ -410,7 +451,7 @@ if ($hour >= 5 && $hour < 12) {
 // Get combination distribution for chart
 $combo_stats_sql = "SELECT combination, COUNT(*) as student_count
                     FROM students 
-                    WHERE is_leaver = 0
+                    WHERE school_id = $school_id AND is_leaver = 0
                     GROUP BY combination
                     ORDER BY student_count DESC";
 $combo_stats = mysqli_query($conn, $combo_stats_sql);
@@ -431,7 +472,7 @@ if ($combo_stats && mysqli_num_rows($combo_stats) > 0) {
 $dorm_summary_sql = "SELECT dorm_name, dorm_type, current_occupancy, total_capacity,
                      (current_occupancy * 100 / total_capacity) as occupancy_percentage
                      FROM dormitories 
-                     WHERE status = 'Active'
+                     WHERE school_id = $school_id AND status = 'Active'
                      ORDER BY dorm_type, dorm_name";
 $dorm_summary = mysqli_query($conn, $dorm_summary_sql);
 $dorm_labels = [];
@@ -446,14 +487,16 @@ if ($dorm_summary && mysqli_num_rows($dorm_summary) > 0) {
         $dorm_capacity[] = (int)$dorm['total_capacity'];
     }
 }
-?>
 
+// Clear output buffer before sending HTML
+ob_end_clean();
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - Muyovozi High School</title>
+    <title>Dashboard - <?php echo htmlspecialchars($school_name); ?></title>
     
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">

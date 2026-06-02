@@ -1,11 +1,18 @@
 <?php
-// login.php - Simple Email Notification using PHP mail() function
+// login.php - TEMPORARY VERSION (without school_id requirements)
 session_start();
 require_once '../controller/db_connect.php';
 
 // Redirect if already logged in
-if (isset($_SESSION['admin_id']) || isset($_SESSION['student_id'])) {
-    if (isset($_SESSION['admin_id'])) {
+if (isset($_SESSION['admin_id']) || isset($_SESSION['student_id']) || isset($_SESSION['super_admin_id'])) {
+    if (isset($_SESSION['super_admin_id'])) {
+        if (file_exists('../super/dashboard.php')) {
+            header("Location: ../super/dashboard.php");
+        } else {
+            header("Location: muyovozi_home.php");
+        }
+        exit();
+    } elseif (isset($_SESSION['admin_id'])) {
         if (file_exists('../muyo/dashboard.php')) {
             header("Location: ../muyo/dashboard.php");
         } else {
@@ -27,18 +34,13 @@ $success = '';
 
 // ==================== SIMPLE EMAIL NOTIFICATION FUNCTION ====================
 function sendLoginNotification($name, $role, $email_to = 'muyovozimuyovozi1@gmail.com') {
-    // Set timezone to Tanzania
     date_default_timezone_set('Africa/Dar_es_Salaam');
     $login_time = date('Y-m-d H:i:s');
     $login_date = date('l, F j, Y');
-    
-    // Get IP address
     $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
     
-    // Email subject
     $subject = "Login Alert - School Management System";
     
-    // Email body (plain text for better compatibility)
     $message = "
 ===========================================
     School Management System LOGIN ALERT
@@ -53,18 +55,14 @@ Login Date: {$login_date}
 IP Address: {$ip}
 
 ===========================================
-he enter at this time
-===========================================
     ";
     
-    // Email headers
     $headers = "From: noreply@muyovozi.sc.tz\r\n";
     $headers .= "Reply-To: admin@muyovozi.sc.tz\r\n";
     $headers .= "X-Mailer: PHP/" . phpversion() . "\r\n";
     $headers .= "MIME-Version: 1.0\r\n";
     $headers .= "Content-Type: text/plain; charset=UTF-8\r\n";
     
-    // Send email
     if(mail($email_to, $subject, $message, $headers)) {
         error_log("Login notification sent to {$email_to} for user: {$name}");
         return true;
@@ -199,13 +197,69 @@ function getLockInfo($conn, $identifier, $type = 'admin') {
     return $result->fetch_assoc();
 }
 
+// ==================== SUPER ADMIN LOGIN FUNCTION ====================
+function verifySuperAdmin($conn, $email, $password) {
+    $sql = "SELECT * FROM super_admins 
+            WHERE email = ? 
+            AND status = 1";
+    
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) return false;
+    $stmt->bind_param("s", $email);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    
+    if ($result && $result->num_rows > 0) {
+        $super_admin = $result->fetch_assoc();
+        if (password_verify($password, $super_admin['password'])) {
+            $update_sql = "UPDATE super_admins 
+                           SET last_login = NOW(), 
+                               last_login_ip = ? 
+                           WHERE id = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            if ($update_stmt) {
+                $ip = $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+                $update_stmt->bind_param("si", $ip, $super_admin['id']);
+                $update_stmt->execute();
+                $update_stmt->close();
+            }
+            return $super_admin;
+        }
+    }
+    return false;
+}
+
 // ==================== HANDLE LOGIN POST ====================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = mysqli_real_escape_string($conn, $_POST['username'] ?? '');
     $password = $_POST['password'] ?? '';
     $login_successful = false;
     
-    // Check if account is locked
+    // FIRST: Check for Super Admin login (only if username contains @)
+    if (strpos($username, '@') !== false) {
+        $super_admin = verifySuperAdmin($conn, $username, $password);
+        if ($super_admin) {
+            $_SESSION['super_admin_id'] = $super_admin['id'];
+            $_SESSION['super_admin_name'] = $super_admin['first_name'] . ' ' . $super_admin['last_name'];
+            $_SESSION['super_admin_email'] = $super_admin['email'];
+            $_SESSION['super_admin_role'] = $super_admin['role'];
+            $_SESSION['user_type'] = 'super_admin';
+            
+            $user_full_name = $super_admin['first_name'] . ' ' . $super_admin['last_name'];
+            $user_role = 'Super Admin - ' . $super_admin['role'];
+            
+            sendLoginNotification($user_full_name, $user_role);
+            
+            if (file_exists('../super/dashboard.php')) {
+                header("Location: ../super/dashboard.php");
+            } else {
+                header("Location: super_dashboard.php");
+            }
+            exit();
+        }
+    }
+    
+    // Check if account is locked (for admin or student)
     if (isAccountLocked($conn, $username, 'admin') || isAccountLocked($conn, $username, 'student')) {
         $lock_info = getLockInfo($conn, $username, 'admin');
         if (!$lock_info) {
@@ -222,8 +276,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = "Account is temporarily locked. Please try again after 30 minutes.";
         }
     } else {
-        // Try admin login first
-        $admin_sql = "SELECT * FROM admins WHERE (email = ? OR phone_number = ?) AND status = 1";
+        // Try admin login first (TEMPORARY - without school_id)
+        $admin_sql = "SELECT * FROM admins 
+                      WHERE (email = ? OR phone_number = ?) 
+                      AND status = 1";
         $stmt = $conn->prepare($admin_sql);
         if ($stmt) {
             $stmt->bind_param("ss", $username, $username);
@@ -258,7 +314,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $_SESSION['admin_email'] = $admin['email'];
                     $_SESSION['user_type'] = 'admin';
                     
-                    // SEND SIMPLE EMAIL NOTIFICATION
                     sendLoginNotification($user_full_name, $user_role);
                     
                     if (file_exists('../muyo/dashboard.php')) {
@@ -281,9 +336,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         
-        // If admin login failed, try student login
+        // If admin login failed, try student login (TEMPORARY - without school_id)
         if (!$login_successful && empty($error)) {
-            $student_sql = "SELECT * FROM students WHERE admission_number = ? AND (is_leaver = FALSE OR is_leaver IS NULL)";
+            $student_sql = "SELECT * FROM students 
+                            WHERE admission_number = ? 
+                            AND (is_leaver = FALSE OR is_leaver IS NULL)
+                            AND status = 1";
             $stmt = $conn->prepare($student_sql);
             if ($stmt) {
                 $stmt->bind_param("s", $username);
@@ -310,7 +368,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $_SESSION['student_class'] = $student['class'] ?? 'Form Six';
                         $_SESSION['user_type'] = 'student';
                         
-                        // SEND SIMPLE EMAIL NOTIFICATION
                         sendLoginNotification($student_full_name, $user_role);
                         
                         if (file_exists('../candidates/dashboard.php')) {
@@ -350,7 +407,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    <style> * { margin: 0; padding: 0; box-sizing: border-box; } body {font-family: 'Poppins', sans-serif; background: linear-gradient(145deg, #d4e0ec 1%, #b6cddf 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; position: relative; } .portal-container {max-width: 1200px; width: 100%; background: rgba(255,255,255,0.7); backdrop-filter: blur(16px); border-radius: 2.2rem; box-shadow: 0 30px 55px rgba(0, 25, 45, 0.35); overflow: hidden; border: 1px solid rgba(255,255,255,0.5); } .split-row {display: flex; flex-wrap: wrap; min-height: 550px; } .carousel-side {flex: 1 1 50%; background: #0b2d3b; position: relative; overflow: hidden; border-radius: 2rem 0 0 2rem; } @media (max-width: 991.98px) {.carousel-side { display: none; } .login-side { flex: 1 1 100%; border-radius: 2rem; } .portal-container { max-width: 95%; } } .login-side {flex: 1 1 50%; background: white; display: flex; align-items: center; justify-content: center; padding: 2rem; border-radius: 0 2rem 2rem 0; } @media (max-width: 576px) {.login-side { padding: 1.5rem; } .login-form-container { padding: 0; } .welcome-title { font-size: 1.5rem !important; } .btn-signin { padding: 0.8rem !important; font-size: 1rem !important; } .input-wrapper { padding: 0.1rem 1rem !important; } .input-wrapper input { padding: 0.7rem 0.5rem !important; } } .login-form-container {width: 100%; max-width: 450px; } .welcome-title {font-size: 2rem; font-weight: 800; color: #0d2d3a; margin-bottom: 0.1rem; } .welcome-sub {color: #3b9db3; font-weight: 500; margin-bottom: 1.5rem; letter-spacing: 0.5px; } .input-group-custom {margin-bottom: 1.5rem; } .input-group-custom label {display: block; font-weight: 600; font-size: 0.82rem; color: #1f4b5a; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 0.3rem; } .input-wrapper {display: flex; align-items: center; background: #f0f6fa; border-radius: 60px; padding: 0.1rem 1.2rem; border: 2px solid transparent; transition: 0.2s; } .input-wrapper:focus-within {border-color: #3b9db3; background: white; box-shadow: 0 0 0 4px rgba(59,157,179,0.15); } .input-wrapper i {color: #3b9db3; font-size: 1.1rem; width: 24px; } .input-wrapper input {border: none; background: transparent; padding: 0.85rem 0.5rem; width: 100%; outline: none; font-size: 1rem; } .btn-signin {background: linear-gradient(125deg, #3b9db3, #1c6c80); color: white; border: none; border-radius: 60px; padding: 0.9rem; font-weight: 700; font-size: 1.1rem; width: 100%; margin: 1.2rem 0 1rem; transition: 0.2s; box-shadow: 0 12px 22px -8px #1c6c80; } .btn-signin:hover {background: #2d7c8f; transform: translateY(-2px); box-shadow: 0 18px 28px -8px #1c6c80; } .btn-signin:disabled {opacity: 0.7; transform: none; } .login-footer-links {display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 10px; } .login-footer-links a {text-decoration: none; color: #1d5b6b; font-weight: 500; transition: 0.2s; } .login-footer-links a:hover {color: #ffc107; } .lock-alert, .success-alert {padding: 12px 16px; border-radius: 30px; margin-bottom: 1.2rem; font-size: 0.85rem; display: flex; align-items: center; gap: 10px; animation: slideDown 0.3s ease; } @keyframes slideDown {from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } } .lock-alert {background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; } .success-alert {background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; } .lock-timer {font-weight: bold; color: #dc3545; margin-top: 8px; } .password-toggle-icon {cursor: pointer; color: #3b9db3; margin-left: 6px; } .loading-overlay {position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; } .loading-overlay.active { display: flex; } .loader {display: flex; gap: 8px; align-items: flex-end; margin-bottom: 20px; } .loader div {width: 12px; background: linear-gradient(145deg, #3b9db3, #1c6c80); border-radius: 4px; animation: load 1s infinite ease-in-out; } .loader div:nth-child(1) { height: 12px; animation-delay: 0s; } .loader div:nth-child(2) { height: 24px; animation-delay: 0.1s; } .loader div:nth-child(3) { height: 36px; animation-delay: 0.2s; } .loader div:nth-child(4) { height: 48px; animation-delay: 0.3s; } .loader div:nth-child(5) { height: 36px; animation-delay: 0.4s; } .loader div:nth-child(6) { height: 24px; animation-delay: 0.5s; } @keyframes load {0%, 100% { transform: scaleY(1); opacity: 0.6; } 50% { transform: scaleY(1.5); opacity: 1; background: #ffc107; } } .loading-text {font-family: 'Poppins', sans-serif; color: #1f4b5a; font-size: 1.1rem; font-weight: 500; margin-top: 10px; letter-spacing: 1px; } .loading-text span {color: #3b9db3; font-weight: 700; } .carousel-inner-custom {position: relative; width: 100%; height: 100%; min-height: 550px; } .carousel-slide {position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; opacity: 0; transition: opacity 1.2s ease-in-out; display: flex; align-items: flex-end; padding: 2.5rem; color: white; } .carousel-slide.active {opacity: 1; z-index: 10; } .carousel-slide::after {content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0,30,40,0.7) 0%, rgba(0,10,20,0.2) 70%); z-index: 1; } .slide-caption {position: relative; z-index: 20; max-width: 85%; text-shadow: 0 4px 12px rgba(0,0,0,0.5); } .slide-caption h2 {font-weight: 700; font-size: 1.8rem; margin-bottom: 0.4rem; } .slide-caption p {font-size: 0.9rem; opacity: 0.9; } .carousel-indicators-custom {position: absolute; bottom: 2rem; left: 2.5rem; z-index: 25; display: flex; gap: 0.8rem; } .indicator-dot {width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.5); cursor: pointer; transition: 0.2s; } .indicator-dot.active {background: #ffc107; transform: scale(1.3); box-shadow: 0 0 14px #ffc107; } .password-strength {height: 3px; margin-top: 5px; border-radius: 2px; background: #e9ecef; overflow: hidden; } .password-strength-bar {height: 100%; width: 0%; transition: width 0.3s ease; } .strength-weak { background: #dc3545; width: 33.33%; } .strength-medium { background: #ffc107; width: 66.66%; } .strength-strong { background: #28a745; width: 100%; } .user-type-hint {text-align: center; margin-top: 10px; font-size: 0.8rem; color: #6c757d; } .user-type-hint i {color: #ffc107; margin: 0 4px; } .modal-content {border-radius: 20px; } .modal-header.bg-info {background: linear-gradient(135deg, #3b9db3, #1c6c80) !important; border-radius: 20px 20px 0 0; } </style>
+    <style> * { margin: 0; padding: 0; box-sizing: border-box; } body {font-family: 'Poppins', sans-serif; background: linear-gradient(145deg, #d4e0ec 1%, #b6cddf 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; position: relative; } .portal-container {max-width: 1200px; width: 100%; background: rgba(255,255,255,0.7); backdrop-filter: blur(16px); border-radius: 2.2rem; box-shadow: 0 30px 55px rgba(0, 25, 45, 0.35); overflow: hidden; border: 1px solid rgba(255,255,255,0.5); } .split-row {display: flex; flex-wrap: wrap; min-height: 550px; } .carousel-side {flex: 1 1 50%; background: #0b2d3b; position: relative; overflow: hidden; border-radius: 2rem 0 0 2rem; } @media (max-width: 991.98px) {.carousel-side { display: none; } .login-side { flex: 1 1 100%; border-radius: 2rem; } .portal-container { max-width: 95%; } } .login-side {flex: 1 1 50%; background: white; display: flex; align-items: center; justify-content: center; padding: 2rem; border-radius: 0 2rem 2rem 0; } @media (max-width: 576px) {.login-side { padding: 1.5rem; } .login-form-container { padding: 0; } .welcome-title { font-size: 1.5rem !important; } .btn-signin { padding: 0.8rem !important; font-size: 1rem !important; } .input-wrapper { padding: 0.1rem 1rem !important; } .input-wrapper input { padding: 0.7rem 0.5rem !important; } } .login-form-container {width: 100%; max-width: 450px; } .welcome-title {font-size: 2rem; font-weight: 800; color: #0d2d3a; margin-bottom: 0.1rem; } .welcome-sub {color: #3b9db3; font-weight: 500; margin-bottom: 1.5rem; letter-spacing: 0.5px; } .input-group-custom {margin-bottom: 1.5rem; } .input-group-custom label {display: block; font-weight: 600; font-size: 0.82rem; color: #1f4b5a; text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 0.3rem; } .input-wrapper {display: flex; align-items: center; background: #f0f6fa; border-radius: 60px; padding: 0.1rem 1.2rem; border: 2px solid transparent; transition: 0.2s; } .input-wrapper:focus-within {border-color: #3b9db3; background: white; box-shadow: 0 0 0 4px rgba(59,157,179,0.15); } .input-wrapper i {color: #3b9db3; font-size: 1.1rem; width: 24px; } .input-wrapper input {border: none; background: transparent; padding: 0.85rem 0.5rem; width: 100%; outline: none; font-size: 1rem; } .btn-signin {background: linear-gradient(125deg, #3b9db3, #1c6c80); color: white; border: none; border-radius: 60px; padding: 0.9rem; font-weight: 700; font-size: 1.1rem; width: 100%; margin: 1.2rem 0 1rem; transition: 0.2s; box-shadow: 0 12px 22px -8px #1c6c80; } .btn-signin:hover {background: #2d7c8f; transform: translateY(-2px); box-shadow: 0 18px 28px -8px #1c6c80; } .btn-signin:disabled {opacity: 0.7; transform: none; } .login-footer-links {display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 1.5rem; flex-wrap: wrap; gap: 10px; } .login-footer-links a {text-decoration: none; color: #1d5b6b; font-weight: 500; transition: 0.2s; } .login-footer-links a:hover {color: #ffc107; } .lock-alert, .success-alert {padding: 12px 16px; border-radius: 30px; margin-bottom: 1.2rem; font-size: 0.85rem; display: flex; align-items: center; gap: 10px; animation: slideDown 0.3s ease; } @keyframes slideDown {from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } } .lock-alert {background-color: #fff3cd; border: 1px solid #ffeeba; color: #856404; } .success-alert {background-color: #d4edda; border: 1px solid #c3e6cb; color: #155724; } .lock-timer {font-weight: bold; color: #dc3545; margin-top: 8px; } .password-toggle-icon {cursor: pointer; color: #3b9db3; margin-left: 6px; } .loading-overlay {position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.98); backdrop-filter: blur(8px); display: none; justify-content: center; align-items: center; z-index: 9999; flex-direction: column; } .loading-overlay.active { display: flex; } .loader {display: flex; gap: 8px; align-items: flex-end; margin-bottom: 20px; } .loader div {width: 12px; background: linear-gradient(145deg, #3b9db3, #1c6c80); border-radius: 4px; animation: load 1s infinite ease-in-out; } .loader div:nth-child(1) { height: 12px; animation-delay: 0s; } .loader div:nth-child(2) { height: 24px; animation-delay: 0.1s; } .loader div:nth-child(3) { height: 36px; animation-delay: 0.2s; } .loader div:nth-child(4) { height: 48px; animation-delay: 0.3s; } .loader div:nth-child(5) { height: 36px; animation-delay: 0.4s; } .loader div:nth-child(6) { height: 24px; animation-delay: 0.5s; } @keyframes load {0%, 100% { transform: scaleY(1); opacity: 0.6; } 50% { transform: scaleY(1.5); opacity: 1; background: #ffc107; } } .loading-text {font-family: 'Poppins', sans-serif; color: #1f4b5a; font-size: 1.1rem; font-weight: 500; margin-top: 10px; letter-spacing: 1px; } .loading-text span {color: #3b9db3; font-weight: 700; } .carousel-inner-custom {position: relative; width: 100%; height: 100%; min-height: 550px; } .carousel-slide {position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-size: cover; background-position: center; opacity: 0; transition: opacity 1.2s ease-in-out; display: flex; align-items: flex-end; padding: 2.5rem; color: white; } .carousel-slide.active {opacity: 1; z-index: 10; } .carousel-slide::after {content: ''; position: absolute; inset: 0; background: linear-gradient(0deg, rgba(0,30,40,0.7) 0%, rgba(0,10,20,0.2) 70%); z-index: 1; } .slide-caption {position: relative; z-index: 20; max-width: 85%; text-shadow: 0 4px 12px rgba(0,0,0,0.5); } .slide-caption h2 {font-weight: 700; font-size: 1.8rem; margin-bottom: 0.4rem; } .slide-caption p {font-size: 0.9rem; opacity: 0.9; } .carousel-indicators-custom {position: absolute; bottom: 2rem; left: 2.5rem; z-index: 25; display: flex; gap: 0.8rem; } .indicator-dot {width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.5); cursor: pointer; transition: 0.2s; } .indicator-dot.active {background: #ffc107; transform: scale(1.3); box-shadow: 0 0 14px #ffc107; } .password-strength {height: 3px; margin-top: 5px; border-radius: 2px; background: #e9ecef; overflow: hidden; } .password-strength-bar {height: 100%; width: 0%; transition: width 0.3s ease; } .strength-weak { background: #dc3545; width: 33.33%; } .strength-medium { background: #ffc107; width: 66.66%; } .strength-strong { background: #28a745; width: 100%; } .user-type-hint {text-align: center; margin-top: 10px; font-size: 0.8rem; color: #6c757d; } .user-type-hint i {color: #ffc107; margin: 0 4px; } .modal-content {border-radius: 20px; } .modal-header.bg-info {background: linear-gradient(135deg, #3b9db3, #1c6c80) !important; border-radius: 20px 20px 0 0; } .super-badge {background: linear-gradient(135deg, #dc3545, #c82333); font-size: 0.7rem; padding: 2px 8px; border-radius: 20px; margin-left: 8px; color: white; } </style>
 </head>
 <body>
     <div class="loading-overlay" id="loadingOverlay">
@@ -486,6 +543,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
+                    <h6 class="text-danger"><i class="fas fa-crown me-2"></i>Super Admin Login:</h6>
+                    <ul>
+                        <li><strong>Email:</strong> tzone@gmail.com</li>
+                        <li><strong>Password:</strong> (Your Super Admin password)</li>
+                    </ul>
+                    
                     <h6 class="text-primary"><i class="fas fa-user-shield me-2"></i>Staff Login:</h6>
                     <ul>
                         <li><strong>Username:</strong> Your email address or phone number</li>
@@ -661,7 +724,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             const username = e.target.value;
             const hint = document.getElementById('userTypeHint');
             
-            if (username.includes('@')) {
+            if (username === 'tzone@gmail.com') {
+                hint.innerHTML = '<i class="fas fa-crown text-danger"></i> Super Admin login detected <i class="fas fa-shield-alt"></i> <span class="super-badge">SUPER</span>';
+            } else if (username.includes('@')) {
                 hint.innerHTML = '<i class="fas fa-shield-alt text-primary"></i> Staff login detected <i class="fas fa-user-shield"></i>';
             } else if (username.toUpperCase().startsWith('ADM') || username.match(/^[0-9]+$/)) {
                 hint.innerHTML = '<i class="fas fa-graduation-cap text-success"></i> Student login detected <i class="fas fa-user-graduate"></i>';
