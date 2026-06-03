@@ -468,7 +468,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             <div class="login-side">
                 <div class="login-form-container">
-                    <div class="welcome-title">Welcome Back</div>
+                    <div class="welcome-title">Welcome Back!</div>
                     <div class="welcome-sub">Login to School management System</div>
 
                     <?php if (!empty($error)): ?>
