@@ -66,6 +66,21 @@ function uploadSchoolLogo($file, $school_id, $school_code) {
     }
 }
 
+// ==================== AJAX: Get School Details ====================
+if (isset($_GET['ajax']) && $_GET['ajax'] == 'get_school' && isset($_GET['id'])) {
+    $school_id = (int)$_GET['id'];
+    $sql = "SELECT id, school_code, school_name, school_motto, address, phone, email, status, logo_path FROM schools WHERE id = $school_id";
+    $result = mysqli_query($conn, $sql);
+    if ($row = mysqli_fetch_assoc($result)) {
+        header('Content-Type: application/json');
+        echo json_encode($row);
+    } else {
+        http_response_code(404);
+        echo json_encode(['error' => 'School not found']);
+    }
+    exit();
+}
+
 // ==================== ADD SCHOOL ====================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_school'])) {
     $school_code = mysqli_real_escape_string($conn, trim($_POST['school_code']));
@@ -76,7 +91,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_school'])) {
     $email = mysqli_real_escape_string($conn, trim($_POST['email'] ?? ''));
     
     $errors = [];
-    
     if (empty($school_code)) $errors[] = "School code is required";
     if (empty($school_name)) $errors[] = "School name is required";
     
@@ -170,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['edit_school'])) {
     $stmt->bind_param("sssssssi", $school_code, $school_name, $school_motto, $address, $phone, $email, $status, $school_id);
     
     if ($stmt->execute()) {
-        // Handle logo upload
+        // Handle logo upload (replace if new file provided)
         if (isset($_FILES['school_logo']) && $_FILES['school_logo']['error'] === UPLOAD_ERR_OK) {
             // Delete old logo if exists
             if ($current_logo_path && file_exists('../' . $current_logo_path)) {
@@ -521,9 +535,9 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
     </div>
 </main>
 
-<!-- ADD SCHOOL MODAL -->
+<!-- ADD SCHOOL MODAL - Two Columns -->
 <div class="modal fade" id="addSchoolModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-plus-circle me-2"></i> Add New School</h5>
@@ -531,34 +545,40 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
             </div>
             <form method="POST" enctype="multipart/form-data">
                 <div class="modal-body">
-                    <div class="mb-3">
-                        <label class="form-label">School Code <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="school_code" required placeholder="e.g., MVZ001">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">School Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="school_name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">School Motto</label>
-                        <input type="text" class="form-control" name="school_motto">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">School Logo</label>
-                        <input type="file" class="form-control" name="school_logo" accept="image/*">
-                        <small class="text-muted">Max 2MB. JPG, PNG, GIF, WEBP</small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Address</label>
-                        <textarea class="form-control" name="address" rows="2"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Phone Number</label>
-                        <input type="tel" class="form-control" name="phone">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email Address</label>
-                        <input type="email" class="form-control" name="email">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">School Code <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="school_code" required placeholder="e.g., MVZ001">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">School Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="school_name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">School Motto</label>
+                                <input type="text" class="form-control" name="school_motto">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">School Logo</label>
+                                <input type="file" class="form-control" name="school_logo" accept="image/*">
+                                <small class="text-muted">Max 2MB. JPG, PNG, GIF, WEBP</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Address</label>
+                                <textarea class="form-control" name="address" rows="2"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Phone Number</label>
+                                <input type="tel" class="form-control" name="phone">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Email Address</label>
+                                <input type="email" class="form-control" name="email">
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -570,9 +590,9 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
     </div>
 </div>
 
-<!-- EDIT SCHOOL MODAL -->
+<!-- EDIT SCHOOL MODAL - Two Columns -->
 <div class="modal fade" id="editSchoolModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title"><i class="fas fa-edit me-2"></i> Edit School</h5>
@@ -590,43 +610,49 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
                             <i class="fas fa-trash me-1"></i> Remove Logo
                         </button>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">School Code <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="school_code" id="edit_school_code" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">School Name <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="school_name" id="edit_school_name" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">School Motto</label>
-                        <input type="text" class="form-control" name="school_motto" id="edit_school_motto">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Change Logo</label>
-                        <input type="file" class="form-control" name="school_logo" id="edit_school_logo" accept="image/*">
-                        <small class="text-muted">Leave empty to keep current logo</small>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Address</label>
-                        <textarea class="form-control" name="address" id="edit_address" rows="2"></textarea>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Phone Number</label>
-                        <input type="tel" class="form-control" name="phone" id="edit_phone">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Email Address</label>
-                        <input type="email" class="form-control" name="email" id="edit_email">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Status</label>
-                        <select class="form-select" name="status" id="edit_status">
-                            <option value="Active">Active</option>
-                            <option value="Suspended">Suspended</option>
-                            <option value="Expired">Expired</option>
-                            <option value="Inactive">Inactive</option>
-                        </select>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">School Code <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="school_code" id="edit_school_code" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">School Name <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" name="school_name" id="edit_school_name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">School Motto</label>
+                                <input type="text" class="form-control" name="school_motto" id="edit_school_motto">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Change Logo</label>
+                                <input type="file" class="form-control" name="school_logo" id="edit_school_logo" accept="image/*">
+                                <small class="text-muted">Leave empty to keep current logo</small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label">Address</label>
+                                <textarea class="form-control" name="address" id="edit_address" rows="2"></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Phone Number</label>
+                                <input type="tel" class="form-control" name="phone" id="edit_phone">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Email Address</label>
+                                <input type="email" class="form-control" name="email" id="edit_email">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" name="status" id="edit_status">
+                                    <option value="Active">Active</option>
+                                    <option value="Suspended">Suspended</option>
+                                    <option value="Expired">Expired</option>
+                                    <option value="Inactive">Inactive</option>
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -659,9 +685,8 @@ Swal.fire({
 
 function editSchool(id) {
     $.ajax({
-        url: 'get_school.php',
-        type: 'POST',
-        data: { id: id },
+        url: 'schools.php?ajax=get_school&id=' + id,
+        type: 'GET',
         dataType: 'json',
         success: function(data) {
             $('#edit_school_id').val(data.id);
@@ -678,12 +703,13 @@ function editSchool(id) {
                 $('#logoPreview').attr('src', '../' + data.logo_path).show();
                 $('#noLogoPreview').hide();
                 $('#removeLogoBtn').show();
-                $('#edit_school_logo').val('');
             } else {
                 $('#logoPreview').hide();
                 $('#noLogoPreview').show();
                 $('#removeLogoBtn').hide();
             }
+            // Clear file input
+            $('#edit_school_logo').val('');
             
             $('#editSchoolModal').modal('show');
         },

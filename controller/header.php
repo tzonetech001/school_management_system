@@ -1,6 +1,7 @@
 <?php
 // header.php - Admin Header with Notification Bell & Session Management
 // UPDATED: Added Super Admin support, School Motto from database, Multi-school support
+// FIXED: School logo now loads from school's logo_path (instead of hardcoded image)
 
 // NO OUTPUT BEFORE THIS LINE - NOT EVEN SPACES OR BLANK LINES!
 
@@ -66,6 +67,7 @@ $admin_id = null;
 $school_id = null;
 $school_name = "School Management System";
 $school_motto = "Education For Life";
+$school_logo_path = null;  // New variable for school logo
 $unread_notification_count = 0;
 $recent_notifications = [];
 
@@ -92,6 +94,7 @@ if ($is_super_admin) {
     // For Super Admin, we don't have a single school - they see all schools
     $school_id = null;
     $school_name = "School Management System";
+    $school_logo_path = null; // No school logo for super admin
     
     // Get all schools for dropdown (optional)
     $schools_sql = "SELECT id, school_name, school_motto FROM schools WHERE status = 'Active' ORDER BY school_name";
@@ -165,6 +168,7 @@ if ($is_super_admin) {
     $school_id = $user['school_id'];
     $school_name = $user['school_name'];
     $school_motto = !empty($user['school_motto']) ? $user['school_motto'] : "Education For Life";
+    $school_logo_path = $user['school_logo'] ?? null;  // Get school logo from DB
     
     // Get admin roles
     $roles_sql = "SELECT GROUP_CONCAT(DISTINCT ar.role_name ORDER BY ara.is_primary DESC, ar.role_name SEPARATOR ', ') as roles,
@@ -398,11 +402,27 @@ if ($bg_option === 'image') {
                 <div class="col-4 col-sm-4 col-md-3">
                     <div class="logo-container">
                         <?php
-                        $logoPath = "../muyovozi.jpg";
-                        if (file_exists($logoPath)) {
-                            echo '<img src="' . $logoPath . '" alt="School Management System Logo" class="logo-img">';
-                        } else {
-                            echo '<div class="logo-placeholder">M</div>';
+                        // Determine which logo to show
+                        $logo_rendered = false;
+                        
+                        if (!$is_super_admin && !empty($school_logo_path)) {
+                            // Regular admin with school logo: path is relative to root (e.g., 'uploads/school_logos/...')
+                            // Since header.php is inside 'controller/' folder, we need to prepend '../' to go to root
+                            $full_logo_path = '../' . $school_logo_path;
+                            if (file_exists($full_logo_path)) {
+                                echo '<img src="' . htmlspecialchars($full_logo_path) . '" alt="School Logo" class="logo-img">';
+                                $logo_rendered = true;
+                            }
+                        }
+                        
+                        if (!$logo_rendered) {
+                            // Fallback: default logo
+                            $default_logo = "../muyovozi.jpg";
+                            if (file_exists($default_logo)) {
+                                echo '<img src="' . $default_logo . '" alt="School Management System Logo" class="logo-img">';
+                            } else {
+                                echo '<div class="logo-placeholder">' . ($is_super_admin ? 'SA' : substr($school_name, 0, 1)) . '</div>';
+                            }
                         }
                         ?>
                         <div class="school-name d-none d-sm-block"> 
