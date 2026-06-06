@@ -1,6 +1,5 @@
 <?php
-// edit_admin.php
-session_start();
+
 require_once '../controller/db_connect.php';
 
 $error = '';
