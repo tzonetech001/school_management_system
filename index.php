@@ -39,22 +39,7 @@ $_SESSION['last_load_time'] = $loadTime;
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <!-- PRIMARY SEO META TAGS -->
-    <title>School Management system | Advanced Level Secondary School Kasulu Kigoma Tanzania</title> <meta name="description" content="School Management system is a leading advanced level secondary school located in Kasulu, Kigoma Tanzania. We provide quality education for Form Five and Form Six students. Excellent NECTA results, experienced teachers."> <meta name="keywords" content="School Management system, Muyovozi Secondary School, Muyovozi school Kasulu, Kigoma secondary schools, A level schools Tanzania, advanced level Kasulu, form five form six Kigoma, NECTA results Tanzania"> <meta name="author" content="School Management system"> <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large"> <meta name="googlebot" content="index, follow"> <meta name="google-site-verification" content="o7arwc_iyjUL-p6ia2-Ov0prfz68ZFRG33iLGRdSJvA">
-    
-    <!-- Open Graph / Social Media -->
-    <meta property="og:title" content="School Management system Kasulu Kigoma | Advanced Level Secondary School Tanzania"> <meta property="og:description" content="School Management system is a leading advanced level secondary school in Kasulu, Kigoma Tanzania. Quality education for Form Five and Form Six students."> <meta property="og:url" content="https://muyovozi.sc.tz/"> <meta property="og:type" content="website"> <meta property="og:site_name" content="School Management system"> <meta property="og:image" content="https://muyovozi.sc.tz/images/image1.png"> <meta property="og:locale" content="en_US">
-    
-    <!-- Twitter Card -->
-    <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="School Management system | Advanced Level Kasulu Kigoma">
-    <meta name="twitter:description" content="Leading advanced level secondary school in Kigoma, Tanzania. Quality education for Form Five and Form Six students.">
-    <meta name="twitter:image" content="https://muyovozi.sc.tz/images/image1.png">
-    
-    <!-- Canonical URL -->
-    <link rel="canonical" href="https://muyovozi.sc.tz/">
-    
+
     <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -145,7 +130,7 @@ $_SESSION['last_load_time'] = $loadTime;
         <!-- Features Section -->
         <section class="features-section">
             <div class="section-header">
-                <h2>Why Choose Muyovozi?</h2>
+                <h2>A-LEVEL ADMINISTRATIVE SYSTEM</h2>
                 <p>Discover what makes our school a center of academic excellence</p>
             </div>
             
@@ -175,10 +160,9 @@ $_SESSION['last_load_time'] = $loadTime;
         
         <!-- SEO Text Content -->
         <div class="seo-content-section">
-            <h2>School Management system Kasulu Kigoma | Advanced Level Secondary School Tanzania</h2>
+            <h2>School Management system | Advanced Level Secondary School Tanzania</h2>
             <p>School Management system is a premier advanced level secondary school located in Kasulu District, Kigoma Region, Tanzania. We take pride in being one of the leading advanced level schools in Kigoma with outstanding NECTA results.</p>
             
-            <p>For students seeking quality education in Kigoma, Muyovozi Secondary School offers experienced teachers, a friendly environment, and modern technology. Located in Kasulu District, Kigoma Region, Tanzania, near the historic Mtabila area.</p>
             
             <ul>
                 <li><strong>Excellent NECTA Results</strong> - Consistently top performance in national examinations</li>
