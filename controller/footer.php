@@ -23,9 +23,5 @@
     });
     </script>
     
-    <!-- Developer Credit -->
-    <div style="text-align: right; padding: 10px; background: #f8f9fa; border-top: 1px solid #dee2e6; bottom: 0.1px;">
-        <small>Developed by <b>Tzone</b><b style="color: coral;">Tech</b></small>
-    </div>
 </body>
 </html>

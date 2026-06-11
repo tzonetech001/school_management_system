@@ -194,6 +194,14 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                         <span>Teacher Subject</span>
                     </a>
                 </li>
+                <?php if ($is_normal_teacher || $is_class_teacher): ?>
+                <li>
+                    <a href="../academic/teacher_timetable" class="<?php echo ($current_page == 'teacher_timetable.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-download"></i>
+                        <span>Your Timetables</span>
+                    </a>
+                </li>
+                <?php endif; ?>
                 <li>
                     <a href="../academic/view_results" class="<?php echo ($current_page == 'view_results.php') ? 'active' : ''; ?>">
                         <i class="fas fa-eye"></i>
