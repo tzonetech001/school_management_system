@@ -5,6 +5,9 @@ require_once '../controller/db_connect.php';
 $error = '';
 $success = '';
 
+// current_school_id provided by db_connect.php
+$current_school_id = isset($current_school_id) ? $current_school_id : null;
+
 // Check if user has permission (Head Master or Second Master only)
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
@@ -47,10 +50,12 @@ if ($roles_result && mysqli_num_rows($roles_result) > 0) {
 
 // Function to update room occupancy
 function updateRoomOccupancy($conn, $room_id) {
+    global $current_school_id;
+    $school_cond = ($current_school_id !== null) ? " AND school_id = $current_school_id" : "";
     $update_sql = "UPDATE dormitory_rooms 
                    SET current_occupancy = (
                        SELECT COUNT(*) FROM student_dormitory 
-                       WHERE room_id = $room_id AND status = 'Active'
+                       WHERE room_id = $room_id AND status = 'Active' $school_cond
                    )
                    WHERE id = $room_id";
     return mysqli_query($conn, $update_sql);
@@ -58,12 +63,14 @@ function updateRoomOccupancy($conn, $room_id) {
 
 // Function to update dormitory occupancy
 function updateDormitoryOccupancy($conn, $dormitory_id) {
+    global $current_school_id;
+    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
     $update_sql = "UPDATE dormitories 
                    SET current_occupancy = (
                        SELECT COUNT(DISTINCT sd.id) 
                        FROM student_dormitory sd
                        JOIN dormitory_rooms dr ON sd.room_id = dr.id
-                       WHERE dr.dormitory_id = $dormitory_id AND sd.status = 'Active'
+                       WHERE dr.dormitory_id = $dormitory_id AND sd.status = 'Active' $school_cond
                    )
                    WHERE id = $dormitory_id";
     return mysqli_query($conn, $update_sql);
@@ -72,7 +79,9 @@ function updateDormitoryOccupancy($conn, $dormitory_id) {
 // Function to remove leavers/graduated students from dormitories
 function removeLeaversFromDormitories($conn) {
     $removed_count = 0;
-    
+    global $current_school_id;
+    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
+
     // Find female students who are leavers or graduated but still have active assignments
     $leavers_sql = "SELECT sd.id as assignment_id, sd.room_id, sd.dormitory_id, 
                            s.first_name, s.last_name, s.index_number,
@@ -80,13 +89,13 @@ function removeLeaversFromDormitories($conn) {
                     FROM student_dormitory sd
                     JOIN students s ON sd.student_id = s.id
                     JOIN dormitories d ON sd.dormitory_id = d.id
-                    WHERE sd.status = 'Active'
+                    WHERE sd.status = 'Active' $school_cond
                     AND s.sex = 'Female'
                     AND d.dorm_type = 'Female'
                     AND (s.is_leaver = TRUE 
                          OR s.class IN ('Leavers', 'Graduated') 
                          OR s.graduation_status IN ('Graduated', 'Left'))";
-    
+
     $leavers_result = mysqli_query($conn, $leavers_sql);
     
     if ($leavers_result && mysqli_num_rows($leavers_result) > 0) {
@@ -124,7 +133,7 @@ function cleanupStudentDormitoryAssignments($conn, $student_id) {
     
     // Get all active assignments for this student
     $assignments_sql = "SELECT id, room_id, dormitory_id FROM student_dormitory 
-                       WHERE student_id = $student_id AND status = 'Active'";
+                       WHERE student_id = $student_id AND status = 'Active'" . ($current_school_id !== null ? " AND school_id = $current_school_id" : "");
     $assignments_result = mysqli_query($conn, $assignments_sql);
     
     if ($assignments_result && mysqli_num_rows($assignments_result) > 0) {
@@ -168,13 +177,14 @@ if (isset($_GET['cleanup_student'])) {
     exit();
 }
 
-// Get all active female students (Form Five and Six, not leavers/graduated)
-$female_students_sql = "SELECT s.* FROM students s 
+    // Get all active female students (Form Five and Six, not leavers/graduated)
+    $school_filter = ($current_school_id !== null) ? " AND s.school_id = $current_school_id" : "";
+    $female_students_sql = "SELECT s.* FROM students s 
                        WHERE s.sex = 'Female' 
                        AND s.is_leaver = FALSE 
                        AND s.status = 1
                        AND s.class IN ('Form Five', 'Form Six')
-                       AND s.graduation_status NOT IN ('Graduated', 'Left')
+                       AND s.graduation_status NOT IN ('Graduated', 'Left') $school_filter
                        ORDER BY s.class, s.combination, s.first_name, s.last_name";
 
 $female_result = mysqli_query($conn, $female_students_sql);
@@ -186,6 +196,7 @@ if ($female_result && mysqli_num_rows($female_result) > 0) {
 }
 
 // Get all dormitory assignments for active female students
+$sd_school_filter = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
 $assignments_sql = "SELECT sd.*, s.first_name, s.last_name, s.index_number, s.class, s.combination,
                    s.is_leaver, s.graduation_status,
                    d.dorm_name, d.dorm_type, dr.room_number, dr.room_label, 
@@ -203,7 +214,7 @@ $assignments_sql = "SELECT sd.*, s.first_name, s.last_name, s.index_number, s.cl
                    AND d.dorm_type = 'Female'
                    AND s.is_leaver = FALSE
                    AND s.class IN ('Form Five', 'Form Six')
-                   AND s.graduation_status NOT IN ('Graduated', 'Left')
+                   AND s.graduation_status NOT IN ('Graduated', 'Left') $sd_school_filter
                    ORDER BY d.dorm_name, dr.room_number, s.first_name";
 
 $assignments_result = mysqli_query($conn, $assignments_sql);
@@ -215,9 +226,10 @@ if ($assignments_result && mysqli_num_rows($assignments_result) > 0) {
 }
 
 // Get female dormitories for dropdown
+$dorm_school_filter = ($current_school_id !== null) ? " AND school_id = $current_school_id" : "";
 $dormitories_sql = "SELECT * FROM dormitories 
                    WHERE dorm_type = 'Female' 
-                   AND status IN ('Active', 'Full')
+                   AND status IN ('Active', 'Full') $dorm_school_filter
                    ORDER BY dorm_name";
 
 $dormitories_result = mysqli_query($conn, $dormitories_sql);

@@ -5,6 +5,9 @@ require_once '../controller/db_connect.php';
 $error = '';
 $success = '';
 
+// current_school_id is provided by controller/db_connect.php (null for super-admin)
+$current_school_id = isset($current_school_id) ? $current_school_id : null;
+
 // Check if user has permission (Head Master or Second Master only)
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
@@ -47,10 +50,12 @@ if ($roles_result && mysqli_num_rows($roles_result) > 0) {
 
 // Function to update room occupancy
 function updateRoomOccupancy($conn, $room_id) {
+    global $current_school_id;
+    $school_cond = ($current_school_id !== null) ? " AND school_id = $current_school_id" : "";
     $update_sql = "UPDATE dormitory_rooms 
                    SET current_occupancy = (
                        SELECT COUNT(*) FROM student_dormitory 
-                       WHERE room_id = $room_id AND status = 'Active'
+                       WHERE room_id = $room_id AND status = 'Active' $school_cond
                    )
                    WHERE id = $room_id";
     return mysqli_query($conn, $update_sql);
@@ -58,12 +63,14 @@ function updateRoomOccupancy($conn, $room_id) {
 
 // Function to update dormitory occupancy
 function updateDormitoryOccupancy($conn, $dormitory_id) {
+    global $current_school_id;
+    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
     $update_sql = "UPDATE dormitories 
                    SET current_occupancy = (
                        SELECT COUNT(DISTINCT sd.id) 
                        FROM student_dormitory sd
                        JOIN dormitory_rooms dr ON sd.room_id = dr.id
-                       WHERE dr.dormitory_id = $dormitory_id AND sd.status = 'Active'
+                       WHERE dr.dormitory_id = $dormitory_id AND sd.status = 'Active' $school_cond
                    )
                    WHERE id = $dormitory_id";
     return mysqli_query($conn, $update_sql);
@@ -72,15 +79,17 @@ function updateDormitoryOccupancy($conn, $dormitory_id) {
 // Function to remove leavers/graduated students from dormitories
 function removeLeaversFromDormitories($conn) {
     $removed_count = 0;
-    
+    global $current_school_id;
+
     // Find students who are leavers or graduated but still have active assignments
+    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
     $leavers_sql = "SELECT sd.id as assignment_id, sd.room_id, sd.dormitory_id, 
                            s.first_name, s.last_name, s.index_number,
                            CONCAT(s.first_name, ' ', s.last_name) as student_name
                     FROM student_dormitory sd
                     JOIN students s ON sd.student_id = s.id
                     JOIN dormitories d ON sd.dormitory_id = d.id
-                    WHERE sd.status = 'Active'
+                    WHERE sd.status = 'Active' $school_cond
                     AND (s.is_leaver = TRUE 
                          OR s.class IN ('Leavers', 'Graduated') 
                          OR s.graduation_status IN ('Graduated', 'Left'))";
@@ -120,11 +129,12 @@ function removeLeaversFromDormitories($conn) {
 removeLeaversFromDormitories($conn);
 
 // Get all active students (Form Five and Six, not leavers/graduated)
+$school_filter = ($current_school_id !== null) ? " AND s.school_id = $current_school_id" : "";
 $students_sql = "SELECT s.* FROM students s 
                 WHERE s.is_leaver = FALSE 
                 AND s.status = 1
                 AND s.class IN ('Form Five', 'Form Six')
-                AND s.graduation_status NOT IN ('Graduated', 'Left')
+                AND s.graduation_status NOT IN ('Graduated', 'Left') $school_filter
                 ORDER BY s.sex, s.class, s.combination, s.first_name, s.last_name";
 
 $students_result = mysqli_query($conn, $students_sql);
@@ -143,6 +153,7 @@ if ($students_result && mysqli_num_rows($students_result) > 0) {
 }
 
 // Get all dormitory assignments for active students
+ $sd_school_filter = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
 $assignments_sql = "SELECT sd.*, s.first_name, s.last_name, s.index_number, s.class, s.combination, s.sex,
                    s.is_leaver, s.graduation_status,
                    d.dorm_name, d.dorm_type, dr.room_number, dr.room_label, 
@@ -159,6 +170,7 @@ $assignments_sql = "SELECT sd.*, s.first_name, s.last_name, s.index_number, s.cl
                    AND s.is_leaver = FALSE
                    AND s.class IN ('Form Five', 'Form Six')
                    AND s.graduation_status NOT IN ('Graduated', 'Left')
+                   $sd_school_filter
                    ORDER BY s.sex, d.dorm_name, dr.room_number, s.first_name";
 
 $assignments_result = mysqli_query($conn, $assignments_sql);
@@ -177,7 +189,8 @@ if ($assignments_result && mysqli_num_rows($assignments_result) > 0) {
 }
 
 // Get all dormitories
-$dormitories_sql = "SELECT * FROM dormitories WHERE status IN ('Active', 'Full') ORDER BY dorm_type, dorm_name";
+$dorm_school_filter = ($current_school_id !== null) ? " AND school_id = $current_school_id" : "";
+$dormitories_sql = "SELECT * FROM dormitories WHERE status IN ('Active', 'Full') $dorm_school_filter ORDER BY dorm_type, dorm_name";
 $dormitories_result = mysqli_query($conn, $dormitories_sql);
 $dormitories = [];
 $male_dormitories = [];
@@ -202,8 +215,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_student'])) {
     $assigned_by = $_SESSION['admin_id'];
     
     // Get student details
+    $student_school_cond = ($current_school_id !== null) ? " AND school_id = $current_school_id" : "";
     $student_sql = "SELECT CONCAT(first_name, ' ', last_name) as student_name, sex 
-                   FROM students WHERE id = $student_id";
+                   FROM students WHERE id = $student_id $student_school_cond";
     $student_result = mysqli_query($conn, $student_sql);
     $student_data = mysqli_fetch_assoc($student_result);
     $student_name = $student_data['student_name'] ?? 'Unknown';
@@ -212,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_student'])) {
     try {
         // Check if student already has active assignment
         $check_sql = "SELECT id FROM student_dormitory 
-                     WHERE student_id = $student_id AND status = 'Active'";
+                 WHERE student_id = $student_id AND status = 'Active' $sd_school_filter";
         $check_result = mysqli_query($conn, $check_sql);
         
         if (mysqli_num_rows($check_result) > 0) {
@@ -271,7 +285,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_assignment'])) 
     $updated_by = $_SESSION['admin_id'];
     
     // Get old room and dormitory info for occupancy updates
-    $old_info_sql = "SELECT room_id, dormitory_id FROM student_dormitory WHERE id = $assignment_id";
+    $old_info_sql = "SELECT room_id, dormitory_id FROM student_dormitory WHERE id = $assignment_id" . ($current_school_id !== null ? " AND school_id = $current_school_id" : "");
     $old_info_result = mysqli_query($conn, $old_info_sql);
     $old_info = mysqli_fetch_assoc($old_info_result);
     $old_room_id = $old_info['room_id'];
@@ -332,9 +346,9 @@ if (isset($_GET['remove_assignment'])) {
     try {
         // Get assignment details first
         $get_sql = "SELECT sd.*, s.first_name, s.last_name, s.sex 
-                   FROM student_dormitory sd
-                   JOIN students s ON sd.student_id = s.id
-                   WHERE sd.id = $assignment_id";
+                       FROM student_dormitory sd
+                       JOIN students s ON sd.student_id = s.id
+                       WHERE sd.id = $assignment_id" . ($current_school_id !== null ? " AND sd.school_id = $current_school_id" : "");
         $get_result = mysqli_query($conn, $get_sql);
         $assignment_data = mysqli_fetch_assoc($get_result);
         
@@ -390,7 +404,7 @@ if (isset($_GET['remove_student_dormitory'])) {
     try {
         // Get all assignments for this student
         $get_assignments_sql = "SELECT id, room_id, dormitory_id FROM student_dormitory 
-                               WHERE student_id = $student_id AND status = 'Active'";
+                       WHERE student_id = $student_id AND status = 'Active'" . ($current_school_id !== null ? " AND school_id = $current_school_id" : "");
         $assignments_result = mysqli_query($conn, $get_assignments_sql);
         
         $removed_count = 0;
