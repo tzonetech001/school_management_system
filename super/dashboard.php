@@ -351,7 +351,7 @@ $animation_duration = '0.3s';
                     <div class="mt-3">
                         <span class="badge bg-white text-dark me-2 px-3 py-2">
                             <i class="fas fa-crown me-1" style="color: var(--primary-color);"></i>
-                            System Administrator
+                            System Registrar
                         </span>
                         <span class="badge bg-white text-dark px-3 py-2">
                             <i class="fas fa-globe me-1" style="color: var(--primary-color);"></i>
@@ -424,49 +424,7 @@ $animation_duration = '0.3s';
             </div>
         </div>
 
-        <!-- All Schools Table -->
-        <div class="row">
-            <div class="col-12">
-                <div class="chart-container">
-                    <h5><i class="fas fa-building"></i> All Schools</h5>
-                    <div class="table-responsive">
-                        <table id="schoolsTable" class="table schools-table">
-                            <thead>
-                                <tr>
-                                    <th>Code</th>
-                                    <th>School Name</th>
-                                    <th>Motto</th>
-                                    <th>Address</th>
-                                    <th>Students</th>
-                                    <th>Staff</th>
-                                    <th>Status</th>
-                                    <th>Created</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php foreach ($all_schools as $school): ?>
-                                <tr>
-                                    <td><strong><?php echo htmlspecialchars($school['school_code']); ?></strong></td>
-                                    <td><?php echo htmlspecialchars($school['school_name']); ?></td>
-                                    <td><?php echo htmlspecialchars(substr($school['school_motto'] ?? '-', 0, 30)); ?></td>
-                                    <td><?php echo htmlspecialchars(substr($school['address'] ?? '-', 0, 40)); ?>...</td>
-                                    <td><?php echo number_format($school['total_students'] ?? 0); ?></td>
-                                    <td><?php echo number_format($school['total_admins'] ?? 0); ?></td>
-                                    <td>
-                                        <span class="status-badge status-<?php echo $school['status']; ?>">
-                                            <?php echo $school['status']; ?>
-                                        </span>
-                                    </td>
-                                    <td><?php echo date('M d, Y', strtotime($school['created_at'])); ?></td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
+       
         <!-- Recent Activities -->
         <div class="row">
             <div class="col-12">
