@@ -1,9 +1,8 @@
 <?php
-// generate_session_timetable.php - Save timetable for all teachers to access
+// generate_session_timetable.php - FIXED
 session_start();
 require_once '../controller/db_connect.php';
 
-// Check login
 if (!isset($_SESSION['admin_id'])) {
     header('Location: ../mhs/login.php');
     exit();
@@ -11,8 +10,8 @@ if (!isset($_SESSION['admin_id'])) {
 
 $admin_id = intval($_SESSION['admin_id']);
 
-// Get all form data
-$term = isset($_POST['term']) ? $_POST['term'] : 'Term 2';
+// ===== GET FORM DATA =====
+$term = isset($_POST['term']) ? trim($_POST['term']) : 'Term 02';
 $year = isset($_POST['year']) ? intval($_POST['year']) : date('Y');
 $start_time = isset($_POST['start_time']) ? $_POST['start_time'] : '08:00';
 $session_length = isset($_POST['session_length']) ? intval($_POST['session_length']) : 40;
@@ -21,9 +20,12 @@ $break_after = isset($_POST['break_after']) ? intval($_POST['break_after']) : 2;
 $break_length = isset($_POST['break_length']) ? intval($_POST['break_length']) : 30;
 $export_format = isset($_POST['export_format']) ? $_POST['export_format'] : 'excel';
 $action = isset($_POST['action']) ? $_POST['action'] : 'download';
-
-// Get selected days
 $selected_days = isset($_POST['days']) ? $_POST['days'] : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+
+// ===== DOCUMENT NAME - USE EXACT TERM =====
+$document_name = $term . ' Timetable - ' . $year;
+$filename_base = str_replace(' ', '_', $document_name);
+$days_joined = implode(', ', $selected_days);
 
 // Get school_id
 $school_id_query = "SELECT school_id FROM admins WHERE id = $admin_id";
@@ -32,21 +34,16 @@ $school_data = mysqli_fetch_assoc($school_result);
 $school_id = $school_data['school_id'];
 
 // Get combinations
-$form5_combinations_query = "SELECT DISTINCT combination FROM students WHERE class = 'Form Five' AND school_id = $school_id AND (is_leaver = 0 OR is_leaver IS NULL) AND combination IS NOT NULL AND combination != '' ORDER BY combination";
-$form5_result = mysqli_query($conn, $form5_combinations_query);
 $form5_combinations = [];
+$form5_result = mysqli_query($conn, "SELECT DISTINCT combination FROM students WHERE class = 'Form Five' AND school_id = $school_id AND (is_leaver = 0 OR is_leaver IS NULL) AND combination IS NOT NULL AND combination != '' ORDER BY combination");
 while ($row = mysqli_fetch_assoc($form5_result)) { $form5_combinations[] = $row['combination']; }
-
-$form6_combinations_query = "SELECT DISTINCT combination FROM students WHERE class = 'Form Six' AND school_id = $school_id AND (is_leaver = 0 OR is_leaver IS NULL) AND combination IS NOT NULL AND combination != '' ORDER BY combination";
-$form6_result = mysqli_query($conn, $form6_combinations_query);
-$form6_combinations = [];
-while ($row = mysqli_fetch_assoc($form6_result)) { $form6_combinations[] = $row['combination']; }
-
-// Fallbacks
 if (empty($form5_combinations)) { $form5_combinations = ['HGE', 'HGL', 'HGK', 'PCM', 'CBG', 'EGM', 'HGM']; }
+
+$form6_combinations = [];
+$form6_result = mysqli_query($conn, "SELECT DISTINCT combination FROM students WHERE class = 'Form Six' AND school_id = $school_id AND (is_leaver = 0 OR is_leaver IS NULL) AND combination IS NOT NULL AND combination != '' ORDER BY combination");
+while ($row = mysqli_fetch_assoc($form6_result)) { $form6_combinations[] = $row['combination']; }
 if (empty($form6_combinations)) { $form6_combinations = ['HGE', 'HGL', 'HGK', 'PCM', 'CBG', 'EGM', 'HGM']; }
 
-// Subject names
 $subject_names = [
     'ac' => 'Accountancy', 'htm' => 'Hotel Management', 'his' => 'History', 'geo' => 'Geography',
     'kisw' => 'Kiswahili', 'eng' => 'English', 'b_math' => 'Basic Math', 'adv_m' => 'Advanced Math',
@@ -63,83 +60,52 @@ $form6_teachers = [];
 $form6_assignments = mysqli_query($conn, "SELECT sta.subject, sta.teacher_id, sta.is_primary, CONCAT(a.first_name, ' ', a.last_name) as teacher_name FROM subject_teacher_assignments sta JOIN admins a ON sta.teacher_id = a.id WHERE sta.form_level = 'Form Six' AND sta.academic_year = $year AND sta.school_id = $school_id");
 while ($row = mysqli_fetch_assoc($form6_assignments)) { $form6_teachers[$row['subject']][] = $row; }
 
-// Function to add minutes to time
-function addMinutesToTime($time, $minutes) { 
-    return date('H:i', strtotime($time) + ($minutes * 60)); 
-}
+function addMinutesToTime($time, $minutes) { return date('H:i', strtotime($time) + ($minutes * 60)); }
 
-// Calculate schedule rows
 function calculateScheduleRows($start_time, $session_length, $sessions_per_day, $break_after, $break_length) {
     $rows = [];
     $current_time = $start_time;
     $session_number = 1;
-    
     for ($i = 1; $i <= $sessions_per_day; $i++) {
         $session_end = addMinutesToTime($current_time, $session_length);
-        $rows[] = [
-            'type' => 'session',
-            'number' => $session_number,
-            'start' => $current_time,
-            'end' => $session_end,
-            'label' => 'Session ' . $session_number
-        ];
-        
+        $rows[] = ['type' => 'session', 'number' => $session_number, 'start' => $current_time, 'end' => $session_end, 'label' => 'Session ' . $session_number];
         $current_time = $session_end;
         $session_number++;
-        
         if ($break_after > 0 && $i == $break_after) {
             $break_end = addMinutesToTime($current_time, $break_length);
-            $rows[] = [
-                'type' => 'break',
-                'start' => $current_time,
-                'end' => $break_end,
-                'duration' => $break_length,
-                'label' => 'BREAK'
-            ];
+            $rows[] = ['type' => 'break', 'start' => $current_time, 'end' => $break_end, 'duration' => $break_length, 'label' => 'BREAK'];
             $current_time = $break_end;
         }
     }
-    
     return $rows;
 }
 
 $schedule_rows = calculateScheduleRows($start_time, $session_length, $sessions_per_day, $break_after, $break_length);
 
-// Get school name
 $school_name = "School Management System";
 $school_q = mysqli_query($conn, "SELECT s.school_name FROM admins a JOIN schools s ON a.school_id = s.id WHERE a.id = $admin_id");
 if ($row = mysqli_fetch_assoc($school_q)) { $school_name = $row['school_name']; }
 
-$document_name = $term . ' Timetable - ' . $year;
-
-// Generate single class timetable
 function generateClassTimetable($class_name, $selected_days, $schedule_rows, $subject_teachers, $subject_names) {
     $available_subjects = array_keys($subject_teachers);
     if (empty($available_subjects)) { $available_subjects = array_keys($subject_names); }
     
     $schedule = [];
     $teacher_schedule = [];
-    
     foreach ($selected_days as $day) {
         $schedule[$day] = [];
         $session_counter = 1;
-        
         foreach ($schedule_rows as $row_index => $row) {
             if ($row['type'] == 'session') {
                 $available_subjects_shuffled = $available_subjects;
                 shuffle($available_subjects_shuffled);
                 $assigned = false;
-                
                 foreach ($available_subjects_shuffled as $subject) {
                     $teachers = $subject_teachers[$subject] ?? [];
                     if (empty($teachers)) continue;
-                    
                     $teacher = null;
-                    foreach ($teachers as $t) { 
-                        if ($t['is_primary'] == 1) { $teacher = $t; break; } 
-                    }
+                    foreach ($teachers as $t) { if ($t['is_primary'] == 1) { $teacher = $t; break; } }
                     if (!$teacher && !empty($teachers)) { $teacher = $teachers[0]; }
-                    
                     if ($teacher) {
                         $teacher_key = $teacher['teacher_id'] . '_' . $day . '_' . $session_counter;
                         if (!isset($teacher_schedule[$teacher_key])) {
@@ -155,7 +121,6 @@ function generateClassTimetable($class_name, $selected_days, $schedule_rows, $su
                         }
                     }
                 }
-                
                 if (!$assigned) {
                     $schedule[$day][$row_index] = [
                         'type' => 'session',
@@ -166,21 +131,16 @@ function generateClassTimetable($class_name, $selected_days, $schedule_rows, $su
                 }
                 $session_counter++;
             } else {
-                $schedule[$day][$row_index] = [
-                    'type' => 'break',
-                    'duration' => $row['duration']
-                ];
+                $schedule[$day][$row_index] = ['type' => 'break', 'duration' => $row['duration']];
             }
         }
     }
     
-    $html = '<div class="timetable-section" style="margin-bottom: 30px; page-break-after: avoid;">';
+    $html = '<div class="timetable-section" style="margin-bottom: 30px;">';
     $html .= '<table border="1" cellpadding="8" cellspacing="0" style="width: 100%; border-collapse: collapse;">';
-    
     $html .= '<tr style="background-color: #2c7a8f; color: white;">';
     $html .= '<td colspan="' . (count($selected_days) + 1) . '" style="text-align: center; font-size: 14px; font-weight: bold; padding: 12px;">' . htmlspecialchars($class_name) . '</td>';
     $html .= '</tr>';
-    
     $html .= '<tr style="background-color: #3B9DB3; color: white;">';
     $html .= '<th style="width: 100px; padding: 10px;">Day / Time</th>';
     foreach ($schedule_rows as $row) {
@@ -191,18 +151,14 @@ function generateClassTimetable($class_name, $selected_days, $schedule_rows, $su
         }
     }
     $html .= '</tr>';
-    
     foreach ($selected_days as $day) {
         $html .= '<tr>';
         $html .= '<td style="background-color: #e8f4f8; font-weight: bold; padding: 10px;">' . htmlspecialchars($day) . '</td>';
-        
         foreach ($schedule_rows as $row_index => $row) {
             $cell = $schedule[$day][$row_index] ?? ['type' => 'session', 'subject_name' => 'TBA', 'teacher_name' => 'Not Assigned'];
-            
             if ($cell['type'] == 'break') {
                 $html .= '<td style="background-color: #ffffcc; text-align: center; vertical-align: middle;">';
-                $html .= '<strong>BREAK</strong><br>';
-                $html .= '<small>' . $cell['duration'] . ' minutes</small>';
+                $html .= '<strong>BREAK</strong><br><small>' . $cell['duration'] . ' min</small>';
                 $html .= '</td>';
             } else {
                 $html .= '<td style="padding: 8px;">';
@@ -213,13 +169,11 @@ function generateClassTimetable($class_name, $selected_days, $schedule_rows, $su
         }
         $html .= '</tr>';
     }
-    
     $html .= '</table>';
     
     $displayed_teachers = [];
     $html .= '<div style="margin-top: 8px; margin-bottom: 15px; padding: 8px; background-color: #f8f9fa; border-left: 4px solid #3B9DB3; border-radius: 4px;">';
     $html .= '<strong><i class="fas fa-chalkboard-teacher"></i> Subject Teachers:</strong> ';
-    
     foreach ($schedule as $day => $day_data) {
         foreach ($day_data as $cell) {
             if (isset($cell['type']) && $cell['type'] == 'session' && isset($cell['teacher_name']) && $cell['teacher_name'] != 'Not Assigned' && $cell['teacher_name'] != '') {
@@ -234,7 +188,6 @@ function generateClassTimetable($class_name, $selected_days, $schedule_rows, $su
         }
     }
     $html .= '</div></div>';
-    
     return $html;
 }
 
@@ -244,72 +197,21 @@ $html = '<!DOCTYPE html>
     <meta charset="UTF-8">
     <title>' . htmlspecialchars($document_name) . '</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            margin: 20px; 
-            font-size: 12px;
-        }
-        .header { 
-            text-align: center; 
-            margin-bottom: 20px; 
-        }
-        .school-name { 
-            font-size: 20px; 
-            font-weight: bold; 
-        }
-        .document-name { 
-            font-size: 16px; 
-            font-weight: bold; 
-            margin-top: 5px;
-            color: #2c7a8f;
-        }
-        .config-info { 
-            text-align: center; 
-            margin-bottom: 20px; 
-            padding: 8px; 
-            background-color: #e8f4f8; 
-            border-radius: 5px; 
-            font-size: 11px; 
-        }
-        table { 
-            border-collapse: collapse; 
-            width: 100%; 
-            margin-bottom: 15px;
-        }
-        th { 
-            background-color: #3B9DB3; 
-            color: white; 
-            padding: 8px; 
-            border: 1px solid #000;
-            text-align: center;
-        }
-        td { 
-            border: 1px solid #000; 
-            padding: 8px; 
-            vertical-align: top;
-        }
-        .footer { 
-            margin-top: 30px; 
-            text-align: center; 
-            font-size: 10px; 
-            color: #999; 
-        }
-        @media print {
-            th { background-color: #3B9DB3 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        }
+        body { font-family: Arial, sans-serif; margin: 20px; font-size: 12px; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .school-name { font-size: 20px; font-weight: bold; }
+        .document-name { font-size: 16px; font-weight: bold; margin-top: 5px; color: #2c7a8f; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 15px; }
+        th { background-color: #3B9DB3; color: white; padding: 8px; border: 1px solid #000; text-align: center; }
+        td { border: 1px solid #000; padding: 8px; vertical-align: top; }
+        .footer { margin-top: 30px; text-align: center; font-size: 10px; color: #999; }
+        @media print { th { background-color: #3B9DB3 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
     </style>
 </head>
 <body>
     <div class="header">
         <div class="school-name">' . htmlspecialchars($school_name) . '</div>
         <div class="document-name">' . htmlspecialchars($document_name) . '</div>
-    </div>
-    <div class="config-info">
-        <strong>Schedule Configuration:</strong> Start: ' . $start_time . ' | Session Length: ' . $session_length . ' min | Sessions per Day: ' . $sessions_per_day;
-if ($break_after > 0 && $break_after <= $sessions_per_day) {
-    $html .= ' | Break: ' . $break_length . ' min after Session ' . $break_after;
-}
-$html .= '
     </div>';
 
 foreach ($form5_combinations as $combo) {
@@ -323,26 +225,28 @@ foreach ($form6_combinations as $combo) {
 $html .= '<div class="footer">Generated on: ' . date('F d, Y g:i A') . '<br>© ' . date('Y') . ' ' . htmlspecialchars($school_name) . '</div>';
 $html .= '</body></html>';
 
-// Ensure directory exists
+// ===== SAVE TIMETABLE =====
 $timetable_dir = '../uploads/timetables/';
-if (!file_exists($timetable_dir)) {
-    mkdir($timetable_dir, 0777, true);
-}
+if (!file_exists($timetable_dir)) { mkdir($timetable_dir, 0777, true); }
 
-// Save the timetable file for all teachers to access
-$filename_base = str_replace(' ', '_', $document_name);
 $filename = $timetable_dir . $filename_base . '.html';
 file_put_contents($filename, $html);
 
-// Also keep a record in database for easy retrieval
-$record_sql = "INSERT INTO generated_timetables (term, year, filename, generated_by, generated_at, school_id) 
-               VALUES (?, ?, ?, ?, NOW(), ?) 
-               ON DUPLICATE KEY UPDATE generated_at = NOW()";
-$stmt = $conn->prepare($record_sql);
-$stmt->bind_param("sisii", $term, $year, $filename_base, $admin_id, $school_id);
-$stmt->execute();
+// ===== SAVE TO DATABASE =====
+$delete_sql = "DELETE FROM generated_timetables WHERE term = ? AND year = ? AND school_id = ?";
+$delete_stmt = $conn->prepare($delete_sql);
+$delete_stmt->bind_param("sii", $term, $year, $school_id);
+$delete_stmt->execute();
 
-// Output based on action
+$insert_sql = "INSERT INTO generated_timetables 
+               (term, year, filename, generated_by, generated_at, school_id, 
+                break_after, break_length, start_time, session_length, sessions_per_day, days) 
+               VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)";
+$insert_stmt = $conn->prepare($insert_sql);
+$insert_stmt->bind_param("sisiiiiisss", $term, $year, $filename_base, $admin_id, $school_id, $break_after, $break_length, $start_time, $session_length, $sessions_per_day, $days_joined);
+$insert_stmt->execute();
+
+// ===== OUTPUT =====
 if ($action === 'download') {
     if ($export_format === 'excel') {
         header('Content-Type: application/vnd.ms-excel');

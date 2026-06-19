@@ -1,5 +1,5 @@
 <?php
-// timetable.php - Role-based timetable access
+// timetable.php - Admin dashboard with existing timetables
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -34,6 +34,58 @@ if ($user_roles_result && mysqli_num_rows($user_roles_result) > 0) {
 if (!$is_academic_admin) {
     header("Location: teacher_timetable.php");
     exit();
+}
+
+// Get school_id
+$school_query = "SELECT school_id FROM admins WHERE id = $admin_id";
+$school_result = mysqli_query($conn, $school_query);
+$school_data = mysqli_fetch_assoc($school_result);
+$school_id = $school_data['school_id'];
+
+// Handle delete - ADMIN CAN DELETE ANY TIMETABLE
+if (isset($_GET['delete']) && isset($_GET['id'])) {
+    $timetable_id = intval($_GET['id']);
+    
+    // Get the timetable details
+    $check_sql = "SELECT filename FROM generated_timetables WHERE id = ?";
+    $check_stmt = $conn->prepare($check_sql);
+    $check_stmt->bind_param("i", $timetable_id);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    
+    if ($check_result->num_rows > 0) {
+        $timetable = $check_result->fetch_assoc();
+        
+        // Delete the physical file
+        $file_path = '../uploads/timetables/' . $timetable['filename'] . '.html';
+        if (file_exists($file_path)) {
+            unlink($file_path);
+        }
+        
+        // Delete from database
+        $delete_sql = "DELETE FROM generated_timetables WHERE id = ?";
+        $delete_stmt = $conn->prepare($delete_sql);
+        $delete_stmt->bind_param("i", $timetable_id);
+        $delete_stmt->execute();
+        
+        $_SESSION['success'] = "Timetable deleted successfully!";
+    } else {
+        $_SESSION['error'] = "Timetable not found.";
+    }
+    
+    header("Location: timetable.php");
+    exit();
+}
+
+// Get existing timetables
+$timetables_query = "SELECT * FROM generated_timetables 
+                     WHERE school_id = $school_id 
+                     ORDER BY year DESC, 
+                     FIELD(term, 'Term 02', 'Term 01')";
+$timetables_result = mysqli_query($conn, $timetables_query);
+$available_timetables = [];
+while ($row = mysqli_fetch_assoc($timetables_result)) {
+    $available_timetables[] = $row;
 }
 
 // Load theme settings for this admin
@@ -94,6 +146,12 @@ $school_result = mysqli_query($conn, $school_query);
 if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
     $school_name = $row['school_name'];
 }
+
+// Get teacher name
+$teacher_query = "SELECT first_name, last_name FROM admins WHERE id = $admin_id";
+$teacher_result = mysqli_query($conn, $teacher_query);
+$teacher = mysqli_fetch_assoc($teacher_result);
+$teacher_name = $teacher['first_name'] . ' ' . $teacher['last_name'];
 ?>
 
 <!DOCTYPE html>
@@ -105,6 +163,7 @@ if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         :root {
             --primary-color: <?php echo $colors['primary']; ?>;
@@ -197,7 +256,6 @@ if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
             border-radius: 20px;
             overflow: hidden;
             box-shadow: 0 10px 40px rgba(0,0,0,0.1);
-            cursor: pointer;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             height: 100%;
             position: relative;
@@ -248,27 +306,6 @@ if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
             line-height: 1.6;
         }
 
-        .card-features {
-            padding: 0 30px 20px;
-            border-top: 1px solid var(--border-color);
-            margin-top: 10px;
-        }
-
-        .feature-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 0;
-            font-size: 13px;
-            color: var(--text-light);
-        }
-
-        .feature-item i {
-            width: 20px;
-            color: var(--primary-color);
-            font-size: 14px;
-        }
-
         .card-footer-btn {
             padding: 15px 30px 25px;
             text-align: center;
@@ -290,89 +327,152 @@ if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
             box-shadow: 0 5px 20px rgba(59, 157, 179, 0.4);
         }
 
-        .stats-section {
-            margin-top: 40px;
+        /* Existing Timetables Section */
+        .section-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-color);
+            margin-bottom: 25px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid var(--primary-light);
         }
 
-        .stat-card {
+        .section-title i {
+            color: var(--primary-color);
+            margin-right: 10px;
+        }
+
+        .timetable-item-card {
             background: white;
-            border-radius: 15px;
-            padding: 20px;
-            text-align: center;
-            transition: all 0.3s;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
             height: 100%;
         }
 
-        .stat-card:hover {
+        .timetable-item-card:hover {
             transform: translateY(-5px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
         }
 
-        .stat-number {
-            font-size: 32px;
-            font-weight: 800;
-            color: var(--primary-color);
-            margin-bottom: 5px;
+        .timetable-item-header {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            padding: 15px;
+            text-align: center;
         }
 
-        .stat-label {
-            font-size: 14px;
-            color: var(--text-light);
-            margin-bottom: 10px;
+        .timetable-item-body {
+            padding: 20px;
+            text-align: center;
         }
 
-        .stat-icon {
+        .timetable-item-icon {
             font-size: 40px;
-            color: var(--primary-light);
+            color: var(--primary-color);
             margin-bottom: 10px;
         }
 
-        .info-section {
-            background: white;
-            border-radius: 15px;
-            padding: 25px;
-            margin-top: 30px;
+        .btn-download {
+            background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            margin: 3px;
+            cursor: pointer;
         }
 
-        .info-title {
-            font-size: 18px;
-            font-weight: 700;
-            color: var(--text-color);
+        .btn-download:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(59, 157, 179, 0.3);
+        }
+
+        .btn-view {
+            background: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            margin: 3px;
+            cursor: pointer;
+        }
+
+        .btn-view:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        .btn-delete {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            margin: 3px;
+            cursor: pointer;
+        }
+
+        .btn-delete:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+        }
+
+        .btn-edit {
+            background: #ffc107;
+            color: #333;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            margin: 3px;
+            cursor: pointer;
+        }
+
+        .btn-edit:hover {
+            background: #e0a800;
+            transform: translateY(-2px);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px 20px;
+            background: white;
+            border-radius: 12px;
+        }
+
+        .empty-icon {
+            font-size: 60px;
+            color: var(--primary-light);
             margin-bottom: 15px;
         }
 
-        .info-text {
-            font-size: 13px;
-            color: var(--text-light);
-            line-height: 1.6;
+        .filter-section {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 25px;
         }
 
-        .quick-link {
-            display: inline-block;
-            margin-right: 15px;
-            margin-bottom: 10px;
-            color: var(--primary-color);
-            text-decoration: none;
-            font-size: 13px;
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 5px;
+            margin-top: 10px;
         }
 
-        .quick-link:hover {
-            text-decoration: underline;
-        }
-
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 24px;
             }
-            to {
-                opacity: 1;
-                transform: translateY(0);
+            .hero-section {
+                padding: 25px;
             }
-        }
-
-        .animate-in {
-            animation: fadeInUp 0.6s ease-out;
+            .action-buttons .btn {
+                font-size: 11px;
+                padding: 6px 12px;
+            }
         }
     </style>
 </head>
@@ -382,7 +482,21 @@ if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
 
     <div class="main-content">
         <div class="container-fluid">
-            <div class="hero-section animate-in">
+            <?php if (isset($_SESSION['success'])): ?>
+                <div class="alert alert-success alert-dismissible fade show">
+                    <?php echo $_SESSION['success']; unset($_SESSION['success']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+            <?php if (isset($_SESSION['error'])): ?>
+                <div class="alert alert-danger alert-dismissible fade show">
+                    <?php echo $_SESSION['error']; unset($_SESSION['error']); ?>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            <?php endif; ?>
+
+            <!-- Hero Section -->
+            <div class="hero-section">
                 <div class="hero-icon">
                     <i class="fas fa-calendar-alt"></i>
                 </div>
@@ -390,13 +504,14 @@ if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
                     <i class="fas fa-clock me-2"></i>Timetable Management
                 </h1>
                 <p class="hero-subtitle">
-                    Create, manage and publish timetables for academic sessions.<br>
-                    Streamline scheduling and ensure efficient time management for your institution.
+                    Welcome, <?php echo htmlspecialchars($teacher_name); ?>! 
+                    Create new timetables or manage existing ones below.
                 </p>
             </div>
 
-            <div class="row g-4">
-                <div class="col-md-6 col-lg-6 animate-in" style="animation-delay: 0.1s;">
+            <!-- Create New Section -->
+            <div class="row g-4 mb-5">
+                <div class="col-md-6">
                     <div class="timetable-card">
                         <div class="card-badge">
                             <i class="fas fa-star me-1"></i> ADMIN ACCESS
@@ -408,24 +523,6 @@ if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
                         <p class="card-description">
                             Create comprehensive daily class schedules with teacher assignments, subject allocation, and period management for Form 5 and Form 6.
                         </p>
-                        <div class="card-features">
-                            <div class="feature-item">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Form 5 & Form 6 combinations</span>
-                            </div>
-                            <div class="feature-item">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Customizable session times and break periods</span>
-                            </div>
-                            <div class="feature-item">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Export to Excel, PDF, or CSV formats</span>
-                            </div>
-                            <div class="feature-item">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Teacher assignment and workload management</span>
-                            </div>
-                        </div>
                         <div class="card-footer-btn">
                             <a href="session_timetable.php" class="btn btn-create">
                                 <i class="fas fa-plus-circle me-2"></i>Create Session Timetable
@@ -434,7 +531,7 @@ if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
                     </div>
                 </div>
 
-                <div class="col-md-6 col-lg-6 animate-in" style="animation-delay: 0.2s;">
+                <div class="col-md-6">
                     <div class="timetable-card">
                         <div class="card-badge" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
                             <i class="fas fa-calendar-week me-1"></i> COMING SOON
@@ -446,24 +543,6 @@ if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
                         <p class="card-description">
                             Plan and organize examination schedules with room allocation, invigilator assignments, and student seating arrangements.
                         </p>
-                        <div class="card-features">
-                            <div class="feature-item">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Exam schedule planning and conflict detection</span>
-                            </div>
-                            <div class="feature-item">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Room and invigilator allocation system</span>
-                            </div>
-                            <div class="feature-item">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Student seating arrangement management</span>
-                            </div>
-                            <div class="feature-item">
-                                <i class="fas fa-check-circle"></i>
-                                <span>Printable exam cards and notices</span>
-                            </div>
-                        </div>
                         <div class="card-footer-btn">
                             <button class="btn btn-create" disabled style="opacity: 0.6; cursor: not-allowed;">
                                 <i class="fas fa-clock me-2"></i>Coming Soon
@@ -473,152 +552,267 @@ if ($school_result && $row = mysqli_fetch_assoc($school_result)) {
                 </div>
             </div>
 
-            <div class="stats-section">
-                <div class="row g-4">
-                    <div class="col-md-3 col-sm-6 animate-in" style="animation-delay: 0.3s;">
-                        <div class="stat-card">
-                            <div class="stat-icon">
-                                <i class="fas fa-users"></i>
-                            </div>
-                            <div class="stat-number" id="statForm5">0</div>
-                            <div class="stat-label">Form 5 Combinations</div>
-                            <small class="text-muted">Active classes</small>
-                        </div>
+            <!-- Existing Timetables Section -->
+            <div class="section-title">
+                <i class="fas fa-list"></i>
+                Published Timetables
+                <span class="badge bg-primary ms-2"><?php echo count($available_timetables); ?></span>
+            </div>
+
+            <!-- Filter Section -->
+            <div class="filter-section">
+                <div class="row align-items-center">
+                    <div class="col-md-4 mb-2 mb-md-0">
+                        <label class="form-label"><i class="fas fa-filter me-1"></i>Term</label>
+                        <select id="filterTerm" class="form-select">
+                            <option value="all">All Terms</option>
+                            <option value="Term 01">Term 01</option>
+                            <option value="Term 02">Term 02</option>
+                        </select>
                     </div>
-                    <div class="col-md-3 col-sm-6 animate-in" style="animation-delay: 0.35s;">
-                        <div class="stat-card">
-                            <div class="stat-icon">
-                                <i class="fas fa-user-graduate"></i>
-                            </div>
-                            <div class="stat-number" id="statForm6">0</div>
-                            <div class="stat-label">Form 6 Combinations</div>
-                            <small class="text-muted">Active classes</small>
-                        </div>
+                    <div class="col-md-4 mb-2 mb-md-0">
+                        <label class="form-label"><i class="fas fa-calendar me-1"></i>Year</label>
+                        <select id="filterYear" class="form-select">
+                            <option value="all">All Years</option>
+                            <?php
+                            $years = array_unique(array_column($available_timetables, 'year'));
+                            rsort($years);
+                            foreach ($years as $year): ?>
+                                <option value="<?php echo $year; ?>"><?php echo $year; ?></option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
-                    <div class="col-md-3 col-sm-6 animate-in" style="animation-delay: 0.4s;">
-                        <div class="stat-card">
-                            <div class="stat-icon">
-                                <i class="fas fa-chalkboard-teacher"></i>
-                            </div>
-                            <div class="stat-number" id="statTeachers">0</div>
-                            <div class="stat-label">Total Teachers</div>
-                            <small class="text-muted">Active staff</small>
-                        </div>
-                    </div>
-                    <div class="col-md-3 col-sm-6 animate-in" style="animation-delay: 0.45s;">
-                        <div class="stat-card">
-                            <div class="stat-icon">
-                                <i class="fas fa-file-export"></i>
-                            </div>
-                            <div class="stat-number">3</div>
-                            <div class="stat-label">Export Formats</div>
-                            <small class="text-muted">Excel, PDF, CSV</small>
-                        </div>
+                    <div class="col-md-4">
+                        <button id="resetFilters" class="btn btn-secondary w-100">
+                            <i class="fas fa-undo-alt me-2"></i>Reset Filters
+                        </button>
                     </div>
                 </div>
             </div>
 
-            <div class="info-section animate-in" style="animation-delay: 0.5s;">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h5 class="info-title">
-                            <i class="fas fa-info-circle me-2" style="color: var(--primary-color);"></i>
-                            About Timetable Management
-                        </h5>
-                        <p class="info-text">
-                            The timetable management system allows you to create structured schedules for academic sessions.
-                            The system includes intelligent teacher assignment to avoid scheduling conflicts and supports multiple 
-                            export formats for easy distribution.
-                        </p>
-                    </div>
-                    <div class="col-md-6">
-                        <h5 class="info-title">
-                            <i class="fas fa-link me-2" style="color: var(--primary-color);"></i>
-                            Quick Links
-                        </h5>
-                        <div>
-                            <a href="session_timetable.php" class="quick-link">
-                                <i class="fas fa-chevron-right me-1"></i> Create Session Timetable
-                            </a>
-                            <a href="teacher_timetable.php" class="quick-link">
-                                <i class="fas fa-chevron-right me-1"></i> View Published Timetables
-                            </a>
-                            <a href="../manage_teachers/admins.php" class="quick-link">
-                                <i class="fas fa-chevron-right me-1"></i> Manage Teachers
-                            </a>
-                            <a href="../manage_subjects/assign_subject.php" class="quick-link">
-                                <i class="fas fa-chevron-right me-1"></i> Assign Subjects
-                            </a>
+            <!-- Timetables Grid -->
+            <div class="row" id="timetablesGrid">
+                <?php if (empty($available_timetables)): ?>
+                    <div class="col-12">
+                        <div class="empty-state">
+                            <div class="empty-icon"><i class="fas fa-calendar-times"></i></div>
+                            <h4>No Published Timetables</h4>
+                            <p class="text-muted">Click "Create Session Timetable" above to generate your first timetable.</p>
                         </div>
+                    </div>
+                <?php else: ?>
+                    <?php foreach ($available_timetables as $timetable): ?>
+                        <div class="col-md-6 col-lg-4 mb-4 timetable-item" 
+                             data-term="<?php echo htmlspecialchars($timetable['term']); ?>" 
+                             data-year="<?php echo $timetable['year']; ?>">
+                            <div class="timetable-item-card">
+                                <div class="timetable-item-header">
+                                    <i class="fas fa-calendar-alt fa-2x mb-2"></i>
+                                    <h5 class="mb-0"><?php echo htmlspecialchars($timetable['term']); ?></h5>
+                                    <small><?php echo $timetable['year']; ?></small>
+                                    <br>
+                                    <small class="badge bg-warning text-dark mt-1">
+                                        <i class="fas fa-crown me-1"></i>Admin Access
+                                    </small>
+                                </div>
+                                <div class="timetable-item-body">
+                                    <div class="timetable-item-icon"><i class="fas fa-file-alt"></i></div>
+                                    <p class="text-muted small">
+                                        <?php echo $timetable['sessions_per_day'] ?? '6'; ?> sessions | 
+                                        Break: <?php echo ($timetable['break_after'] ?? 0) > 0 ? 'After Session ' . ($timetable['break_after'] ?? 0) : 'No break'; ?>
+                                        <?php if (!empty($timetable['days'])): ?>
+                                            <br>Days: <?php echo htmlspecialchars($timetable['days']); ?>
+                                        <?php endif; ?>
+                                    </p>
+                                    <div class="action-buttons">
+                                        <button class="btn-download" onclick="downloadTimetable('<?php echo htmlspecialchars($timetable['filename']); ?>')">
+                                            <i class="fas fa-download me-1"></i>Download
+                                        </button>
+                                        <button class="btn-view" onclick="viewTimetable('<?php echo htmlspecialchars($timetable['filename']); ?>')">
+                                            <i class="fas fa-eye me-1"></i>View
+                                        </button>
+                                        <button class="btn-edit" onclick="editTimetable(<?php echo $timetable['id']; ?>)">
+                                            <i class="fas fa-edit me-1"></i>Edit
+                                        </button>
+                                        <button class="btn-delete" onclick="deleteTimetable(<?php echo $timetable['id']; ?>)">
+                                            <i class="fas fa-trash me-1"></i>Delete
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+            </div>
+
+            <!-- Info Card -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        <strong>Information:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li>Click <strong>View</strong> to open the timetable in your browser</li>
+                            <li>Click <strong>Download</strong> to save the timetable to your device</li>
+                            <li>Click <strong>Edit</strong> to modify timetable settings and regenerate</li>
+                            <li>Click <strong>Delete</strong> to permanently remove the timetable from the system</li>
+                        </ul>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- View Timetable Modal -->
+    <div class="modal fade" id="viewTimetableModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: white;">
+                    <h5 class="modal-title"><i class="fas fa-calendar-alt me-2"></i><span id="modalTitle">Timetable</span></h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0" id="modalBody">
+                    <div class="text-center p-5">
+                        <div class="spinner-border text-primary"></div>
+                        <p class="mt-3">Loading timetable...</p>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="printModalBtn">
+                        <i class="fas fa-print me-2"></i>Print / Save as PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <?php include '../controller/footer.php'; ?>
-    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
-        function loadStats() {
+        function filterTimetables() {
+            const term = $('#filterTerm').val();
+            const year = $('#filterYear').val();
+            
+            $('.timetable-item').each(function() {
+                const itemTerm = $(this).data('term');
+                const itemYear = $(this).data('year').toString();
+                
+                let show = true;
+                if (term !== 'all' && itemTerm !== term) show = false;
+                if (year !== 'all' && itemYear !== year) show = false;
+                
+                $(this).toggle(show);
+            });
+            
+            if ($('.timetable-item:visible').length === 0 && $('.timetable-item').length > 0) {
+                if ($('#noResultsMsg').length === 0) {
+                    $('#timetablesGrid').append(`
+                        <div id="noResultsMsg" class="col-12">
+                            <div class="alert alert-warning text-center">
+                                <i class="fas fa-exclamation-triangle me-2"></i>
+                                No timetables match your filters.
+                            </div>
+                        </div>
+                    `);
+                }
+            } else {
+                $('#noResultsMsg').remove();
+            }
+        }
+        
+        $('#filterTerm, #filterYear').on('change', filterTimetables);
+        
+        $('#resetFilters').on('click', function() {
+            $('#filterTerm').val('all');
+            $('#filterYear').val('all');
+            filterTimetables();
+        });
+        
+        function downloadTimetable(filename) {
+            window.location.href = 'download_timetable.php?file=' + encodeURIComponent(filename + '.html');
+        }
+        
+        function viewTimetable(filename) {
+            const displayName = filename.replace(/_/g, ' ');
+            $('#modalTitle').text(displayName);
+            $('#modalBody').html(`
+                <div class="text-center p-5">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-3">Loading timetable...</p>
+                </div>
+            `);
+            
             $.ajax({
-                url: 'get_stats.php',
-                method: 'GET',
-                dataType: 'json',
-                timeout: 5000,
-                success: function(data) {
-                    if (data.success) {
-                        $('#statForm5').text(data.form5_count || 0);
-                        $('#statForm6').text(data.form6_count || 0);
-                        $('#statTeachers').text(data.teachers_count || 0);
-                    } else {
-                        console.log('Error loading stats:', data.error);
-                        // Set default values
-                        $('#statForm5').text('N/A');
-                        $('#statForm6').text('N/A');
-                        $('#statTeachers').text('N/A');
-                    }
+                url: 'view_timetable.php?file=' + encodeURIComponent(filename + '.html'),
+                success: function(response) {
+                    $('#modalBody').html(response);
                 },
-                error: function(xhr, status, error) {
-                    console.log('Could not load stats:', error);
-                    $('#statForm5').text('N/A');
-                    $('#statForm6').text('N/A');
-                    $('#statTeachers').text('N/A');
+                error: function() {
+                    $('#modalBody').html(`
+                        <div class="alert alert-danger m-3">
+                            <i class="fas fa-exclamation-triangle me-2"></i>
+                            Error loading timetable. Please try again.
+                        </div>
+                    `);
+                }
+            });
+            
+            new bootstrap.Modal(document.getElementById('viewTimetableModal')).show();
+        }
+        
+        function deleteTimetable(id) {
+            Swal.fire({
+                title: 'Delete Timetable?',
+                text: 'This will permanently remove this timetable from the system. All teachers will lose access to it. This action cannot be undone!',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#dc3545',
+                cancelButtonColor: '#6c757d',
+                confirmButtonText: 'Yes, delete it permanently!'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    // Show processing message
+                    Swal.fire({
+                        title: 'Deleting...',
+                        text: 'Please wait while the timetable is being removed.',
+                        allowOutsideClick: false,
+                        didOpen: () => {
+                            Swal.showLoading();
+                        }
+                    });
+                    
+                    // Redirect to delete
+                    window.location.href = 'timetable.php?delete=1&id=' + id;
                 }
             });
         }
         
-        loadStats();
-
-        const observerOptions = {
-            threshold: 0.1,
-            rootMargin: '0px 0px -50px 0px'
-        };
-
-        const observer = new IntersectionObserver((entries) => {
-            entries.forEach(entry => {
-                if (entry.isIntersecting) {
-                    entry.target.style.opacity = '1';
-                    entry.target.style.transform = 'translateY(0)';
-                }
-            });
-        }, observerOptions);
-
-        document.querySelectorAll('.animate-in').forEach(el => {
-            el.style.opacity = '0';
-            el.style.transform = 'translateY(30px)';
-            observer.observe(el);
-        });
-
-        const cards = document.querySelectorAll('.timetable-card');
-        cards.forEach(card => {
-            card.addEventListener('mouseenter', () => {
-                card.style.transform = 'translateY(-10px)';
-            });
-            card.addEventListener('mouseleave', () => {
-                card.style.transform = 'translateY(0)';
-            });
+        function editTimetable(id) {
+            window.location.href = 'edit_timetable.php?id=' + id;
+        }
+        
+        $('#printModalBtn').on('click', function() {
+            const printContent = $('#modalBody').html();
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                    <head>
+                        <title>Timetable</title>
+                        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+                        <style>
+                            body { padding: 20px; }
+                            @media print { body { margin: 0; padding: 10px; } }
+                        </style>
+                    </head>
+                    <body>
+                        ${printContent}
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
         });
     </script>
 </body>
