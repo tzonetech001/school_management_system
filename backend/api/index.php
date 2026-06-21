@@ -11,7 +11,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 $uri = $_SERVER['REQUEST_URI'];
 $uri = strtok($uri, '?');
-$uri = str_replace('/api', '', $uri);
+// Remove the base path and /api prefix
+$uri = preg_replace('#^.*?/api/#', '/', $uri);
 $uri = rtrim($uri, '/');
 
 // Simple routing
@@ -25,9 +26,18 @@ switch ($uri) {
     case '/auth/logout':
         require __DIR__ . '/auth/logout.php';
         break;
+    case '/share/materials':
+        require __DIR__ . '/materials.php';
+        break;
+    case '/share/holiday_packages':
+        require __DIR__ . '/holiday_packages.php';
+        break;
+    case '/share/fee_payments':
+        require __DIR__ . '/fee_payments.php';
+        break;
     default:
         http_response_code(404);
-        echo json_encode(['success' => false, 'message' => 'Endpoint not found']);
+        echo json_encode(['success' => false, 'message' => 'Endpoint not found', 'path' => $uri]);
         break;
 }
 ?>

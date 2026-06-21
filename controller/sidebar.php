@@ -1,4 +1,4 @@
- <?php
+<?php
 // Start session if not already started
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -194,11 +194,11 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                         <span>Teacher Subject</span>
                     </a>
                 </li>
-                <?php if ($is_normal_teacher || $is_class_teacher): ?>
+                <?php if ($is_normal_teacher || $is_class_teacher || $is_head_master || $is_second_master || $is_academic_master): ?>
                 <li>
                     <a href="../academic/teacher_timetable" class="<?php echo ($current_page == 'teacher_timetable.php') ? 'active' : ''; ?>">
                         <i class="fas fa-download"></i>
-                        <span>Your Timetables</span>
+                        <span>Teacher Timetables</span>
                     </a>
                 </li>
                 <?php endif; ?>
@@ -428,7 +428,45 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                 <small><i class="fas fa-school me-1"></i>SCHOOL SERVICES</small>
             </div>
         </li>
-        
+
+        <!-- ====== NEW FINANCE DROPDOWN ====== -->
+        <?php if ($is_head_master || $is_bursar_store): ?>
+        <li class="sidebar-dropdown">
+            <a href="#" class="dropdown-toggle <?php echo (in_array($current_page, ['settings.php', 'record_payment.php', 'payments.php']) && $current_dir == 'fee') ? 'active' : ''; ?>">
+                <i class="fas fa-coins"></i>
+                <span class="menu-text">Finance</span>
+                <span class="dropdown-arrow">
+                    <i class="fas fa-chevron-down"></i>
+                </span>
+            </a>
+            <ul class="sub-menu">
+                <?php if ($is_head_master): ?>
+                <li>
+                    <a href="../fee/settings" class="<?php echo ($current_page == 'settings.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-sliders-h"></i>
+                        <span>Fee Settings</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+                <?php if ($is_bursar_store): ?>
+                <li>
+                    <a href="../fee/record_payment" class="<?php echo ($current_page == 'record_payment.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-hand-holding-usd"></i>
+                        <span>Record Payment</span>
+                    </a>
+                </li>
+                <?php endif; ?>
+                <li>
+                    <a href="../fee/payments" class="<?php echo ($current_page == 'payments.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-file-invoice"></i>
+                        <span>Payment Reports</span>
+                    </a>
+                </li>
+            </ul>
+        </li>
+        <?php endif; ?>
+        <!-- ====== END FINANCE ====== -->
+
         <!-- Message Center -->
         <?php if ($is_head_master || $is_second_master || $is_academic_master): ?>
         <li>

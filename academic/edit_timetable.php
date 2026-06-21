@@ -58,7 +58,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $break_after = isset($_POST['break_after']) ? intval($_POST['break_after']) : $timetable['break_after'];
     $break_length = isset($_POST['break_length']) ? intval($_POST['break_length']) : $timetable['break_length'];
     $days = isset($_POST['days']) ? $_POST['days'] : explode(', ', $timetable['days']);
-    
+
+    // Handle generated_at options
+    $generated_action = isset($_POST['generated_action']) ? $_POST['generated_action'] : 'keep';
+    $custom_generated_at = isset($_POST['custom_generated_at']) ? $_POST['custom_generated_at'] : '';
+
+    $generated_at_override = null;
+    if ($generated_action === 'now') {
+        $generated_at_override = date('Y-m-d H:i:s');
+    } elseif ($generated_action === 'clear') {
+        $generated_at_override = null;
+    } elseif ($generated_action === 'custom' && !empty($custom_generated_at)) {
+        $generated_at_override = str_replace('T', ' ', $custom_generated_at);
+        if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?:[:\d{2}]*)?$/', $generated_at_override)) {
+            $generated_at_override = $timetable['generated_at'];
+        }
+    } else {
+        $generated_at_override = $timetable['generated_at'];
+    }
+
     // Store in session for regenerate
     $_SESSION['edit_params'] = [
         'timetable_id' => $timetable_id,
@@ -69,7 +87,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'sessions_per_day' => $sessions_per_day,
         'break_after' => $break_after,
         'break_length' => $break_length,
-        'days' => $days
+        'days' => $days,
+        'generated_action' => $generated_action,
+        'custom_generated_at' => $custom_generated_at,
+        'generated_at_override' => $generated_at_override,
+        'generated_by_override' => $timetable['generated_by']
     ];
     
     header('Location: regenerate_timetable.php');
@@ -298,6 +320,30 @@ $compact_mode = isset($preferences['compact_mode']) && $preferences['compact_mod
                             </div>
                         </div>
                         
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label class="form-label"><i class="fas fa-clock me-1"></i>Generated Timestamp</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="generated_action" id="gen_keep" value="keep" checked>
+                                    <label class="form-check-label" for="gen_keep">Keep existing</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="generated_action" id="gen_now" value="now">
+                                    <label class="form-check-label" for="gen_now">Set to now</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="radio" name="generated_action" id="gen_clear" value="clear">
+                                    <label class="form-check-label" for="gen_clear">Clear timestamp</label>
+                                </div>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="radio" name="generated_action" id="gen_custom" value="custom">
+                                    <label class="form-check-label" for="gen_custom">Set custom</label>
+                                    <input type="datetime-local" name="custom_generated_at" id="custom_generated_at" class="form-control mt-2" style="max-width:260px;" disabled>
+                                </div>
+                                <div class="form-text">Choose whether to update or clear the generated timestamp.</div>
+                            </div>
+                        </div>
+
                         <div class="mt-4">
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-save me-2"></i>Save & Regenerate
@@ -326,6 +372,15 @@ $compact_mode = isset($preferences['compact_mode']) && $preferences['compact_mod
             
             $('select[name="term"], #yearInput').on('change keyup', updateDocPreview);
             updateDocPreview();
+
+            // Toggle custom generated_at input
+            $('input[name="generated_action"]').on('change', function() {
+                if ($('#gen_custom').is(':checked')) {
+                    $('#custom_generated_at').prop('disabled', false);
+                } else {
+                    $('#custom_generated_at').prop('disabled', true);
+                }
+            });
         });
     </script>
 </body>

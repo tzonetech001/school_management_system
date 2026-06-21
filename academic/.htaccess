@@ -5,5 +5,7 @@ RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME}.php -f
 RewriteRule ^(.+)$ $1.php [L]
 
+# Skip redirect for POST requests (AJAX calls)
+RewriteCond %{REQUEST_METHOD} !POST
 RewriteCond %{THE_REQUEST} \s/+(.*)\.php[\s?] [NC]
 RewriteRule ^ /%1 [R=301,L]

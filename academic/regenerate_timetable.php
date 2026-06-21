@@ -23,7 +23,7 @@ unset($_SESSION['edit_params']);
 
 // Get the original timetable to delete old file
 if ($timetable_id > 0) {
-    $original_query = "SELECT filename FROM generated_timetables WHERE id = ?";
+    $original_query = "SELECT filename, generated_by, generated_at FROM generated_timetables WHERE id = ?";
     $stmt = $conn->prepare($original_query);
     $stmt->bind_param("i", $timetable_id);
     $stmt->execute();
@@ -43,7 +43,43 @@ if ($timetable_id > 0) {
         $delete_stmt = $conn->prepare($delete_sql);
         $delete_stmt->bind_param("i", $timetable_id);
         $delete_stmt->execute();
+
+        $original_generated_by = intval($original['generated_by']);
+        $original_generated_at = $original['generated_at'];
+    } else {
+        $original_generated_by = 0;
+        $original_generated_at = null;
     }
+} else {
+    $original_generated_by = 0;
+    $original_generated_at = null;
+}
+
+$generated_at_override = null;
+if (isset($params['generated_action'])) {
+    switch ($params['generated_action']) {
+        case 'now':
+            $generated_at_override = date('Y-m-d H:i:s');
+            break;
+        case 'clear':
+            $generated_at_override = null;
+            break;
+        case 'custom':
+            if (!empty($params['custom_generated_at'])) {
+                $generated_at_override = str_replace('T', ' ', $params['custom_generated_at']);
+                if (!preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(?:[:\d{2}]*)?$/', $generated_at_override)) {
+                    $generated_at_override = $original_generated_at;
+                }
+            } else {
+                $generated_at_override = $original_generated_at;
+            }
+            break;
+        default:
+            $generated_at_override = $original_generated_at;
+            break;
+    }
+} else {
+    $generated_at_override = $original_generated_at;
 }
 
 // Forward to generate with the parameters
@@ -57,7 +93,11 @@ $_POST = [
     'break_length' => $params['break_length'],
     'days' => $params['days'],
     'export_format' => 'excel',
-    'action' => 'save'
+    'action' => 'save',
+    'generated_by_override' => $original_generated_by > 0 ? $original_generated_by : $_SESSION['admin_id'],
+    'generated_at_override' => $generated_at_override,
+    'last_updated_by_override' => $_SESSION['admin_id'],
+    'last_updated_at_override' => date('Y-m-d H:i:s')
 ];
 
 // Include the generation file - this will create the new file

@@ -15,33 +15,42 @@ if (empty($phone)) {
     exit;
 }
 
-// Clean phone number (remove spaces)
-$phone = preg_replace('/\s+/', '', $phone);
-
-try {
-    $pdo = getDBConnection();
+    // Clean phone number (remove spaces)
+    $phone = preg_replace('/\s+/', '', $phone);
     
-    // Remove leading + for database check
-    $phoneWithoutPlus = ltrim($phone, '+');
-    
-    // Check if parent exists in students table
-    $stmt = $pdo->prepare("
-        SELECT 
-            id,
-            CONCAT(first_name, ' ', last_name) AS name,
-            parent_name,
-            parent_phone AS phone,
-            class,
-            combination,
-            index_number,
-            admission_number
-        FROM students 
-        WHERE (parent_phone = ? OR parent_phone = ?)
-        AND status = 1 
-        AND is_leaver = 0
-        LIMIT 1
-    ");
-    $stmt->execute([$phone, $phoneWithoutPlus]);
+    try {
+        $pdo = getDBConnection();
+        
+        // Normalize phone number - handle both +255 and 0 prefixes
+        $phoneNormalized = $phone;
+        $phoneWithoutPlus = ltrim($phone, '+');
+        
+        // If starts with 0, replace with 255
+        if (strpos($phone, '0') === 0) {
+            $phoneNormalized = '+255' . substr($phone, 1);
+            $phoneWithoutPlus = '255' . substr($phone, 1);
+        } elseif (strpos($phone, '+255') === 0) {
+            $phoneWithoutPlus = '255' . substr($phone, 4);
+        }
+        
+        // Check if parent exists in students table - search with all variations
+        $stmt = $pdo->prepare("
+            SELECT 
+                id,
+                CONCAT(first_name, ' ', last_name) AS name,
+                parent_name,
+                parent_phone AS phone,
+                class,
+                combination,
+                index_number,
+                admission_number
+            FROM students 
+            WHERE (parent_phone = ? OR parent_phone = ? OR parent_phone = ? OR parent_phone = ?)
+            AND status = 1 
+            AND is_leaver = 0
+            LIMIT 1
+        ");
+        $stmt->execute([$phone, $phoneNormalized, $phoneWithoutPlus, ltrim($phoneWithoutPlus, '255')]);
     $student = $stmt->fetch();
     
     if (!$student) {

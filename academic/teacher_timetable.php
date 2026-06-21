@@ -107,10 +107,14 @@ if (isset($_GET['edit']) && isset($_GET['id'])) {
 }
 
 // Get timetables
-$timetables_query = "SELECT * FROM generated_timetables 
-                     WHERE school_id = $school_id 
-                     ORDER BY year DESC, 
-                     FIELD(term, 'Term 02', 'Term 01')";
+$timetables_query = "SELECT gt.*, 
+       CONCAT(gf.first_name, ' ', gf.last_name) AS generated_by_name, 
+       CONCAT(uf.first_name, ' ', uf.last_name) AS updated_by_name 
+       FROM generated_timetables gt 
+       LEFT JOIN admins gf ON gt.generated_by = gf.id 
+       LEFT JOIN admins uf ON gt.last_updated_by = uf.id 
+       WHERE gt.school_id = $school_id 
+       ORDER BY gt.year DESC, FIELD(gt.term, 'Term 02', 'Term 01')";
 $timetables_result = mysqli_query($conn, $timetables_query);
 $available_timetables = [];
 while ($row = mysqli_fetch_assoc($timetables_result)) {
@@ -326,6 +330,10 @@ $compact_mode = isset($preferences['compact_mode']) && $preferences['compact_mod
                                     <i class="fas fa-calendar-alt fa-2x mb-2"></i>
                                     <h5 class="mb-0"><?php echo htmlspecialchars($timetable['term']); ?></h5>
                                     <small><?php echo $timetable['year']; ?></small>
+                                    <?php if (!empty($timetable['generated_at'])): ?>
+                                        <br>
+                                        <small style="font-size:11px;color:#f1f1f1;opacity:0.95;">Generated: <?php echo date('l, F d, Y g:i A', strtotime($timetable['generated_at'])); ?></small>
+                                    <?php endif; ?>
                                     <br>
                                     <small class="badge <?php echo $badge_class; ?> mt-1">
                                         <i class="fas fa-<?php echo $badge_icon; ?> me-1"></i>
@@ -334,12 +342,15 @@ $compact_mode = isset($preferences['compact_mode']) && $preferences['compact_mod
                                 </div>
                                 <div class="timetable-card-body">
                                     <div class="timetable-icon"><i class="fas fa-file-alt"></i></div>
-                                    <h6>Academic Timetable</h6>
+                                    <h6><?php echo htmlspecialchars($timetable['document_name'] ?: ($timetable['term'] . ' Timetable - ' . $timetable['year'])); ?></h6>
                                     <p class="text-muted small">
                                         <?php echo $timetable['sessions_per_day'] ?? '6'; ?> sessions | 
                                         Break: <?php echo ($timetable['break_after'] ?? 0) > 0 ? 'After Session ' . ($timetable['break_after'] ?? 0) : 'No break'; ?>
                                         <?php if (!empty($timetable['days'])): ?>
                                             <br>Days: <?php echo htmlspecialchars($timetable['days']); ?>
+                                        <?php endif; ?>
+                                        <?php if (!empty($timetable['updated_by_name'])): ?>
+                                            <br>Updated by: <?php echo htmlspecialchars($timetable['updated_by_name']); ?>
                                         <?php endif; ?>
                                     </p>
                                     <div class="action-buttons">

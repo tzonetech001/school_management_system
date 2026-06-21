@@ -25,6 +25,23 @@ if ($path === 'debug') {
 // Remove api/ prefix
 $path = str_replace('api/', '', $path);
 
+// Share endpoints
+if (strpos($path, 'share/') === 0) {
+    $filePath = __DIR__ . '/' . $path . '.php';
+    if (file_exists($filePath)) {
+        require $filePath;
+    } else {
+        http_response_code(404);
+        echo json_encode([
+            'success' => false,
+            'message' => 'Share endpoint not found',
+            'path' => $path,
+            'file_path' => $filePath
+        ]);
+    }
+    exit;
+}
+
 if (empty($path)) {
     echo json_encode([
         'success' => true,

@@ -11,21 +11,57 @@ if (!isset($_SESSION['admin_id'])) {
 $admin_id = intval($_SESSION['admin_id']);
 
 // ===== GET FORM DATA =====
-$term = isset($_POST['term']) ? trim($_POST['term']) : 'Term 02';
+$term = isset($_POST['term']) && trim($_POST['term']) !== '' ? trim($_POST['term']) : 'Term 02';
+$term = preg_replace('/\s+/', ' ', $term); // normalize whitespace
 $year = isset($_POST['year']) ? intval($_POST['year']) : date('Y');
-$start_time = isset($_POST['start_time']) ? $_POST['start_time'] : '08:00';
-$session_length = isset($_POST['session_length']) ? intval($_POST['session_length']) : 40;
-$sessions_per_day = isset($_POST['sessions_per_day']) ? intval($_POST['sessions_per_day']) : 6;
-$break_after = isset($_POST['break_after']) ? intval($_POST['break_after']) : 2;
-$break_length = isset($_POST['break_length']) ? intval($_POST['break_length']) : 30;
+$start_time = isset($_POST['start_time']) && preg_match('/^\d{2}:\d{2}$/', $_POST['start_time']) ? $_POST['start_time'] : '08:00';
+$session_length = isset($_POST['session_length']) ? max(10, min(180, intval($_POST['session_length']))) : 40;
+$sessions_per_day = isset($_POST['sessions_per_day']) ? max(1, min(10, intval($_POST['sessions_per_day']))) : 6;
+$break_after = isset($_POST['break_after']) ? intval($_POST['break_after']) : 0;
+$break_length = isset($_POST['break_length']) ? max(0, min(120, intval($_POST['break_length']))) : 30;
 $export_format = isset($_POST['export_format']) ? $_POST['export_format'] : 'excel';
 $action = isset($_POST['action']) ? $_POST['action'] : 'download';
-$selected_days = isset($_POST['days']) ? $_POST['days'] : ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+$selected_days = isset($_POST['days']) && is_array($_POST['days']) ? $_POST['days'] : [];
+
+$valid_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+$ordered_days = [];
+foreach ($valid_days as $day_name) {
+    if (in_array($day_name, $selected_days, true)) {
+        $ordered_days[] = $day_name;
+    }
+}
+
+if (empty($ordered_days)) {
+    $ordered_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
+}
+$selected_days = $ordered_days;
+
+// Ensure break placement is valid
+if ($break_after < 1 || $break_after > $sessions_per_day) {
+    $break_after = 0;
+}
 
 // ===== DOCUMENT NAME - USE EXACT TERM =====
 $document_name = $term . ' Timetable - ' . $year;
-$filename_base = str_replace(' ', '_', $document_name);
+$filename_base = preg_replace('/[^A-Za-z0-9_\-]/', '_', str_replace(' ', '_', $document_name));
 $days_joined = implode(', ', $selected_days);
+
+// Optional metadata overrides for regeneration/edit flows
+$generated_at_override = array_key_exists('generated_at_override', $_POST) ? $_POST['generated_at_override'] : null;
+$use_generated_at = null;
+if (array_key_exists('generated_at_override', $_POST)) {
+    if ($generated_at_override === null || $generated_at_override === '') {
+        $use_generated_at = null;
+    } else {
+        $use_generated_at = $generated_at_override;
+    }
+} else {
+    $use_generated_at = date('Y-m-d H:i:s');
+}
+
+$generated_by = array_key_exists('generated_by_override', $_POST) && intval($_POST['generated_by_override']) > 0 ? intval($_POST['generated_by_override']) : $admin_id;
+$last_updated_by = array_key_exists('last_updated_by_override', $_POST) && intval($_POST['last_updated_by_override']) > 0 ? intval($_POST['last_updated_by_override']) : $admin_id;
+$last_updated_at = array_key_exists('last_updated_at_override', $_POST) && !empty($_POST['last_updated_at_override']) ? $_POST['last_updated_at_override'] : date('Y-m-d H:i:s');
 
 // Get school_id
 $school_id_query = "SELECT school_id FROM admins WHERE id = $admin_id";
@@ -222,7 +258,7 @@ foreach ($form6_combinations as $combo) {
     $html .= generateClassTimetable("Form 6 - {$combo}", $selected_days, $schedule_rows, $form6_teachers, $subject_names);
 }
 
-$html .= '<div class="footer">Generated on: ' . date('F d, Y g:i A') . '<br>© ' . date('Y') . ' ' . htmlspecialchars($school_name) . '</div>';
+$html .= '<div class="footer">Generated on: ' . date('l, F d, Y g:i A') . '<br>© ' . date('Y') . ' ' . htmlspecialchars($school_name) . '</div>';
 $html .= '</body></html>';
 
 // ===== SAVE TIMETABLE =====
@@ -239,11 +275,11 @@ $delete_stmt->bind_param("sii", $term, $year, $school_id);
 $delete_stmt->execute();
 
 $insert_sql = "INSERT INTO generated_timetables 
-               (term, year, filename, generated_by, generated_at, school_id, 
+               (term, year, filename, document_name, generated_by, generated_at, last_updated_by, last_updated_at, school_id, 
                 break_after, break_length, start_time, session_length, sessions_per_day, days) 
-               VALUES (?, ?, ?, ?, NOW(), ?, ?, ?, ?, ?, ?, ?)";
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 $insert_stmt = $conn->prepare($insert_sql);
-$insert_stmt->bind_param("sisiiiiisss", $term, $year, $filename_base, $admin_id, $school_id, $break_after, $break_length, $start_time, $session_length, $sessions_per_day, $days_joined);
+$insert_stmt->bind_param("sissisissiiisss", $term, $year, $filename_base, $document_name, $generated_by, $use_generated_at, $last_updated_by, $last_updated_at, $school_id, $break_after, $break_length, $start_time, $session_length, $sessions_per_day, $days_joined);
 $insert_stmt->execute();
 
 // ===== OUTPUT =====
@@ -266,6 +302,6 @@ if ($action === 'download') {
 } elseif ($action === 'view') {
     echo $html;
 } elseif ($action === 'save') {
-    echo '<!DOCTYPE html><html><head><title>Saved</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"><meta http-equiv="refresh" content="3;url=session_timetable.php"></head><body><div class="container mt-5"><div class="alert alert-success">Timetable saved!<br><a href="' . $filename . '" target="_blank">Download</a><br>Redirecting...</div></div></body></html>';
+    echo '<!DOCTYPE html><html><head><title>Saved</title><link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet"><meta http-equiv="refresh" content="3;url=session_timetable.php"></head><body><div class="container mt-5"><div class="alert alert-success"><h4 class="alert-heading">Timetable saved!</h4><p><strong>Document:</strong> ' . htmlspecialchars($document_name) . '</p><p><a href="' . $filename . '" target="_blank">Download saved timetable</a></p><hr><p class="mb-0">Redirecting back to timetable creation...</p></div></div></body></html>';
 }
 ?>

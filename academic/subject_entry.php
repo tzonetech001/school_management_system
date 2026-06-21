@@ -1,5 +1,4 @@
 <?php
-ob_start();
 // subject_entry.php - Main page to select form and subject
 session_start();
 require_once '../controller/db_connect.php';
@@ -86,9 +85,12 @@ if ($bg_option === 'image') {
     $bg_size = 'auto';
 }
 
-// Font size
+// Font size – with fallback
 $font_sizes = ['10' => '10px', '12' => '12px', '14' => '14px', '16' => '16px', '18' => '18px'];
-$font_size = isset($preferences['font_size']) ? $font_sizes[$preferences['font_size']] : '16px';
+$font_size = '16px'; // default
+if (isset($preferences['font_size']) && isset($font_sizes[$preferences['font_size']])) {
+    $font_size = $font_sizes[$preferences['font_size']];
+}
 $compact_mode = isset($preferences['compact_mode']) && $preferences['compact_mode'] === '1';
 $animations = isset($preferences['animations']) && $preferences['animations'] === '1';
 $animation_speed = isset($preferences['animation_speed']) ? $preferences['animation_speed'] : 'normal';
@@ -348,7 +350,8 @@ $subject_display = [
             display: flex;
             justify-content: space-between;
             align-items: center;
-            transition: background 0.2s ease;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         .subject-list li:hover {
@@ -392,6 +395,28 @@ $subject_display = [
             transform: scale(1.05);
             box-shadow: 0 5px 15px rgba(40,167,69,0.3);
             color: white;
+        }
+
+        /* New button styles */
+        .btn-outline-primary {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+        .btn-outline-primary:hover {
+            background: var(--primary-color);
+            color: white;
+        }
+        .btn-outline-warning {
+            border-color: var(--warning-color);
+            color: #856404;
+        }
+        .btn-outline-warning:hover {
+            background: var(--warning-color);
+            color: white;
+        }
+        .btn-sm {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.8rem;
         }
 
         .no-subjects {
@@ -467,7 +492,7 @@ $subject_display = [
                     <div>
                         <i class="fas fa-chalkboard-user fa-2x me-3" style="opacity: 0.9;"></i>
                         <div style="display: inline-block;">
-                            <h4 class="mb-0">Welcome back, <?php echo htmlspecialchars($teacher_name); ?>!</h4>
+                            <h4 class="mb-0">Welcome back, <?php echo htmlspecialchars($teacher_name, ENT_QUOTES, 'UTF-8'); ?>!</h4>
                             <p class="mb-0 opacity-75"><i class="fas fa-calendar-alt me-1"></i> Academic Year: <?php echo $current_year; ?></p>
                         </div>
                     </div>
@@ -483,9 +508,9 @@ $subject_display = [
             <div class="mb-4 animate-card delay-1">
                 <h2 class="page-title" style="color: var(--text-color);">
                     <i class="fas fa-chalkboard-teacher me-2" style="color: var(--primary-color);"></i>
-                    Subject Results Entry
+                    Subject Results & Materials
                 </h2>
-                <p class="text-muted">Select a form and subject to enter examination results</p>
+                <p class="text-muted">Select a subject to enter results, upload learning materials, or manage holiday packages</p>
             </div>
 
             <!-- Statistics Row -->
@@ -541,7 +566,7 @@ $subject_display = [
                                         <li>
                                             <div>
                                                 <span class="subject-name">
-                                                    <?php echo $subject_display[$subject['subject']] ?? strtoupper($subject['subject']); ?>
+                                                    <?php echo htmlspecialchars($subject_display[$subject['subject']] ?? strtoupper($subject['subject']), ENT_QUOTES, 'UTF-8'); ?>
                                                 </span>
                                                 <?php if ($subject['is_primary']): ?>
                                                     <span class="subject-badge badge-primary-teacher">
@@ -549,10 +574,25 @@ $subject_display = [
                                                     </span>
                                                 <?php endif; ?>
                                             </div>
-                                            <a href="subject_entry_five.php?subject=<?php echo $subject['subject']; ?>" 
-                                               class="btn-enter btn">
-                                                <i class="fas fa-arrow-right me-1"></i>Enter Results
-                                            </a>
+                                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                                <!-- Enter Results -->
+                                                <a href="subject_entry_five.php?subject=<?php echo urlencode($subject['subject']); ?>" 
+                                                   class="btn-enter btn btn-sm">
+                                                    <i class="fas fa-arrow-right me-1"></i>Results
+                                                </a>
+                                                <!-- Upload Learning Material -->
+                                                <a href="upload_material.php?subject=<?php echo urlencode($subject['subject']); ?>&form=<?php echo urlencode($subject['form_level']); ?>" 
+                                                   class="btn btn-outline-primary btn-sm" 
+                                                   title="Upload learning materials (videos, PDFs, etc.)">
+                                                    <i class="fas fa-cloud-upload-alt"></i> Material
+                                                </a>
+                                                <!-- Upload Holiday Package -->
+                                                <a href="upload_holiday.php?subject=<?php echo urlencode($subject['subject']); ?>&form=<?php echo urlencode($subject['form_level']); ?>" 
+                                                   class="btn btn-outline-warning btn-sm" 
+                                                   title="Upload holiday package for mobile app">
+                                                    <i class="fas fa-box"></i> Holiday
+                                                </a>
+                                            </div>
                                         </li>
                                     <?php endforeach; ?>
                                 </ul>
@@ -582,7 +622,7 @@ $subject_display = [
                                         <li>
                                             <div>
                                                 <span class="subject-name">
-                                                    <?php echo $subject_display[$subject['subject']] ?? strtoupper($subject['subject']); ?>
+                                                    <?php echo htmlspecialchars($subject_display[$subject['subject']] ?? strtoupper($subject['subject']), ENT_QUOTES, 'UTF-8'); ?>
                                                 </span>
                                                 <?php if ($subject['is_primary']): ?>
                                                     <span class="subject-badge badge-primary-teacher">
@@ -590,10 +630,25 @@ $subject_display = [
                                                     </span>
                                                 <?php endif; ?>
                                             </div>
-                                            <a href="subject_entry_six.php?subject=<?php echo $subject['subject']; ?>" 
-                                               class="btn-enter btn">
-                                                <i class="fas fa-arrow-right me-1"></i>Enter Results
-                                            </a>
+                                            <div class="d-flex gap-2 align-items-center flex-wrap">
+                                                <!-- Enter Results -->
+                                                <a href="subject_entry_six.php?subject=<?php echo urlencode($subject['subject']); ?>" 
+                                                   class="btn-enter btn btn-sm">
+                                                    <i class="fas fa-arrow-right me-1"></i>Results
+                                                </a>
+                                                <!-- Upload Learning Material -->
+                                                <a href="upload_material.php?subject=<?php echo urlencode($subject['subject']); ?>&form=<?php echo urlencode($subject['form_level']); ?>" 
+                                                   class="btn btn-outline-primary btn-sm" 
+                                                   title="Upload learning materials (videos, PDFs, etc.)">
+                                                    <i class="fas fa-cloud-upload-alt"></i> Material
+                                                </a>
+                                                <!-- Upload Holiday Package -->
+                                                <a href="upload_holiday.php?subject=<?php echo urlencode($subject['subject']); ?>&form=<?php echo urlencode($subject['form_level']); ?>" 
+                                                   class="btn btn-outline-warning btn-sm" 
+                                                   title="Upload holiday package for mobile app">
+                                                    <i class="fas fa-box"></i> Holiday
+                                                </a>
+                                            </div>
                                         </li>
                                     <?php endforeach; ?>
                                 </ul>
@@ -610,12 +665,11 @@ $subject_display = [
                     <div>
                         <strong class="d-block mb-1">Information & Guidelines</strong>
                         <ul class="mb-0 ps-3">
-                            <li>You can only enter results for subjects you have been assigned to</li>
-                            <li>Only active exams will be available for result entry</li>
-                            <li>Marks are automatically saved as you type (1.5 second delay)</li>
-                            <li>Use arrow keys (↑ ↓ ← →) to navigate between cells while entering marks</li>
-                            <li>Primary teachers have additional responsibilities but same entry rights</li>
-                            <li>Contact Academic Master if you need access to additional subjects</li>
+                            <li>You can only manage subjects you have been assigned to.</li>
+                            <li><strong>Results:</strong> Enter marks for active examinations (auto-save with arrow-key navigation).</li>
+                            <li><strong>Material:</strong> Upload learning resources (PDFs, videos, presentations) for students.</li>
+                            <li><strong>Holiday Package:</strong> Upload assignments that will be sent to the mobile app.</li>
+                            <li>Contact Academic Master if you need access to additional subjects.</li>
                         </ul>
                     </div>
                 </div>
@@ -629,12 +683,12 @@ $subject_display = [
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <script>
-        // Add animation classes to elements
         document.addEventListener('DOMContentLoaded', function() {
-            // Any additional initialization
             console.log('Subject Entry Page Loaded');
         });
     </script>
+    
+    <!-- Footer included here (inside body, before closing) -->
+    <?php include '../controller/footer.php'; ?>
 </body>
 </html>
-<?php include '../controller/footer.php'; ?>
