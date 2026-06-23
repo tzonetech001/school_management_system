@@ -6087,6 +6087,49 @@ ADD COLUMN `school_id` INT(11) NOT NULL DEFAULT 1 AFTER `email_sent`;
 ALTER TABLE `login_notifications` 
 ADD INDEX `idx_school_id` (`school_id`);
 
+
+
+-- Table for teacher class assignments (links teachers to specific classes and combinations)
+CREATE TABLE teacher_class_assignments (
+    id INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    teacher_id INT(11) NOT NULL,
+    class_level ENUM('Form Five', 'Form Six') NOT NULL,
+    combination VARCHAR(10) NOT NULL,
+    assigned_by INT(11) NOT NULL,
+    assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    school_id INT(11) NOT NULL DEFAULT 1,
+    INDEX idx_teacher_id (teacher_id),
+    INDEX idx_class_combination (class_level, combination),
+    INDEX idx_school_id (school_id),
+    UNIQUE KEY unique_teacher_class_combination (teacher_id, class_level, combination, school_id),
+    FOREIGN KEY (teacher_id) REFERENCES admins(id) ON DELETE CASCADE,
+    FOREIGN KEY (assigned_by) REFERENCES admins(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+CREATE TABLE attendance_records (
+    id INT(11) NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    student_id INT(11) NOT NULL,
+    teacher_id INT(11) NOT NULL,
+    class_level ENUM('Form Five', 'Form Six') NOT NULL,
+    combination VARCHAR(10) NOT NULL,
+    attendance_date DATE NOT NULL,
+    day_of_week VARCHAR(2) NOT NULL,
+    status ENUM('present', 'absent', 'permission') NULL,
+    remarks TEXT DEFAULT NULL,
+    recorded_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    school_id INT(11) NOT NULL DEFAULT 1,
+    INDEX idx_student_id (student_id),
+    INDEX idx_teacher_id (teacher_id),
+    INDEX idx_class_combination (class_level, combination),
+    INDEX idx_attendance_date (attendance_date),
+    INDEX idx_school_id (school_id),
+    UNIQUE KEY unique_student_attendance (student_id, attendance_date, school_id),
+    FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
+    FOREIGN KEY (teacher_id) REFERENCES admins(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
 /*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;

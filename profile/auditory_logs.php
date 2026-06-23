@@ -914,10 +914,7 @@ $sidebarClass = ($preferences['sidebar_collapsed'] == '1') ? 'sidebar-hidden' : 
         <div class="page-header">
             <div class="d-flex justify-content-between align-items-center flex-wrap">
                 <div class="d-flex align-items-center mb-2 mb-sm-0">
-                    <a href="dashboard.php" class="btn-back me-3">
-                        <i class="fas fa-arrow-left me-2"></i>
-                        <span class="d-none d-sm-inline">Back to Dashboard</span>
-                    </a>
+                    
                     <h2 class="mb-0">
                         <i class="fas fa-history me-2"></i>
                         Audit Logs

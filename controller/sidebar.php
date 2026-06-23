@@ -215,20 +215,7 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                     </a>
                 </li>
 
-                <?php if ($is_head_master || $is_second_master || $is_academic_master): ?>
-                <li>
-                    <a href="../academic/manage_attendance" class="<?php echo ($current_page == 'manage_attendance.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-clipboard-list"></i>
-                        <span>Attendance</span>
-                    </a>
-                </li>
-                 <?php endif; ?>
-                  <li>
-                    <a href="../academic/attendance" class="<?php echo ($current_page == 'attendance.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-clipboard-list"></i>
-                        <span>Attendance</span>
-                    </a>
-                </li>
+                
                 <?php if ($is_head_master || $is_second_master || $is_academic_master || $is_ps): ?>
 
                 <li>
@@ -371,6 +358,43 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
             </ul>
         </li>
         <?php endif; ?>
+
+        <!-- ====== ATTENDANCE DROPDOWN (Class Teacher & Academic) ====== -->
+<?php if ($is_academic_master || $is_class_teacher || $is_head_master || $is_second_master): ?>
+<li class="sidebar-dropdown">
+    <a href="#" class="dropdown-toggle <?php echo (in_array($current_page, ['manage_attendance.php', 'attendance.php', 'view_attendance.php'])) ? 'active' : ''; ?>">
+        <i class="fas fa-clipboard-list"></i>
+        <span class="menu-text">Attendance</span>
+        <span class="dropdown-arrow">
+            <i class="fas fa-chevron-down"></i>
+        </span>
+    </a>
+    <ul class="sub-menu">
+        <?php if ($is_head_master || $is_second_master || $is_academic_master || $is_class_teacher): ?>
+        <li>
+            <a href="../academic/manage_attendance" class="<?php echo ($current_page == 'manage_attendance.php') ? 'active' : ''; ?>">
+                <i class="fas fa-user-cog"></i>
+                <span>Manage Attndc</span>
+            </a>
+        </li>
+        <?php endif; ?>
+        <?php if ($is_academic_master || $is_class_teacher): ?>
+        <li>
+            <a href="../academic/attendance" class="<?php echo ($current_page == 'attendance.php') ? 'active' : ''; ?>">
+                <i class="fas fa-check-circle"></i>
+                <span>Take Attendance</span>
+            </a>
+        </li>
+        <?php endif; ?>
+        <li>
+            <a href="../academic/view_attendance" class="<?php echo ($current_page == 'view_attendance.php') ? 'active' : ''; ?>">
+                <i class="fas fa-eye"></i>
+                <span>View Attendance</span>
+            </a>
+        </li>
+    </ul>
+</li>
+<?php endif; ?>
         
         <!-- Discipline -->
         <?php if ($is_head_master || $is_second_master || $is_discipline_master): ?>
