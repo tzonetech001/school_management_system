@@ -281,9 +281,9 @@ $assignments_result = mysqli_query($conn, $assignments_sql);
              
              <!-- Action Button with Dropdown -->
                 <div class="dropdown">
-                    <!-- <button type="button" class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#assignModal">
+                     <button type="button" class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#assignModal">
                                                 <i class="fas fa-plus me-2"></i>Assign Student
-                                            </button> -->
+                                            </button> 
                     <button class="btn btn-primary dropdown-toggle" type="button" id="actionDropdown" 
                             data-bs-toggle="dropdown" aria-expanded="false">
                         <i class="fas fa-cog me-2"></i>Actions

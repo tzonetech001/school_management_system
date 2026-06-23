@@ -214,12 +214,8 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                         <span>Timetable</span>
                     </a>
                 </li>
-                <li>
-                    <a href="../academic/exams" class="<?php echo ($current_page == 'exams.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-clipboard-list"></i>
-                        <span>Exams</span>
-                    </a>
-                </li>
+
+                
                 <?php if ($is_head_master || $is_second_master || $is_academic_master || $is_ps): ?>
 
                 <li>
@@ -362,6 +358,43 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
             </ul>
         </li>
         <?php endif; ?>
+
+        <!-- ====== ATTENDANCE DROPDOWN (Class Teacher & Academic) ====== -->
+<?php if ($is_academic_master || $is_class_teacher || $is_head_master || $is_second_master): ?>
+<li class="sidebar-dropdown">
+    <a href="#" class="dropdown-toggle <?php echo (in_array($current_page, ['manage_attendance.php', 'attendance.php', 'view_attendance.php'])) ? 'active' : ''; ?>">
+        <i class="fas fa-clipboard-list"></i>
+        <span class="menu-text">Attendance</span>
+        <span class="dropdown-arrow">
+            <i class="fas fa-chevron-down"></i>
+        </span>
+    </a>
+    <ul class="sub-menu">
+        <?php if ($is_head_master || $is_second_master || $is_academic_master || $is_class_teacher): ?>
+        <li>
+            <a href="../academic/manage_attendance" class="<?php echo ($current_page == 'manage_attendance.php') ? 'active' : ''; ?>">
+                <i class="fas fa-user-cog"></i>
+                <span>Manage Attndc</span>
+            </a>
+        </li>
+        <?php endif; ?>
+        <?php if ($is_academic_master || $is_class_teacher): ?>
+        <li>
+            <a href="../academic/attendance" class="<?php echo ($current_page == 'attendance.php') ? 'active' : ''; ?>">
+                <i class="fas fa-check-circle"></i>
+                <span>Take Attendance</span>
+            </a>
+        </li>
+        <?php endif; ?>
+        <li>
+            <a href="../academic/view_attendance" class="<?php echo ($current_page == 'view_attendance.php') ? 'active' : ''; ?>">
+                <i class="fas fa-eye"></i>
+                <span>View Attendance</span>
+            </a>
+        </li>
+    </ul>
+</li>
+<?php endif; ?>
         
         <!-- Discipline -->
         <?php if ($is_head_master || $is_second_master || $is_discipline_master): ?>
@@ -559,6 +592,39 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                 <span class="menu-text">Help & Support</span>
             </a>
         </li>
+        <li>
+            <a href="../profile/auditory_logs" class="<?php echo ($current_page == 'auditory_logs.php') ? 'active' : ''; ?>">
+                <i class="fas fa-history"></i>
+                <span class="menu-text">Auditory Logs</span>
+            </a>
+        </li>
+
+         <!-- ====== REPORTS DROPDOWN ====== -->
+<?php if ($is_head_master || $is_second_master || $is_academic_master): ?>
+<li class="sidebar-dropdown">
+    <a href="#" class="dropdown-toggle <?php echo (in_array($current_page, ['student_report.php', 'staff_report.php'])) ? 'active' : ''; ?>">
+        <i class="fas fa-chart-bar"></i>
+        <span class="menu-text">General Reports</span>
+        <span class="dropdown-arrow">
+            <i class="fas fa-chevron-down"></i>
+        </span>
+    </a>
+    <ul class="sub-menu">
+        <li>
+            <a href="../report/student_report" class="<?php echo ($current_page == 'student_report.php') ? 'active' : ''; ?>">
+                <i class="fas fa-user-graduate"></i>
+                <span>Student Reports</span>
+            </a>
+        </li>
+        <li>
+            <a href="../report/staff_report" class="<?php echo ($current_page == 'staff_report.php') ? 'active' : ''; ?>">
+                <i class="fas fa-chalkboard-teacher"></i>
+                <span>Teacher Reports</span>
+            </a>
+        </li>
+    </ul>
+</li>
+<?php endif; ?>
         
         <!-- logout -->
         <li>

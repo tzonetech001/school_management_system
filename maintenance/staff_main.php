@@ -372,6 +372,9 @@ $assignments_result = mysqli_query($conn, $assignments_sql);
             <h2 class="page-title">Assign Item to Staff</h2>
               <!-- Action Button with Dropdown -->
                 <div class="dropdown">
+                    <button type="button" class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#assignModal">
+                                                <i class="fas fa-plus me-2"></i>Assign Staff
+                                            </button> 
                     
                     <button class="btn btn-primary dropdown-toggle" type="button" id="actionDropdown" 
                             data-bs-toggle="dropdown" aria-expanded="false">
