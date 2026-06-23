@@ -369,7 +369,7 @@ $sidebar_collapsed = isset($preferences['sidebar_collapsed']) && $preferences['s
         <li class="sidebar-item <?php echo is_active(['school_admins.php', 'view_admin.php'], $current_page) ? 'active' : ''; ?>">
             <a href="../super/school_admins.php">
                 <i class="fas fa-user-shield"></i>
-                <span>School Admins</span>
+                <span>School Headmaster</span>
             </a>
         </li>
 
@@ -379,7 +379,7 @@ $sidebar_collapsed = isset($preferences['sidebar_collapsed']) && $preferences['s
         <li class="sidebar-item <?php echo is_active(['super_admins.php', 'add_super_admin.php'], $current_page) ? 'active' : ''; ?>">
             <a href="../super/super_admins.php">
                 <i class="fas fa-crown"></i>
-                <span>Super Admins</span>
+                <span>System Registry</span>
             </a>
         </li>
 

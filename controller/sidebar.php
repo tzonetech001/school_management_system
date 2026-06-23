@@ -214,10 +214,19 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                         <span>Timetable</span>
                     </a>
                 </li>
+
+                <?php if ($is_head_master || $is_second_master || $is_academic_master): ?>
                 <li>
-                    <a href="../academic/exams" class="<?php echo ($current_page == 'exams.php') ? 'active' : ''; ?>">
+                    <a href="../academic/manage_attendance" class="<?php echo ($current_page == 'manage_attendance.php') ? 'active' : ''; ?>">
                         <i class="fas fa-clipboard-list"></i>
-                        <span>Exams</span>
+                        <span>Attendance</span>
+                    </a>
+                </li>
+                 <?php endif; ?>
+                  <li>
+                    <a href="../academic/attendance" class="<?php echo ($current_page == 'attendance.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-clipboard-list"></i>
+                        <span>Attendance</span>
                     </a>
                 </li>
                 <?php if ($is_head_master || $is_second_master || $is_academic_master || $is_ps): ?>
@@ -557,6 +566,12 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
             <a href="../help/help" class="<?php echo ($current_page == 'help.php') ? 'active' : ''; ?>">
                 <i class="fas fa-question-circle"></i>
                 <span class="menu-text">Help & Support</span>
+            </a>
+        </li>
+        <li>
+            <a href="../profile/auditory_logs" class="<?php echo ($current_page == 'auditory_logs.php') ? 'active' : ''; ?>">
+                <i class="fas fa-history"></i>
+                <span class="menu-text">Auditory Logs</span>
             </a>
         </li>
         
