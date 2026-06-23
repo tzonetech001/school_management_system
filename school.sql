@@ -1217,7 +1217,7 @@ INSERT INTO `admin_roles` (`id`, `role_name`, `description`) VALUES
 (13, 'Librarian', 'Library management'),
 (14, 'Shule Salama', 'School security and safety'),
 (15, 'Normal Teacher', 'Regular teaching duties'),
-(16, 'Maintainance', 'Maintanance of the school'),
+(16, 'Maintainance', 'Maintanance of the school');
 
 
 -- --------------------------------------------------------
