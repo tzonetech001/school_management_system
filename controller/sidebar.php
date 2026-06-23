@@ -598,6 +598,33 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                 <span class="menu-text">Auditory Logs</span>
             </a>
         </li>
+
+         <!-- ====== REPORTS DROPDOWN ====== -->
+<?php if ($is_head_master || $is_second_master || $is_academic_master): ?>
+<li class="sidebar-dropdown">
+    <a href="#" class="dropdown-toggle <?php echo (in_array($current_page, ['student_report.php', 'staff_report.php'])) ? 'active' : ''; ?>">
+        <i class="fas fa-chart-bar"></i>
+        <span class="menu-text">General Reports</span>
+        <span class="dropdown-arrow">
+            <i class="fas fa-chevron-down"></i>
+        </span>
+    </a>
+    <ul class="sub-menu">
+        <li>
+            <a href="../report/student_report" class="<?php echo ($current_page == 'student_report.php') ? 'active' : ''; ?>">
+                <i class="fas fa-user-graduate"></i>
+                <span>Student Reports</span>
+            </a>
+        </li>
+        <li>
+            <a href="../report/staff_report" class="<?php echo ($current_page == 'staff_report.php') ? 'active' : ''; ?>">
+                <i class="fas fa-chalkboard-teacher"></i>
+                <span>Teacher Reports</span>
+            </a>
+        </li>
+    </ul>
+</li>
+<?php endif; ?>
         
         <!-- logout -->
         <li>

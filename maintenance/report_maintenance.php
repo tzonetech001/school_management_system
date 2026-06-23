@@ -1,15 +1,73 @@
 <?php
-// edit_admin.php
+// report_maintenance.php - Maintenance Report Generator
+// UPDATED: School name, motto, and logo now load dynamically from schools table
+// Supports multi-school: school_id is used to fetch correct school details
+// FIXED: TCPDF PNG alpha channel error - converts PNG to JPG using GD
+
 session_start();
 require_once '../controller/db_connect.php';
 
 $error = '';
 $success = '';
 
-// Check if user has permission (Head Master or Second Master only)
+// Check if user has permission
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
-// Get current user's roles
+// ==================== GET CURRENT USER'S SCHOOL ID ====================
+$school_id = $_SESSION['school_id'] ?? 0;
+
+// If school_id not in session, get it from admin record
+if ($school_id == 0 && $admin_id > 0) {
+    $school_sql = "SELECT school_id FROM admins WHERE id = ?";
+    $school_stmt = $conn->prepare($school_sql);
+    $school_stmt->bind_param("i", $admin_id);
+    $school_stmt->execute();
+    $school_result = $school_stmt->get_result();
+    if ($school_row = $school_result->fetch_assoc()) {
+        $school_id = $school_row['school_id'];
+        $_SESSION['school_id'] = $school_id;
+    }
+    $school_stmt->close();
+}
+
+// Check for System Registrar
+$is_super_admin = isset($_SESSION['super_admin_id']);
+
+// If System Registrar, allow selecting a school
+if ($is_super_admin) {
+    $selected_school_id = $_GET['school_id'] ?? 0;
+    if ($selected_school_id > 0) {
+        $school_id = $selected_school_id;
+    }
+}
+
+// ==================== GET SCHOOL INFO FROM DATABASE ====================
+$school_name = "School Management System";
+$school_motto = "Education For Life";
+$school_logo_path = null;
+$school_code = "";
+
+if ($school_id > 0) {
+    $school_sql = "SELECT school_name, school_motto, logo_path, school_code FROM schools WHERE id = ? AND status = 'Active'";
+    $school_stmt = $conn->prepare($school_sql);
+    $school_stmt->bind_param("i", $school_id);
+    $school_stmt->execute();
+    $school_result = $school_stmt->get_result();
+    if ($school_row = $school_result->fetch_assoc()) {
+        $school_name = !empty($school_row['school_name']) ? $school_row['school_name'] : "School Management System";
+        $school_motto = !empty($school_row['school_motto']) ? $school_row['school_motto'] : "Education For Life";
+        $school_logo_path = $school_row['logo_path'] ?? null;
+        $school_code = $school_row['school_code'] ?? "";
+    }
+    $school_stmt->close();
+}
+
+// Fallback if no school found
+if (empty($school_name)) {
+    $school_name = "School Management System";
+}
+
+// ==================== GET USER ROLES ====================
 $user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
 $stmt = $conn->prepare($user_roles_sql);
 $stmt->bind_param("i", $admin_id);
@@ -20,29 +78,40 @@ while ($row = $user_roles_result->fetch_assoc()) {
     $user_role_ids[] = $row['role_id'];
 }
 
-// Check if user has Head Master (1) or Second Master (2) role
+// Check if user has Head Master (1) or Second Master (2) or Academic Master (3) or Maintenance (16) role
 $has_permission = false;
 foreach ($user_role_ids as $role_id) {
-    if ($role_id == 1 || $role_id == 2 || $role_id == 3 || $role_id == 16) { // Head Master or Second Master
+    if ($role_id == 1 || $role_id == 2 || $role_id == 3 || $role_id == 16) {
         $has_permission = true;
         break;
     }
 }
 
-if (!$has_permission) {
+if (!$has_permission && !$is_super_admin) {
     $_SESSION['error'] = "You don't have permission to view page you need.";
     header("Location: ../404.php");
     exit();
 }
-// Default filter values
-$report_type = $_GET['report_type'] ?? 'student'; // 'student' or 'staff'
+
+// ==================== GET ALL SCHOOLS FOR SYSTEM REGISTRAR ====================
+$all_schools = [];
+if ($is_super_admin) {
+    $schools_sql = "SELECT id, school_name, school_code, logo_path FROM schools WHERE status = 'Active' ORDER BY school_name";
+    $schools_result = mysqli_query($conn, $schools_sql);
+    while ($row = mysqli_fetch_assoc($schools_result)) {
+        $all_schools[] = $row;
+    }
+}
+
+// ==================== GET FILTER PARAMETERS ====================
+$report_type = $_GET['report_type'] ?? 'student';
 $filter_class = $_GET['class'] ?? '';
 $filter_combination = $_GET['combination'] ?? '';
 $filter_gender = $_GET['gender'] ?? '';
 $filter_status = $_GET['status'] ?? 'active';
-$assign_status = $_GET['assign_status'] ?? 'all'; // 'all', 'assigned', 'available'
-$item_type = $_GET['item_type'] ?? 'all'; // 'all', 'table', 'chair'
-$sort_order = $_GET['sort_order'] ?? 'index_asc'; // 'index_asc', 'index_desc', 'name_asc', 'name_desc'
+$assign_status = $_GET['assign_status'] ?? 'all';
+$item_type = $_GET['item_type'] ?? 'all';
+$sort_order = $_GET['sort_order'] ?? 'index_asc';
 
 // Column inclusion options
 $include_combination = isset($_GET['include_combination']) && $_GET['include_combination'] == 1;
@@ -54,30 +123,37 @@ $include_table = isset($_GET['include_table']) && $_GET['include_table'] == 1;
 $include_chair = isset($_GET['include_chair']) && $_GET['include_chair'] == 1;
 $include_item_details = isset($_GET['include_item_details']) && $_GET['include_item_details'] == 1;
 
-// Get all combinations for filter dropdown
-$combinations_sql = "SELECT DISTINCT combination FROM students WHERE combination IS NOT NULL AND combination != '' ORDER BY combination";
-$combinations_result = mysqli_query($conn, $combinations_sql);
+// ==================== GET COMBINATIONS ====================
+$combinations_sql = "SELECT DISTINCT combination FROM students WHERE school_id = ? AND combination IS NOT NULL AND combination != '' ORDER BY combination";
+$combinations_stmt = $conn->prepare($combinations_sql);
+$combinations_stmt->bind_param("i", $school_id);
+$combinations_stmt->execute();
+$combinations_result = $combinations_stmt->get_result();
 $combinations = [];
 while ($row = mysqli_fetch_assoc($combinations_result)) {
     $combinations[] = $row['combination'];
 }
+$combinations_stmt->close();
 
-// Get all classes for filter dropdown
-$classes_sql = "SELECT DISTINCT class FROM students WHERE class IS NOT NULL AND class != '' ORDER BY class";
-$classes_result = mysqli_query($conn, $classes_sql);
+// ==================== GET CLASSES ====================
+$classes_sql = "SELECT DISTINCT class FROM students WHERE school_id = ? AND class IS NOT NULL AND class != '' ORDER BY class";
+$classes_stmt = $conn->prepare($classes_sql);
+$classes_stmt->bind_param("i", $school_id);
+$classes_stmt->execute();
+$classes_result = $classes_stmt->get_result();
 $classes = [];
 while ($row = mysqli_fetch_assoc($classes_result)) {
     $classes[] = $row['class'];
 }
+$classes_stmt->close();
 
-// Build query based on report type
+// ==================== BUILD QUERY ====================
 if ($report_type == 'student') {
     // STUDENT REPORT
-    $where_conditions = [];
-    $params = [];
-    $param_types = '';
+    $where_conditions = ["s.school_id = ?"];
+    $params = [$school_id];
+    $param_types = 'i';
     
-    // Build WHERE conditions for students
     if (!empty($filter_class)) {
         $where_conditions[] = "s.class = ?";
         $params[] = $filter_class;
@@ -135,6 +211,7 @@ if ($report_type == 'student') {
                  WHERE ma.student_id = s.id 
                  AND ma.status = 'active' 
                  AND ma.assignment_type = 'table'
+                 AND mi.school_id = ?
                  LIMIT 1) as assigned_table,
                  
                 -- Get assigned chair
@@ -144,6 +221,7 @@ if ($report_type == 'student') {
                  WHERE ma.student_id = s.id 
                  AND ma.status = 'active' 
                  AND ma.assignment_type = 'chair'
+                 AND mi.school_id = ?
                  LIMIT 1) as assigned_chair,
                  
                 -- Get table assignment date
@@ -153,6 +231,7 @@ if ($report_type == 'student') {
                  WHERE ma.student_id = s.id 
                  AND ma.status = 'active' 
                  AND ma.assignment_type = 'table'
+                 AND mi.school_id = ?
                  LIMIT 1) as table_assigned_date,
                  
                 -- Get chair assignment date
@@ -162,6 +241,7 @@ if ($report_type == 'student') {
                  WHERE ma.student_id = s.id 
                  AND ma.status = 'active' 
                  AND ma.assignment_type = 'chair'
+                 AND mi.school_id = ?
                  LIMIT 1) as chair_assigned_date,
                  
                 -- Get table description
@@ -171,6 +251,7 @@ if ($report_type == 'student') {
                  WHERE ma.student_id = s.id 
                  AND ma.status = 'active' 
                  AND ma.assignment_type = 'table'
+                 AND mi.school_id = ?
                  LIMIT 1) as table_description,
                  
                 -- Get chair description
@@ -180,6 +261,7 @@ if ($report_type == 'student') {
                  WHERE ma.student_id = s.id 
                  AND ma.status = 'active' 
                  AND ma.assignment_type = 'chair'
+                 AND mi.school_id = ?
                  LIMIT 1) as chair_description,
                  
                 -- Check if has any active assignment
@@ -189,6 +271,10 @@ if ($report_type == 'student') {
                  AND ma.status = 'active') as total_assignments
                 
             FROM students s";
+    
+    // Add school_id parameter for subqueries
+    array_push($params, $school_id, $school_id, $school_id, $school_id, $school_id, $school_id);
+    $param_types .= 'iiiiii';
     
     if (!empty($where_conditions)) {
         $sql .= " WHERE " . implode(" AND ", $where_conditions);
@@ -203,20 +289,11 @@ if ($report_type == 'student') {
         END,
         s.index_number ASC";
     
-    // Prepare and execute statement
-    $stmt = mysqli_prepare($conn, $sql);
-    if (!empty($params)) {
-        mysqli_stmt_bind_param($stmt, $param_types, ...$params);
-    }
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $records = mysqli_fetch_all($result, MYSQLI_ASSOC);
-    
 } else {
     // STAFF REPORT
-    $where_conditions = [];
-    $params = [];
-    $param_types = '';
+    $where_conditions = ["a.school_id = ?"];
+    $params = [$school_id];
+    $param_types = 'i';
     
     if (!empty($filter_gender)) {
         $where_conditions[] = "a.sex = ?";
@@ -261,6 +338,7 @@ if ($report_type == 'student') {
                  WHERE msa.staff_id = a.id 
                  AND msa.status = 'active' 
                  AND msa.assignment_type = 'table'
+                 AND mi.school_id = ?
                  LIMIT 1) as assigned_table,
                  
                 -- Get assigned chair
@@ -270,6 +348,7 @@ if ($report_type == 'student') {
                  WHERE msa.staff_id = a.id 
                  AND msa.status = 'active' 
                  AND msa.assignment_type = 'chair'
+                 AND mi.school_id = ?
                  LIMIT 1) as assigned_chair,
                  
                 -- Get table assignment date
@@ -279,6 +358,7 @@ if ($report_type == 'student') {
                  WHERE msa.staff_id = a.id 
                  AND msa.status = 'active' 
                  AND msa.assignment_type = 'table'
+                 AND mi.school_id = ?
                  LIMIT 1) as table_assigned_date,
                  
                 -- Get chair assignment date
@@ -288,6 +368,7 @@ if ($report_type == 'student') {
                  WHERE msa.staff_id = a.id 
                  AND msa.status = 'active' 
                  AND msa.assignment_type = 'chair'
+                 AND mi.school_id = ?
                  LIMIT 1) as chair_assigned_date,
                  
                 -- Get table description
@@ -297,6 +378,7 @@ if ($report_type == 'student') {
                  WHERE msa.staff_id = a.id 
                  AND msa.status = 'active' 
                  AND msa.assignment_type = 'table'
+                 AND mi.school_id = ?
                  LIMIT 1) as table_description,
                  
                 -- Get chair description
@@ -306,10 +388,14 @@ if ($report_type == 'student') {
                  WHERE msa.staff_id = a.id 
                  AND msa.status = 'active' 
                  AND msa.assignment_type = 'chair'
+                 AND mi.school_id = ?
                  LIMIT 1) as chair_description,
                  
                 -- Get staff roles
-                GROUP_CONCAT(DISTINCT ar.role_name SEPARATOR ', ') as roles,
+                (SELECT GROUP_CONCAT(DISTINCT ar.role_name SEPARATOR ', ')
+                 FROM admin_role_assignments ara
+                 JOIN admin_roles ar ON ara.role_id = ar.id
+                 WHERE ara.admin_id = a.id) as roles,
                 
                 -- Check if has any active assignment
                 (SELECT COUNT(*) 
@@ -317,9 +403,11 @@ if ($report_type == 'student') {
                  WHERE msa.staff_id = a.id 
                  AND msa.status = 'active') as total_assignments
                 
-            FROM admins a
-            LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
-            LEFT JOIN admin_roles ar ON ara.role_id = ar.id";
+            FROM admins a";
+    
+    // Add school_id parameter for subqueries
+    array_push($params, $school_id, $school_id, $school_id, $school_id, $school_id, $school_id);
+    $param_types .= 'iiiiii';
     
     if (!empty($where_conditions)) {
         $sql .= " WHERE " . implode(" AND ", $where_conditions);
@@ -344,20 +432,19 @@ if ($report_type == 'student') {
         default:
             $sql .= " ORDER BY a.first_name ASC, a.last_name ASC";
     }
-    
-    // Prepare and execute statement for staff
-    $stmt = mysqli_prepare($conn, $sql);
-    if (!empty($params)) {
-        mysqli_stmt_bind_param($stmt, $param_types, ...$params);
-    }
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-    $records = mysqli_fetch_all($result, MYSQLI_ASSOC);
 }
+
+// Execute query
+$stmt = mysqli_prepare($conn, $sql);
+mysqli_stmt_bind_param($stmt, $param_types, ...$params);
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt);
+$records = mysqli_fetch_all($result, MYSQLI_ASSOC);
+mysqli_stmt_close($stmt);
 
 $total_records = count($records);
 
-// Get statistics for the report
+// ==================== CALCULATE STATISTICS ====================
 $stats = [
     'total' => $total_records,
     'with_table' => 0,
@@ -395,51 +482,84 @@ foreach ($records as $record) {
     if ($record['sex'] == 'Female') $stats['female']++;
 }
 
-// Handle PDF export
+// ==================== PDF EXPORT ====================
 if (isset($_GET['export']) && $_GET['export'] == 'pdf') {
     require_once('../tcpdf/tcpdf.php');
     
-class MaintenancePDF extends TCPDF {
-    // Page header
-    public function Header() {
-        $logo_path = '../muyovozi.png';
+    class MaintenancePDF extends TCPDF {
+        public $school_name = '';
+        public $school_motto = '';
+        public $logo_path = '';
+        public $report_type = '';
         
-        // Logo on left
-        if (file_exists($logo_path)) {
-            $this->Image($logo_path, 15, 10, 25, 25, 'PNG', '', 'T', false, 300, '', false, false, 0, false, false, false);
+        public function Header() {
+            $logo_used = false;
+            $temp_logo_path = null;
+            
+            if (!empty($this->logo_path)) {
+                $full_logo_path = '../' . $this->logo_path;
+                
+                if (file_exists($full_logo_path)) {
+                    $file_info = pathinfo($full_logo_path);
+                    $extension = strtolower($file_info['extension'] ?? '');
+                    
+                    if ($extension == 'png') {
+                        if (function_exists('imagecreatefrompng') && function_exists('imagejpeg')) {
+                            $png = @imagecreatefrompng($full_logo_path);
+                            if ($png !== false) {
+                                $temp_jpg = sys_get_temp_dir() . '/logo_' . md5($full_logo_path) . '.jpg';
+                                imagejpeg($png, $temp_jpg, 90);
+                                imagedestroy($png);
+                                if (file_exists($temp_jpg)) {
+                                    $temp_logo_path = $temp_jpg;
+                                    $full_logo_path = $temp_logo_path;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (file_exists($full_logo_path)) {
+                        $this->Image($full_logo_path, 15, 10, 25, 25, '', '', 'T', false, 300, '', false, false, 0, false, false, false);
+                        $logo_used = true;
+                    }
+                }
+            }
+            
+            $this->SetY(12);
+            $this->SetFont('helvetica', 'B', 16);
+            $this->Cell(0, 0, strtoupper($this->school_name), 0, 1, 'C');
+            
+            $this->SetFont('helvetica', 'I', 10);
+            $this->Cell(0, 0, $this->school_motto, 0, 1, 'C');
+            
+            $this->SetFont('helvetica', 'B', 14);
+            $this->SetY(25);
+            $report_title = $this->report_type == 'student' ? 'STUDENT MAINTENANCE REPORT' : 'STAFF MAINTENANCE REPORT';
+            $this->Cell(0, 0, $report_title, 0, 1, 'C');
+            
+            $this->SetY(38);
+            $this->Line(15, $this->GetY(), 195, $this->GetY());
+            $this->SetY($this->GetY() + 8);
         }
         
-        // School name and report title centered
-        $this->SetFont('helvetica', 'B', 18);
-        $this->SetY(12);
-        $this->Cell(0, 0, 'MUYOVOZI HIGH SCHOOL', 0, 1, 'C');
-        
-        $this->SetFont('helvetica', 'B', 14);
-        $this->SetY(22);
-        $report_title = $GLOBALS['report_type'] == 'student' ? 'STUDENT MAINTENANCE REPORT' : 'STAFF MAINTENANCE REPORT';
-        $this->Cell(0, 0, $report_title, 0, 1, 'C');
-        
-        // Line separator
-        $this->SetY(35);
-        $this->Line(15, $this->GetY(), 195, $this->GetY());
-        $this->SetY($this->GetY() + 8);
+        public function Footer() {
+            $this->SetY(-15);
+            $this->SetFont('helvetica', 'I', 8);
+            $this->Cell(0, 10, 'Page ' . $this->getAliasNumPage() . '/' . $this->getAliasNbPages(), 0, false, 'C', 0, '', 0, false, 'T', 'M');
+        }
     }
     
-    // Page footer
-    public function Footer() {
-        $this->SetY(-15);
-        $this->SetFont('helvetica', 'I', 8);
-        $this->Cell(0, 10, 'Page ' . $this->getAliasNumPage() . '/' . $this->getAliasNbPages(), 0, false, 'C', 0, '', 0, false, 'T', 'M');
-    }
-}
-    
-    // Create PDF
     $pdf = new MaintenancePDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
     
-    $pdf->SetCreator('Muyovozi High School');
+    $pdf->school_name = $school_name;
+    $pdf->school_motto = $school_motto;
+    $pdf->logo_path = $school_logo_path;
+    $pdf->report_type = $report_type;
+    
+    $pdf->SetCreator($school_name);
     $pdf->SetAuthor('Administrator');
-    $pdf->SetTitle(($report_type == 'student' ? 'Student' : 'Staff') . ' Maintenance Report');
-    $pdf->SetMargins(15, 40, 15); // Reduced top margin since we removed the summary from header
+    $pdf->SetTitle(($report_type == 'student' ? 'Student' : 'Staff') . ' Maintenance Report - ' . $school_name);
+    $pdf->SetMargins(15, 45, 15);
     $pdf->SetHeaderMargin(10);
     $pdf->SetFooterMargin(10);
     $pdf->SetAutoPageBreak(TRUE, 15);
@@ -453,37 +573,30 @@ class MaintenancePDF extends TCPDF {
             $grouped_students[$class][] = $record;
         }
         
-        // Display Form Five first, then Form Six, then others
         $ordered_classes = ['Form Five', 'Form Six'];
         foreach ($ordered_classes as $class) {
             if (isset($grouped_students[$class]) && count($grouped_students[$class]) > 0) {
-                // Add class header
                 $pdf->SetFont('helvetica', 'B', 12);
                 $pdf->SetFillColor(200, 220, 255);
                 $pdf->Cell(0, 10, 'CLASS: ' . $class, 0, 1, 'C', true);
                 $pdf->Ln(2);
-                
-                // Display table for this class
-                displayStudentTable($pdf, $grouped_students[$class]);
+                displayStudentTablePDF($pdf, $grouped_students[$class]);
                 $pdf->Ln(5);
             }
         }
         
-        // Display other classes
         foreach ($grouped_students as $class => $class_students) {
             if (!in_array($class, $ordered_classes) && count($class_students) > 0) {
                 $pdf->SetFont('helvetica', 'B', 12);
                 $pdf->SetFillColor(220, 220, 220);
                 $pdf->Cell(0, 10, 'CLASS: ' . $class, 0, 1, 'C', true);
                 $pdf->Ln(2);
-                
-                displayStudentTable($pdf, $class_students);
+                displayStudentTablePDF($pdf, $class_students);
                 $pdf->Ln(5);
             }
         }
     } else {
-        // Display staff table
-        displayStaffTable($pdf, $records);
+        displayStaffTablePDF($pdf, $records);
     }
     
     // Add statistics section at the end
@@ -544,15 +657,13 @@ class MaintenancePDF extends TCPDF {
     </table>';
     
     $pdf->writeHTML($stats_html, true, false, true, false, '');
-    
     $pdf->Ln(10);
     
-    // Add Report Summary section after Statistics
+    // Report Summary section
     $pdf->SetFont('helvetica', 'B', 14);
     $pdf->Cell(0, 10, 'REPORT SUMMARY', 0, 1, 'C');
     $pdf->Ln(5);
     
-    // Create PDF summary table HTML
     $summary_html = '
     <table border="1" cellpadding="6" cellspacing="0" style="border-collapse: collapse; width: 100%; font-size: 10pt;">
         <tr style="background-color: #3B9DB3; color: white;">
@@ -563,6 +674,12 @@ class MaintenancePDF extends TCPDF {
             <td style="width: 25%;">' . ($report_type == 'student' ? 'Student Maintenance' : 'Staff Maintenance') . '</td>
             <td style="font-weight: bold; width: 25%;">Generated Date:</td>
             <td style="width: 25%;">' . date('d/m/Y') . '</td>
+        </tr>
+        <tr>
+            <td style="font-weight: bold;">School:</td>
+            <td>' . htmlspecialchars($school_name) . '</td>
+            <td style="font-weight: bold;">School Code:</td>
+            <td>' . htmlspecialchars($school_code) . '</td>
         </tr>';
     
     if ($report_type == 'student') {
@@ -592,25 +709,25 @@ class MaintenancePDF extends TCPDF {
     
     $pdf->writeHTML($summary_html, true, false, true, false, '');
     
-    // Output PDF
+    if (isset($temp_logo_path) && file_exists($temp_logo_path)) {
+        @unlink($temp_logo_path);
+    }
+    
     $pdf->Output('maintenance_report_' . date('Y-m-d') . '.pdf', 'D');
     exit();
 }
 
-// Function to display student table in PDF
-function displayStudentTable($pdf, $students) {
+// ==================== FUNCTIONS FOR PDF ====================
+function displayStudentTablePDF($pdf, $students) {
     global $include_class, $include_combination, $include_gender, $include_table, $include_chair;
     
-    // Calculate column widths
-    $col_widths = [12, 25, 60]; // S/N, Index No., Full Name
-    
+    $col_widths = [12, 25, 60];
     if ($include_class) $col_widths[] = 20;
     if ($include_combination) $col_widths[] = 25;
     if ($include_gender) $col_widths[] = 18;
     if ($include_table) $col_widths[] = 25;
     if ($include_chair) $col_widths[] = 25;
     
-    // Table header
     $pdf->SetFont('helvetica', 'B', 9);
     $pdf->SetFillColor(59, 157, 179);
     $pdf->SetTextColor(255);
@@ -624,13 +741,11 @@ function displayStudentTable($pdf, $students) {
     if ($include_table) $headers[] = 'Table';
     if ($include_chair) $headers[] = 'Chair';
     
-    // Output headers
     for($i = 0; $i < count($headers); $i++) {
         $pdf->Cell($col_widths[$i], 8, $headers[$i], 1, 0, 'C', 1);
     }
     $pdf->Ln();
     
-    // Table content
     $pdf->SetTextColor(0);
     $pdf->SetFont('helvetica', '', 9);
     $fill = false;
@@ -643,48 +758,29 @@ function displayStudentTable($pdf, $students) {
             $pdf->SetFillColor(255, 255, 255);
         }
         
-        // S/N
         $pdf->Cell($col_widths[0], 8, $sn, 1, 0, 'C', $fill);
-        
-        // Index Number
-        $index = $student['index_number'] ?: 'N/A';
-        $pdf->Cell($col_widths[1], 8, $index, 1, 0, 'C', $fill);
-        
-        // Full Name
-        $full_name = $student['first_name'] . ' ' . $student['last_name'];
-        $pdf->Cell($col_widths[2], 8, $full_name, 1, 0, 'L', $fill);
+        $pdf->Cell($col_widths[1], 8, $student['index_number'] ?: 'N/A', 1, 0, 'C', $fill);
+        $pdf->Cell($col_widths[2], 8, $student['first_name'] . ' ' . $student['last_name'], 1, 0, 'L', $fill);
         
         $col_index = 3;
-        
-        // Class
         if ($include_class) {
             $pdf->Cell($col_widths[$col_index], 8, $student['class'] ?: 'N/A', 1, 0, 'C', $fill);
             $col_index++;
         }
-        
-        // Combination
         if ($include_combination) {
             $pdf->Cell($col_widths[$col_index], 8, $student['combination'] ?: 'N/A', 1, 0, 'C', $fill);
             $col_index++;
         }
-        
-        // Gender
         if ($include_gender) {
             $pdf->Cell($col_widths[$col_index], 8, $student['sex'] ?: 'N/A', 1, 0, 'C', $fill);
             $col_index++;
         }
-        
-        // Table
         if ($include_table) {
-            $table_text = $student['assigned_table'] ?: 'Not assigned';
-            $pdf->Cell($col_widths[$col_index], 8, $table_text, 1, 0, 'C', $fill);
+            $pdf->Cell($col_widths[$col_index], 8, $student['assigned_table'] ?: 'Not assigned', 1, 0, 'C', $fill);
             $col_index++;
         }
-        
-        // Chair
         if ($include_chair) {
-            $chair_text = $student['assigned_chair'] ?: 'Not assigned';
-            $pdf->Cell($col_widths[$col_index], 8, $chair_text, 1, 0, 'C', $fill);
+            $pdf->Cell($col_widths[$col_index], 8, $student['assigned_chair'] ?: 'Not assigned', 1, 0, 'C', $fill);
         }
         
         $pdf->Ln();
@@ -693,20 +789,16 @@ function displayStudentTable($pdf, $students) {
     }
 }
 
-// Function to display staff table in PDF
-function displayStaffTable($pdf, $staff) {
+function displayStaffTablePDF($pdf, $staff) {
     global $include_email, $include_gender, $include_role, $include_table, $include_chair;
     
-    // Calculate column widths
-    $col_widths = [12, 20, 60]; // S/N, ID, Full Name
-    
+    $col_widths = [12, 20, 60];
     if ($include_email) $col_widths[] = 45;
     if ($include_gender) $col_widths[] = 18;
     if ($include_role) $col_widths[] = 30;
     if ($include_table) $col_widths[] = 25;
     if ($include_chair) $col_widths[] = 25;
     
-    // Table header
     $pdf->SetFont('helvetica', 'B', 9);
     $pdf->SetFillColor(59, 157, 179);
     $pdf->SetTextColor(255);
@@ -720,13 +812,11 @@ function displayStaffTable($pdf, $staff) {
     if ($include_table) $headers[] = 'Table';
     if ($include_chair) $headers[] = 'Chair';
     
-    // Output headers
     for($i = 0; $i < count($headers); $i++) {
         $pdf->Cell($col_widths[$i], 8, $headers[$i], 1, 0, 'C', 1);
     }
     $pdf->Ln();
     
-    // Table content
     $pdf->SetTextColor(0);
     $pdf->SetFont('helvetica', '', 9);
     $fill = false;
@@ -739,47 +829,30 @@ function displayStaffTable($pdf, $staff) {
             $pdf->SetFillColor(255, 255, 255);
         }
         
-        // S/N
         $pdf->Cell($col_widths[0], 8, $sn, 1, 0, 'C', $fill);
-        
-        // ID
         $pdf->Cell($col_widths[1], 8, $person['id'], 1, 0, 'C', $fill);
-        
-        // Full Name
         $full_name = $person['first_name'] . ' ' . ($person['middle_name'] ? $person['middle_name'] . ' ' : '') . $person['last_name'];
         $pdf->Cell($col_widths[2], 8, $full_name, 1, 0, 'L', $fill);
         
         $col_index = 3;
-        
-        // Email
         if ($include_email) {
             $pdf->Cell($col_widths[$col_index], 8, $person['email'] ?: 'N/A', 1, 0, 'L', $fill);
             $col_index++;
         }
-        
-        // Gender
         if ($include_gender) {
             $pdf->Cell($col_widths[$col_index], 8, $person['sex'] ?: 'N/A', 1, 0, 'C', $fill);
             $col_index++;
         }
-        
-        // Role
         if ($include_role) {
             $pdf->Cell($col_widths[$col_index], 8, $person['roles'] ?: 'N/A', 1, 0, 'L', $fill);
             $col_index++;
         }
-        
-        // Table
         if ($include_table) {
-            $table_text = $person['assigned_table'] ?: 'Not assigned';
-            $pdf->Cell($col_widths[$col_index], 8, $table_text, 1, 0, 'C', $fill);
+            $pdf->Cell($col_widths[$col_index], 8, $person['assigned_table'] ?: 'Not assigned', 1, 0, 'C', $fill);
             $col_index++;
         }
-        
-        // Chair
         if ($include_chair) {
-            $chair_text = $person['assigned_chair'] ?: 'Not assigned';
-            $pdf->Cell($col_widths[$col_index], 8, $chair_text, 1, 0, 'C', $fill);
+            $pdf->Cell($col_widths[$col_index], 8, $person['assigned_chair'] ?: 'Not assigned', 1, 0, 'C', $fill);
         }
         
         $pdf->Ln();
@@ -788,17 +861,54 @@ function displayStaffTable($pdf, $staff) {
     }
 }
 
-// Handle Excel export
+// ==================== EXCEL EXPORT ====================
 if (isset($_GET['export']) && $_GET['export'] == 'excel') {
     header('Content-Type: application/vnd.ms-excel');
     header('Content-Disposition: attachment;filename="maintenance_report_' . date('Y-m-d') . '.xls"');
     header('Cache-Control: max-age=0');
     
-    echo '<table border="1">';
-    echo '<tr><th colspan="' . (3 + ($include_class ? 1 : 0) + ($include_combination ? 1 : 0) + ($include_gender ? 1 : 0) + ($include_email ? 1 : 0) + ($include_role ? 1 : 0) + ($include_table ? 1 : 0) + ($include_chair ? 1 : 0)) . '">';
-    echo 'MUYOVOZI HIGH SCHOOL - ' . ($report_type == 'student' ? 'STUDENT' : 'STAFF') . ' MAINTENANCE REPORT';
-    echo '</th></tr>';
+    $colspan = 3; // S/N, Index/ID, Full Name
+    if ($report_type == 'student') {
+        if ($include_class) $colspan++;
+        if ($include_combination) $colspan++;
+        if ($include_gender) $colspan++;
+    } else {
+        if ($include_email) $colspan++;
+        if ($include_gender) $colspan++;
+        if ($include_role) $colspan++;
+    }
+    if ($include_table) $colspan++;
+    if ($include_chair) $colspan++;
     
+    echo '<!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            table { border-collapse: collapse; width: 100%; }
+            th { background-color: #3B9DB3; color: white; font-weight: bold; padding: 8px; border: 1px solid #ddd; }
+            td { padding: 6px; border: 1px solid #ddd; }
+            .header { text-align: center; font-size: 16px; font-weight: bold; margin-bottom: 20px; }
+            .sub-header { text-align: center; font-size: 12px; margin-bottom: 20px; color: #666; }
+            .filter-info { background-color: #f0f0f0; padding: 10px; margin-bottom: 20px; }
+        </style>
+    </head>
+    <body>';
+    
+    echo '<div class="header">' . strtoupper(htmlspecialchars($school_name)) . '</div>';
+    echo '<div class="sub-header">' . htmlspecialchars($school_motto) . '</div>';
+    echo '<div class="header" style="font-size:14px;">' . ($report_type == 'student' ? 'STUDENT' : 'STAFF') . ' MAINTENANCE REPORT</div>';
+    
+    echo '<div class="filter-info">';
+    echo '<strong>Filters Applied:</strong><br>';
+    echo 'School: ' . htmlspecialchars($school_name) . ' | ';
+    echo 'Gender: ' . ($filter_gender ?: 'All') . ' | ';
+    echo 'Status: ' . ucfirst($filter_status) . ' | ';
+    echo 'Assignment Status: ' . ucfirst($assign_status) . ' | ';
+    echo 'Total Records: ' . $total_records;
+    echo '</div>';
+    
+    echo '<table border="1">';
     echo '<tr>';
     echo '<th>S/N</th>';
     echo '<th>' . ($report_type == 'student' ? 'Index No.' : 'ID') . '</th>';
@@ -842,6 +952,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
     }
     
     echo '</table>';
+    echo '</body></html>';
     exit();
 }
 ?>
@@ -853,36 +964,86 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
     <div class="container-fluid">
         <!-- Page Title -->
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="page-title">Maintenance Report Generator</h2>
-            <!-- Action Button with Dropdown -->
-                <div class="dropdown">
-                    
-                    <button class="btn btn-primary dropdown-toggle" type="button" id="actionDropdown" 
-                            data-bs-toggle="dropdown" aria-expanded="false">
-                        <i class="fas fa-cog me-2"></i>Actions
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="actionDropdown">
-                        <li><a class="dropdown-item" href="maintenance.php">
-                            <i class="fas fa-tools me-2"></i>Dashboard
-                        </a></li>
-                       
-                        <li><a class="dropdown-item" href="student_main.php">
-                            <i class="fas fa-user-graduate me-2"></i>Assign Student
-                        </a></li>
-                        <li><a class="dropdown-item" href="staff_main.php">
-                            <i class="fas fa-chalkboard-teacher me-2"></i>Assign Staff
-                        </a></li>
-                        <li><a class="dropdown-item" href="maintenance_logs.php">
-                            <i class="fas fa-history me-2"></i>View Logs
-                        </a></li>
-                        <li><a class="dropdown-item" href="report_maintenance.php"><i class="fas fa-download me-2"></i>Export List</a></li>
-                    </ul>
-                </div>
+            <h2 class="page-title">
+                <i class="fas fa-chart-bar me-2"></i>Maintenance Report Generator
+                <span class="badge bg-primary ms-2"><?php echo htmlspecialchars($school_name); ?></span>
+            </h2>
+            <div class="dropdown">
+                <button class="btn btn-primary dropdown-toggle" type="button" id="actionDropdown" 
+                        data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-cog me-2"></i>Actions
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="actionDropdown">
+                    <li><a class="dropdown-item" href="maintenance.php"><i class="fas fa-tools me-2"></i>Dashboard</a></li>
+                    <li><a class="dropdown-item" href="student_main.php"><i class="fas fa-user-graduate me-2"></i>Assign Student</a></li>
+                    <li><a class="dropdown-item" href="staff_main.php"><i class="fas fa-chalkboard-teacher me-2"></i>Assign Staff</a></li>
+                    <li><a class="dropdown-item" href="maintenance_logs.php"><i class="fas fa-history me-2"></i>View Logs</a></li>
+                    <li><a class="dropdown-item" href="report_maintenance.php"><i class="fas fa-download me-2"></i>Export List</a></li>
+                </ul>
+            </div>
         </div>
+
+        <!-- School Info Card -->
+        <div class="card mb-4 bg-light">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-2 text-center">
+                        <?php if (!empty($school_logo_path)): ?>
+                            <img src="../<?php echo htmlspecialchars($school_logo_path); ?>" 
+                                 alt="<?php echo htmlspecialchars($school_name); ?> Logo" 
+                                 class="img-fluid" style="max-height: 80px; border-radius: 8px;">
+                        <?php else: ?>
+                            <div class="logo-placeholder" style="width: 80px; height: 80px; background: #3B9DB3; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; margin: 0 auto;">
+                                <?php echo substr($school_name, 0, 1); ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="col-md-6">
+                        <h3 class="mb-1"><?php echo htmlspecialchars($school_name); ?></h3>
+                        <p class="text-muted mb-0"><?php echo htmlspecialchars($school_motto); ?></p>
+                        <?php if (!empty($school_code)): ?>
+                            <span class="badge bg-secondary">Code: <?php echo htmlspecialchars($school_code); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <span class="badge bg-info fs-6">Total Records: <?php echo $total_records; ?></span>
+                        <span class="badge bg-success fs-6 ms-2">With Assignments: <?php echo $stats['with_table'] + $stats['with_chair'] - $stats['with_both']; ?></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <?php if ($is_super_admin && count($all_schools) > 1): ?>
+        <!-- School Selector for System Registrar -->
+        <div class="card mb-4">
+            <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
+                <h5 class="mb-0"><i class="fas fa-building me-2"></i>Select School</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="report_maintenance.php" class="row g-3">
+                    <div class="col-md-4">
+                        <input type="hidden" name="report_type" value="<?php echo $report_type; ?>">
+                        <select name="school_id" class="form-select" onchange="this.form.submit()">
+                            <option value="0">-- Select School --</option>
+                            <?php foreach ($all_schools as $school): ?>
+                                <option value="<?php echo $school['id']; ?>" 
+                                    <?php echo ($school_id == $school['id']) ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($school['school_name']); ?> (<?php echo htmlspecialchars($school['school_code']); ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="report_maintenance.php" class="btn btn-outline-secondary">Reset</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Report Type Tabs -->
         <div class="card mb-4">
-            <div class="card-header">
+            <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
                 <ul class="nav nav-tabs card-header-tabs" id="reportTypeTabs" role="tablist">
                     <li class="nav-item" role="presentation">
                         <button class="nav-link <?php echo $report_type == 'student' ? 'active' : ''; ?>" 
@@ -904,6 +1065,9 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                 <!-- Filter Form -->
                 <form method="GET" action="report_maintenance.php" id="filterForm">
                     <input type="hidden" name="report_type" id="report_type" value="<?php echo $report_type; ?>">
+                    <?php if ($is_super_admin && $school_id > 0): ?>
+                        <input type="hidden" name="school_id" value="<?php echo $school_id; ?>">
+                    <?php endif; ?>
                     
                     <div class="row">
                         <!-- Student-specific filters -->
@@ -986,7 +1150,6 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                         <div class="col-md-12">
                             <h6 class="mb-3">Select Columns to Include:</h6>
                             <div class="row">
-                                <!-- Common columns -->
                                 <div class="col-md-2 mb-2">
                                     <div class="form-check">
                                         <input class="form-check-input" type="checkbox" name="include_table" value="1" 
@@ -1077,12 +1240,14 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                                         }
                                         ?>
                                     </span>
+                                    <span class="badge bg-primary ms-2"><?php echo htmlspecialchars($school_name); ?></span>
                                 </div>
                                 <div>
                                     <button type="submit" class="btn btn-primary me-2">
                                         <i class="fas fa-search me-2"></i>Apply Filters
                                     </button>
-                                    <a href="report_maintenance.php" class="btn btn-outline-secondary">
+                                    <a href="report_maintenance.php<?php echo ($is_super_admin && $school_id > 0) ? '?school_id=' . $school_id : ''; ?>" 
+                                       class="btn btn-outline-secondary">
                                         <i class="fas fa-redo me-2"></i>Reset
                                     </a>
                                 </div>
@@ -1138,7 +1303,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
 
         <!-- Export Options -->
         <div class="card mb-4">
-            <div class="card-header" style="background-color: #3B9DB3; color: white;">
+            <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
                 <h4 class="mb-0">
                     <i class="fas fa-download me-2"></i>Export Options
                 </h4>
@@ -1151,7 +1316,11 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                             <h4>Export as PDF</h4>
                             <p class="text-muted">Professional PDF report with school logo</p>
                             <?php
-                            $export_url = "report_maintenance.php?" . http_build_query(array_merge($_GET, ['export' => 'pdf']));
+                            $export_params = array_merge($_GET, ['export' => 'pdf']);
+                            if ($is_super_admin && $school_id > 0) {
+                                $export_params['school_id'] = $school_id;
+                            }
+                            $export_url = "report_maintenance.php?" . http_build_query($export_params);
                             ?>
                             <a href="<?php echo $export_url; ?>" class="btn btn-danger btn-lg">
                                 <i class="fas fa-download me-2"></i>Download PDF
@@ -1165,7 +1334,11 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                             <h4>Export as Excel</h4>
                             <p class="text-muted">Excel spreadsheet for data analysis</p>
                             <?php
-                            $export_excel_url = "report_maintenance.php?" . http_build_query(array_merge($_GET, ['export' => 'excel']));
+                            $export_excel_params = array_merge($_GET, ['export' => 'excel']);
+                            if ($is_super_admin && $school_id > 0) {
+                                $export_excel_params['school_id'] = $school_id;
+                            }
+                            $export_excel_url = "report_maintenance.php?" . http_build_query($export_excel_params);
                             ?>
                             <a href="<?php echo $export_excel_url; ?>" class="btn btn-success btn-lg">
                                 <i class="fas fa-download me-2"></i>Download Excel
@@ -1184,6 +1357,9 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                         <li>Statistics summary on last page</li>
                         <li>Report summary after statistics</li>
                         <li>Professional formatting</li>
+                        <?php if ($is_super_admin): ?>
+                            <li><strong>System Registrar:</strong> Select a school from the dropdown above to view its data</li>
+                        <?php endif; ?>
                     </ul>
                 </div>
             </div>
@@ -1191,7 +1367,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
 
         <!-- Preview Section -->
         <div class="card">
-            <div class="card-header">
+            <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
                 <div class="d-flex justify-content-between align-items-center">
                     <h4 class="mb-0">
                         <i class="fas fa-eye me-2"></i>Report Preview
@@ -1206,7 +1382,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
             <div class="card-body">
                 <!-- Report Summary Preview -->
                 <div class="card mb-4">
-                    <div class="card-header">
+                    <div class="card-header bg-light">
                         <h6 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Report Summary</h6>
                     </div>
                     <div class="card-body">
@@ -1214,10 +1390,16 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                             <table class="table table-sm table-bordered">
                                 <tbody>
                                     <tr>
-                                        <th width="25%">Report Type:</th>
-                                        <td width="25%"><?php echo $report_type == 'student' ? 'Student Maintenance' : 'Staff Maintenance'; ?></td>
-                                        <th width="25%">Generated Date:</th>
-                                        <td width="25%"><?php echo date('d/m/Y'); ?></td>
+                                        <th width="20%">Report Type:</th>
+                                        <td width="30%"><?php echo $report_type == 'student' ? 'Student Maintenance' : 'Staff Maintenance'; ?></td>
+                                        <th width="20%">Generated Date:</th>
+                                        <td width="30%"><?php echo date('d/m/Y'); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <th>School:</th>
+                                        <td><?php echo htmlspecialchars($school_name); ?></td>
+                                        <th>School Code:</th>
+                                        <td><?php echo htmlspecialchars($school_code); ?></td>
                                     </tr>
                                     <?php if ($report_type == 'student'): ?>
                                     <tr>
@@ -1461,7 +1643,8 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                     <i class="fas fa-search fa-3x text-muted mb-3"></i>
                     <h4>No records found</h4>
                     <p class="text-muted">Try adjusting your filter criteria</p>
-                    <a href="report_maintenance.php" class="btn btn-primary">
+                    <a href="report_maintenance.php<?php echo ($is_super_admin && $school_id > 0) ? '?school_id=' . $school_id : ''; ?>" 
+                       class="btn btn-primary">
                         <i class="fas fa-redo me-2"></i>Reset Filters
                     </a>
                 </div>
@@ -1479,18 +1662,15 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Show/hide appropriate filters
         const studentFilters = document.getElementById('studentFilters');
-        const staffFilters = document.getElementById('staffFilters');
         const studentColumns = document.getElementById('studentColumns');
         const staffColumns = document.getElementById('staffColumns');
         
         if (type === 'student') {
             studentFilters.classList.remove('d-none');
-            staffFilters.classList.add('d-none');
             studentColumns.classList.remove('d-none');
             staffColumns.classList.add('d-none');
         } else {
             studentFilters.classList.add('d-none');
-            staffFilters.classList.remove('d-none');
             studentColumns.classList.add('d-none');
             staffColumns.classList.remove('d-none');
         }
@@ -1514,24 +1694,6 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     };
     
-    // Update checkbox labels
-    const checkboxes = document.querySelectorAll('.form-check-input');
-    checkboxes.forEach(checkbox => {
-        const label = checkbox.nextElementSibling;
-        checkbox.addEventListener('change', function() {
-            if (label) {
-                label.textContent = this.checked ? 
-                    label.textContent.replace('Include', 'Including') : 
-                    label.textContent.replace('Including', 'Include');
-            }
-        });
-        
-        // Initialize label text
-        if (label && checkbox.checked) {
-            label.textContent = label.textContent.replace('Include', 'Including');
-        }
-    });
-    
     // Auto-submit on some filter changes
     const autoSubmitFilters = ['class', 'combination', 'gender', 'status', 'assign_status', 'sort_order'];
     autoSubmitFilters.forEach(filterName => {
@@ -1554,7 +1716,6 @@ document.addEventListener('DOMContentLoaded', function() {
         const allChecked = Array.from(checkboxes).every(cb => cb.checked);
         
         checkboxes.forEach(cb => {
-            // Only toggle checkboxes that are visible for current report type
             const parentDiv = cb.closest('.col-md-2');
             if (parentDiv && !parentDiv.classList.contains('d-none')) {
                 cb.checked = !allChecked;
@@ -1572,29 +1733,34 @@ document.addEventListener('DOMContentLoaded', function() {
         columnOptionsDiv.insertBefore(toggleAllBtn, columnOptionsDiv.querySelector('h6'));
     }
     
-    // Add hover effects to table rows
-    const tableRows = document.querySelectorAll('table tbody tr');
-    tableRows.forEach(row => {
-        row.addEventListener('mouseenter', function() {
-            this.style.backgroundColor = 'rgba(59, 157, 179, 0.05)';
-            this.style.cursor = 'pointer';
-        });
-        row.addEventListener('mouseleave', function() {
-            this.style.backgroundColor = '';
-        });
-    });
-    
     // Initialize based on current report type
     switchReportType('<?php echo $report_type; ?>');
 });
 </script>
 
 <style>
-/* Custom styles for maintenance report page */
-.card-header{
-     background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+.card-header {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
     color: var(--white);
 }
+
+.nav-tabs .nav-link {
+    color: rgba(255, 255, 255, 0.8);
+    border: none;
+    padding: 10px 20px;
+}
+
+.nav-tabs .nav-link.active {
+    color: #3B9DB3;
+    background-color: white;
+    border-bottom: 3px solid #3B9DB3;
+}
+
+.nav-tabs .nav-link:hover:not(.active) {
+    color: white;
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
 .avatar-circle {
     width: 36px;
     height: 36px;
@@ -1651,23 +1817,6 @@ document.addEventListener('DOMContentLoaded', function() {
     transform: translateY(-5px);
 }
 
-.nav-tabs .nav-link {
-    color: rgba(255, 255, 255, 0.8);
-    border: none;
-    padding: 10px 20px;
-}
-
-.nav-tabs .nav-link.active {
-    color: #3B9DB3;
-    background-color: white;
-    border-bottom: 3px solid #3B9DB3;
-}
-
-.nav-tabs .nav-link:hover:not(.active) {
-    color: white;
-    background-color: rgba(255, 255, 255, 0.1);
-}
-
 .class-section {
     border: 1px solid #dee2e6;
     border-radius: 8px;
@@ -1681,7 +1830,25 @@ document.addEventListener('DOMContentLoaded', function() {
     margin-bottom: 15px;
 }
 
-/* Responsive adjustments */
+.logo-placeholder {
+    background: #3B9DB3 !important;
+}
+
+.form-check {
+    padding-left: 2rem;
+    margin-bottom: 0.5rem;
+}
+
+.form-check-input:checked {
+    background-color: #3B9DB3;
+    border-color: #3B9DB3;
+}
+
+.form-check-label {
+    cursor: pointer;
+    font-weight: 500;
+}
+
 @media (max-width: 768px) {
     .stats-card.simple-card {
         padding: 15px;
@@ -1721,7 +1888,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 }
 
-/* Print styles */
 @media print {
     .no-print, .card-header .btn, .export-option, .stats-card, .nav-tabs, form {
         display: none !important;
@@ -1741,36 +1907,6 @@ document.addEventListener('DOMContentLoaded', function() {
         break-inside: avoid;
         page-break-inside: avoid;
     }
-}
-
-/* Column options styling */
-.form-check {
-    padding-left: 2rem;
-    margin-bottom: 0.5rem;
-}
-
-.form-check-input:checked {
-    background-color: #3B9DB3;
-    border-color: #3B9DB3;
-}
-
-.form-check-label {
-    cursor: pointer;
-    font-weight: 500;
-}
-
-/* Summary table styling */
-.table-sm th, .table-sm td {
-    padding: 8px;
-}
-
-.table-bordered {
-    border: 1px solid #dee2e6;
-}
-
-.table-bordered th {
-    background-color: #f8f9fa;
-    font-weight: 600;
 }
 </style>
 

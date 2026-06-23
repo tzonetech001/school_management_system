@@ -1,5 +1,9 @@
 <?php
-// edit_admin.php
+// report_admin.php - Staff/Teachers Report Generator
+// UPDATED: School name, motto, and logo now load dynamically from schools table
+// Supports multi-school: school_id is used to fetch correct school details
+// FIXED: TCPDF PNG alpha channel error - converts PNG to JPG using GD
+
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -9,7 +13,61 @@ $success = '';
 // Check if user has permission (Head Master or Second Master only)
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
-// Get current user's roles
+// ==================== GET CURRENT USER'S SCHOOL ID ====================
+// Get school_id from session or from admin record
+$school_id = $_SESSION['school_id'] ?? 0;
+
+// If school_id not in session, get it from admin record
+if ($school_id == 0 && $admin_id > 0) {
+    $school_sql = "SELECT school_id FROM admins WHERE id = ?";
+    $school_stmt = $conn->prepare($school_sql);
+    $school_stmt->bind_param("i", $admin_id);
+    $school_stmt->execute();
+    $school_result = $school_stmt->get_result();
+    if ($school_row = $school_result->fetch_assoc()) {
+        $school_id = $school_row['school_id'];
+        $_SESSION['school_id'] = $school_id;
+    }
+    $school_stmt->close();
+}
+
+// If still no school_id, try to get from session super_admin
+$is_super_admin = isset($_SESSION['super_admin_id']);
+if ($is_super_admin) {
+    // System Registrar can select a school or view all
+    $selected_school_id = $_GET['school_id'] ?? 0;
+    if ($selected_school_id > 0) {
+        $school_id = $selected_school_id;
+    }
+}
+
+// ==================== GET SCHOOL INFO FROM DATABASE ====================
+$school_name = "School Management System";
+$school_motto = "Education For Life";
+$school_logo_path = null;
+$school_code = "";
+
+if ($school_id > 0) {
+    $school_sql = "SELECT school_name, school_motto, logo_path, school_code FROM schools WHERE id = ? AND status = 'Active'";
+    $school_stmt = $conn->prepare($school_sql);
+    $school_stmt->bind_param("i", $school_id);
+    $school_stmt->execute();
+    $school_result = $school_stmt->get_result();
+    if ($school_row = $school_result->fetch_assoc()) {
+        $school_name = !empty($school_row['school_name']) ? $school_row['school_name'] : "School Management System";
+        $school_motto = !empty($school_row['school_motto']) ? $school_row['school_motto'] : "Education For Life";
+        $school_logo_path = $school_row['logo_path'] ?? null;
+        $school_code = $school_row['school_code'] ?? "";
+    }
+    $school_stmt->close();
+}
+
+// Fallback if no school found
+if (empty($school_name)) {
+    $school_name = "School Management System";
+}
+
+// ==================== GET USER ROLES ====================
 $user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
 $stmt = $conn->prepare($user_roles_sql);
 $stmt->bind_param("i", $admin_id);
@@ -23,29 +81,19 @@ while ($row = $user_roles_result->fetch_assoc()) {
 // Check if user has Head Master (1) or Second Master (2) role
 $has_permission = false;
 foreach ($user_role_ids as $role_id) {
-    if ($role_id == 1 || $role_id == 2) { // Head Master or Second Master
+    if ($role_id == 1 || $role_id == 2) {
         $has_permission = true;
         break;
     }
 }
 
-if (!$has_permission) {
+if (!$has_permission && !$is_super_admin) {
     $_SESSION['error'] = "You don't have permission to view staff members.";
     header("Location: ../404.php");
     exit();
 }
 
-
-// Get all roles from database (excluding Super Admin if it exists)
-$roles = [];
-$roles_sql = "SELECT * FROM admin_roles WHERE role_name != 'Super Admin' ORDER BY role_name";
-$roles_result = mysqli_query($conn, $roles_sql);
-if ($roles_result && mysqli_num_rows($roles_result) > 0) {
-    while ($row = mysqli_fetch_assoc($roles_result)) {
-        $roles[] = $row;
-    }
-}
-// Default values
+// ==================== GET FILTER PARAMETERS ====================
 $filter_role = $_GET['role'] ?? '';
 $filter_gender = $_GET['gender'] ?? '';
 $filter_status = $_GET['status'] ?? 'Active';
@@ -57,18 +105,19 @@ $include_status = isset($_GET['include_status']) && $_GET['include_status'] == 1
 $include_roles = isset($_GET['include_roles']) && $_GET['include_roles'] == 1 ? true : false;
 $include_created = isset($_GET['include_created']) && $_GET['include_created'] == 1 ? true : false;
 
-// Build SQL query based on filters
-$where_conditions = [];
-$params = [];
-$param_types = "";
+// Get all available roles for filter dropdown
+$roles_sql = "SELECT DISTINCT role_name FROM admin_roles ORDER BY role_name";
+$roles_result = mysqli_query($conn, $roles_sql);
+$all_roles = [];
+while ($row = mysqli_fetch_assoc($roles_result)) {
+    $all_roles[] = $row['role_name'];
+}
 
-// Base query with role information
-$base_sql = "SELECT a.*, 
-            GROUP_CONCAT(DISTINCT ar.role_name ORDER BY ara.is_primary DESC, ar.role_name SEPARATOR ', ') as roles,
-            GROUP_CONCAT(DISTINCT CASE WHEN ara.is_primary = 1 THEN ar.role_name END) as primary_role
-            FROM admins a
-            LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
-            LEFT JOIN admin_roles ar ON ara.role_id = ar.id";
+// ==================== BUILD SQL QUERY ====================
+// Build WHERE conditions
+$where_conditions = ["a.school_id = ?"];
+$params = [$school_id];
+$param_types = "i";
 
 if (!empty($filter_role)) {
     $where_conditions[] = "ar.role_name = ?";
@@ -96,44 +145,65 @@ if ($filter_has_nida == 'yes') {
     $where_conditions[] = "(a.nida IS NULL OR a.nida = '')";
 }
 
-// Add WHERE clause if conditions exist
-if (count($where_conditions) > 0) {
-    $where_clause = "WHERE " . implode(" AND ", $where_conditions);
-} else {
-    $where_clause = "";
-}
+// Base query
+$base_sql = "SELECT a.*, 
+            GROUP_CONCAT(DISTINCT ar.role_name ORDER BY ara.is_primary DESC, ar.role_name SEPARATOR ', ') as roles,
+            GROUP_CONCAT(DISTINCT CASE WHEN ara.is_primary = 1 THEN ar.role_name END) as primary_role
+            FROM admins a
+            LEFT JOIN admin_role_assignments ara ON a.id = ara.admin_id
+            LEFT JOIN admin_roles ar ON ara.role_id = ar.id";
 
-// Complete SQL with GROUP BY and ORDER BY
+$where_clause = "WHERE " . implode(" AND ", $where_conditions);
 $sql = "$base_sql $where_clause GROUP BY a.id ORDER BY a.status DESC, a.first_name, a.last_name";
 
 // Get filtered admins
 $admins = [];
-if (!empty($params)) {
-    $stmt = mysqli_prepare($conn, $sql);
-    mysqli_stmt_bind_param($stmt, $param_types, ...$params);
-    mysqli_stmt_execute($stmt);
-    $result = mysqli_stmt_get_result($stmt);
-} else {
-    $result = mysqli_query($conn, $sql);
-}
+$stmt = mysqli_prepare($conn, $sql);
+mysqli_stmt_bind_param($stmt, $param_types, ...$params);
+mysqli_stmt_execute($stmt);
+$result = mysqli_stmt_get_result($stmt);
 
 if ($result && mysqli_num_rows($result) > 0) {
     while ($row = mysqli_fetch_assoc($result)) {
         $admins[] = $row;
     }
 }
+mysqli_stmt_close($stmt);
 
 $total_admins = count($admins);
 
-// Get all available roles for filter dropdown
-$roles_sql = "SELECT DISTINCT role_name FROM admin_roles ORDER BY role_name";
-$roles_result = mysqli_query($conn, $roles_sql);
-$all_roles = [];
-while ($row = mysqli_fetch_assoc($roles_result)) {
-    $all_roles[] = $row['role_name'];
-}
+// ==================== GET STATISTICS ====================
+$stats_sql = "SELECT 
+    COUNT(*) as total,
+    SUM(CASE WHEN sex = 'Male' THEN 1 ELSE 0 END) as males,
+    SUM(CASE WHEN sex = 'Female' THEN 1 ELSE 0 END) as females,
+    SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as active,
+    SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) as inactive,
+    SUM(CASE WHEN nida IS NOT NULL AND nida != '' THEN 1 ELSE 0 END) as has_nida
+    FROM admins
+    WHERE school_id = ?";
 
-// Get statistics for each role
+$stats_stmt = $conn->prepare($stats_sql);
+$stats_stmt->bind_param("i", $school_id);
+$stats_stmt->execute();
+$stats_result = $stats_stmt->get_result();
+$overall_stats = $stats_result->fetch_assoc();
+$stats_stmt->close();
+
+// Get role count for this school
+$role_count_sql = "SELECT COUNT(DISTINCT ar.role_name) as role_count 
+                    FROM admin_roles ar
+                    JOIN admin_role_assignments ara ON ar.id = ara.role_id
+                    JOIN admins a ON ara.admin_id = a.id
+                    WHERE a.school_id = ?";
+$role_count_stmt = $conn->prepare($role_count_sql);
+$role_count_stmt->bind_param("i", $school_id);
+$role_count_stmt->execute();
+$role_count_result = $role_count_stmt->get_result();
+$role_count = $role_count_result->fetch_assoc()['role_count'] ?? 0;
+$role_count_stmt->close();
+
+// Get role statistics for this school
 $role_stats_sql = "SELECT 
     ar.role_name,
     COUNT(DISTINCT a.id) as total,
@@ -144,43 +214,90 @@ $role_stats_sql = "SELECT
     FROM admins a
     JOIN admin_role_assignments ara ON a.id = ara.admin_id
     JOIN admin_roles ar ON ara.role_id = ar.id
+    WHERE a.school_id = ?
     GROUP BY ar.role_name
     ORDER BY ar.role_name";
     
-$role_stats_result = mysqli_query($conn, $role_stats_sql);
+$role_stats_stmt = $conn->prepare($role_stats_sql);
+$role_stats_stmt->bind_param("i", $school_id);
+$role_stats_stmt->execute();
+$role_stats_result = $role_stats_stmt->get_result();
 $role_stats = [];
-while ($row = mysqli_fetch_assoc($role_stats_result)) {
+while ($row = $role_stats_result->fetch_assoc()) {
     $role_stats[$row['role_name']] = $row;
 }
+$role_stats_stmt->close();
 
-// Handle PDF generation
+// ==================== GET ALL SCHOOLS FOR SYSTEM REGISTRAR ====================
+$all_schools = [];
+if ($is_super_admin) {
+    $schools_sql = "SELECT id, school_name, school_code, logo_path FROM schools WHERE status = 'Active' ORDER BY school_name";
+    $schools_result = mysqli_query($conn, $schools_sql);
+    while ($row = mysqli_fetch_assoc($schools_result)) {
+        $all_schools[] = $row;
+    }
+}
+
+// ==================== PDF GENERATION ====================
 if (isset($_GET['export']) && $_GET['export'] == 'pdf') {
     require_once('../tcpdf/tcpdf.php');
     
     class AdminPDF extends TCPDF {
-        // Page header
+        public $school_name = '';
+        public $school_motto = '';
+        public $logo_path = '';
+        
         public function Header() {
-            // Logo
-            $logo_path = '../muyovozi.png';
-            if (file_exists($logo_path)) {
-                $this->Image($logo_path, 10, 10, 20, 20, 'PNG', '', 'T', false, 300, '', false, false, 0, false, false, false);
-                $this->SetFont('helvetica', 'B', 16);
-                $this->Cell(0, 0, 'MUYOVOZI HIGH SCHOOL', 0, 1, 'C');
-                $this->SetFont('helvetica', '', 10);
-                $this->Cell(0, 0, 'Staff/Teachers Report', 0, 1, 'C');
-                $this->SetY(35);
-            } else {
-                $this->SetFont('helvetica', 'B', 16);
-                $this->Cell(0, 0, 'MUYOVOZI HIGH SCHOOL', 0, 1, 'C');
-                $this->SetFont('helvetica', '', 10);
-                $this->Cell(0, 0, 'Staff/Teachers Report', 0, 1, 'C');
-                $this->SetY(30);
+            // Try to load school logo
+            $logo_used = false;
+            $temp_logo_path = null;
+            
+            if (!empty($this->logo_path)) {
+                $full_logo_path = '../' . $this->logo_path;
+                
+                if (file_exists($full_logo_path)) {
+                    $file_info = pathinfo($full_logo_path);
+                    $extension = strtolower($file_info['extension'] ?? '');
+                    
+                    if ($extension == 'png') {
+                        // Convert PNG to JPG using GD
+                        if (function_exists('imagecreatefrompng') && function_exists('imagejpeg')) {
+                            $png = @imagecreatefrompng($full_logo_path);
+                            if ($png !== false) {
+                                $temp_jpg = sys_get_temp_dir() . '/logo_' . md5($full_logo_path) . '.jpg';
+                                imagejpeg($png, $temp_jpg, 90);
+                                imagedestroy($png);
+                                if (file_exists($temp_jpg)) {
+                                    $temp_logo_path = $temp_jpg;
+                                    $full_logo_path = $temp_logo_path;
+                                }
+                            }
+                        }
+                    }
+                    
+                    if (file_exists($full_logo_path)) {
+                        $this->Image($full_logo_path, 10, 10, 20, 20, '', '', 'T', false, 300, '', false, false, 0, false, false, false);
+                        $logo_used = true;
+                    }
+                }
             }
+            
+            // School name and motto
+            $this->SetY(12);
+            $this->SetFont('helvetica', 'B', 14);
+            $this->Cell(0, 0, strtoupper($this->school_name), 0, 1, 'C');
+            
+            $this->SetFont('helvetica', 'I', 10);
+            $this->Cell(0, 0, $this->school_motto, 0, 1, 'C');
+            
+            $this->SetFont('helvetica', 'B', 12);
+            $this->Cell(0, 10, 'STAFF/TEACHERS REPORT', 0, 1, 'C');
+            
+            $this->SetY(35);
             $this->Line(10, $this->GetY() + 0.05, 200, $this->GetY() + 0.05);
             $this->Ln(10);
         }
         
-        // Page footer
         public function Footer() {
             $this->SetY(-15);
             $this->SetFont('helvetica', 'I', 8);
@@ -191,32 +308,23 @@ if (isset($_GET['export']) && $_GET['export'] == 'pdf') {
     // Create new PDF document
     $pdf = new AdminPDF(PDF_PAGE_ORIENTATION, PDF_UNIT, PDF_PAGE_FORMAT, true, 'UTF-8', false);
     
+    // Set school info
+    $pdf->school_name = $school_name;
+    $pdf->school_motto = $school_motto;
+    $pdf->logo_path = $school_logo_path;
+    
     // Set document information
-    $pdf->SetCreator('Muyovozi High School');
+    $pdf->SetCreator($school_name);
     $pdf->SetAuthor('Administrator');
-    $pdf->SetTitle('Staff Report');
+    $pdf->SetTitle('Staff Report - ' . $school_name);
     $pdf->SetSubject('Staff/Teachers List');
-    $pdf->SetKeywords('Staff, Teachers, Report, Muyovozi');
-    
-    // Set default header data
-    $pdf->SetHeaderData('', 0, 'MUYOVOZI HIGH SCHOOL', 'Staff/Teachers Report');
-    
-    // Set header and footer fonts
-    $pdf->setHeaderFont(Array(PDF_FONT_NAME_MAIN, '', PDF_FONT_SIZE_MAIN));
-    $pdf->setFooterFont(Array(PDF_FONT_NAME_DATA, '', PDF_FONT_SIZE_DATA));
-    
-    // Set default monospaced font
-    $pdf->SetDefaultMonospacedFont(PDF_FONT_MONOSPACED);
+    $pdf->SetKeywords('Staff, Teachers, Report, ' . $school_name);
     
     // Set margins
     $pdf->SetMargins(15, 35, 15);
     $pdf->SetHeaderMargin(10);
     $pdf->SetFooterMargin(10);
-    
-    // Set auto page breaks
     $pdf->SetAutoPageBreak(TRUE, 15);
-    
-    // Set image scale factor
     $pdf->setImageScale(PDF_IMAGE_SCALE_RATIO);
     
     // Add a page
@@ -242,7 +350,6 @@ if (isset($_GET['export']) && $_GET['export'] == 'pdf') {
     $pdf->SetFont('helvetica', 'B', 9);
     $header = array('S/N', 'Full Name', 'Email');
     
-    // Dynamically add columns based on inclusion options
     $col_widths = [12, 50, 40];
     $column_count = 3;
     
@@ -282,28 +389,23 @@ if (isset($_GET['export']) && $_GET['export'] == 'pdf') {
         $column_count++;
     }
     
-    // Set fill color
     $pdf->SetFillColor(59, 157, 179);
     $pdf->SetTextColor(255);
     $pdf->SetDrawColor(59, 157, 179);
     $pdf->SetLineWidth(0.3);
     
-    // Header
     for($i = 0; $i < count($header); $i++) {
         $pdf->Cell($col_widths[$i], 8, $header[$i], 1, 0, 'C', 1);
     }
     $pdf->Ln();
     
-    // Reset text color
     $pdf->SetTextColor(0);
     $pdf->SetFont('helvetica', '', 9);
     
-    // Table content
     $fill = false;
     $sn = 1;
     
     foreach($admins as $admin) {
-        // Alternate row background
         if($fill) {
             $pdf->SetFillColor(240, 248, 250);
         } else {
@@ -312,15 +414,12 @@ if (isset($_GET['export']) && $_GET['export'] == 'pdf') {
         
         $pdf->Cell($col_widths[0], 8, $sn, 1, 0, 'C', $fill);
         
-        // Full Name
         $fullName = $admin['first_name'];
         if (!empty($admin['middle_name'])) {
             $fullName .= ' ' . $admin['middle_name'];
         }
         $fullName .= ' ' . $admin['last_name'];
         $pdf->Cell($col_widths[1], 8, $fullName, 1, 0, 'L', $fill);
-        
-        // Email
         $pdf->Cell($col_widths[2], 8, $admin['email'], 1, 0, 'L', $fill);
         
         $col_index = 3;
@@ -374,7 +473,6 @@ if (isset($_GET['export']) && $_GET['export'] == 'pdf') {
         $role_cols = ['Role', 'Total', 'Male', 'Female', 'Active', 'Inactive'];
         $role_widths = [40, 20, 20, 20, 20, 20];
         
-        // Role header
         $pdf->SetFillColor(59, 157, 179);
         $pdf->SetTextColor(255);
         for($i = 0; $i < count($role_cols); $i++) {
@@ -382,7 +480,6 @@ if (isset($_GET['export']) && $_GET['export'] == 'pdf') {
         }
         $pdf->Ln();
         
-        // Role data
         $pdf->SetTextColor(0);
         $role_fill = false;
         
@@ -404,18 +501,22 @@ if (isset($_GET['export']) && $_GET['export'] == 'pdf') {
         }
     }
     
-    // Output PDF
+    // Clean up temp file if created
+    if (isset($temp_logo_path) && file_exists($temp_logo_path)) {
+        @unlink($temp_logo_path);
+    }
+    
     $pdf->Output('staff_report_' . date('Y-m-d') . '.pdf', 'D');
     exit();
 }
 
-// Handle Excel export
+// ==================== EXCEL GENERATION ====================
 if (isset($_GET['export']) && $_GET['export'] == 'excel') {
     header('Content-Type: application/vnd.ms-excel');
     header('Content-Disposition: attachment;filename="staff_report_' . date('Y-m-d') . '.xls"');
     header('Cache-Control: max-age=0');
     
-    $colspan = 3; // S/N, Full Name, Email are always included
+    $colspan = 3;
     if ($include_roles) $colspan++;
     if ($include_gender) $colspan++;
     if ($include_status) $colspan++;
@@ -423,36 +524,25 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
     if ($include_nida) $colspan++;
     if ($include_created) $colspan++;
     
-    echo '<table border="1">
-        <tr><th colspan="' . $colspan . '">MUYOVOZI HIGH SCHOOL - STAFF/TEACHERS REPORT</th></tr>
-        <tr>
+    echo '<html>';
+    echo '<head><meta charset="UTF-8"></head>';
+    echo '<body>';
+    echo '<table border="1">';
+    echo '<tr><th colspan="' . $colspan . '" style="font-size:16px; text-align:center;">' . strtoupper($school_name) . '</th></tr>';
+    echo '<tr><th colspan="' . $colspan . '" style="font-size:12px; text-align:center;">' . $school_motto . '</th></tr>';
+    echo '<tr><th colspan="' . $colspan . '" style="font-size:14px; text-align:center;">STAFF/TEACHERS REPORT</th></tr>';
+    echo '<tr><td colspan="' . $colspan . '" style="text-align:center;">Generated: ' . date('Y-m-d H:i:s') . ' | Total Staff: ' . $total_admins . '</td></tr>';
+    echo '<tr>
             <th>S/N</th>
             <th>Full Name</th>
             <th>Email</th>';
     
-    if ($include_roles) {
-        echo '<th>Roles</th>';
-    }
-    
-    if ($include_gender) {
-        echo '<th>Gender</th>';
-    }
-    
-    if ($include_status) {
-        echo '<th>Status</th>';
-    }
-    
-    if ($include_phone) {
-        echo '<th>Phone</th>';
-    }
-    
-    if ($include_nida) {
-        echo '<th>NIDA</th>';
-    }
-    
-    if ($include_created) {
-        echo '<th>Created</th>';
-    }
+    if ($include_roles) echo '<th>Roles</th>';
+    if ($include_gender) echo '<th>Gender</th>';
+    if ($include_status) echo '<th>Status</th>';
+    if ($include_phone) echo '<th>Phone</th>';
+    if ($include_nida) echo '<th>NIDA</th>';
+    if ($include_created) echo '<th>Created</th>';
     
     echo '</tr>';
     
@@ -461,45 +551,27 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
         echo '<tr>';
         echo '<td>' . $sn . '</td>';
         
-        // Full Name
         $fullName = $admin['first_name'];
         if (!empty($admin['middle_name'])) {
             $fullName .= ' ' . $admin['middle_name'];
         }
         $fullName .= ' ' . $admin['last_name'];
         echo '<td>' . $fullName . '</td>';
-        
         echo '<td>' . $admin['email'] . '</td>';
         
-        if ($include_roles) {
-            echo '<td>' . $admin['roles'] . '</td>';
-        }
-        
-        if ($include_gender) {
-            echo '<td>' . $admin['sex'] . '</td>';
-        }
-        
-        if ($include_status) {
-            echo '<td>' . ($admin['status'] ? 'Active' : 'Inactive') . '</td>';
-        }
-        
-        if ($include_phone) {
-            echo '<td>' . $admin['phone_number'] . '</td>';
-        }
-        
-        if ($include_nida) {
-            echo '<td>' . ($admin['nida'] ?: 'N/A') . '</td>';
-        }
-        
-        if ($include_created) {
-            echo '<td>' . date('Y-m-d', strtotime($admin['created_at'])) . '</td>';
-        }
+        if ($include_roles) echo '<td>' . $admin['roles'] . '</td>';
+        if ($include_gender) echo '<td>' . $admin['sex'] . '</td>';
+        if ($include_status) echo '<td>' . ($admin['status'] ? 'Active' : 'Inactive') . '</td>';
+        if ($include_phone) echo '<td>' . $admin['phone_number'] . '</td>';
+        if ($include_nida) echo '<td>' . ($admin['nida'] ?: 'N/A') . '</td>';
+        if ($include_created) echo '<td>' . date('Y-m-d', strtotime($admin['created_at'])) . '</td>';
         
         echo '</tr>';
         $sn++;
     }
     
     echo '</table>';
+    echo '</body></html>';
     exit();
 }
 ?>
@@ -511,7 +583,10 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
     <div class="container-fluid">
         <!-- Page Title -->
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2 class="page-title">Staff/Teachers Report Generator</h2>
+            <h2 class="page-title">
+                <i class="fas fa-chart-bar me-2"></i>Staff/Teachers Report Generator
+                <span class="badge bg-primary ms-2"><?php echo htmlspecialchars($school_name); ?></span>
+            </h2>
             <div>
                 <a href="admins.php" class="btn btn-outline-primary me-2">
                     <i class="fas fa-arrow-left me-2"></i>Back to Staff Management
@@ -519,16 +594,76 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
             </div>
         </div>
 
+        <!-- School Info Card -->
+        <div class="card mb-4 bg-light">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-2 text-center">
+                        <?php if (!empty($school_logo_path)): ?>
+                            <img src="../<?php echo htmlspecialchars($school_logo_path); ?>" 
+                                 alt="<?php echo htmlspecialchars($school_name); ?> Logo" 
+                                 class="img-fluid" style="max-height: 80px; border-radius: 8px;">
+                        <?php else: ?>
+                            <div class="logo-placeholder" style="width: 80px; height: 80px; background: #3B9DB3; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 32px; font-weight: bold; margin: 0 auto;">
+                                <?php echo substr($school_name, 0, 1); ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                    <div class="col-md-6">
+                        <h3 class="mb-1"><?php echo htmlspecialchars($school_name); ?></h3>
+                        <p class="text-muted mb-0"><?php echo htmlspecialchars($school_motto); ?></p>
+                        <?php if (!empty($school_code)): ?>
+                            <span class="badge bg-secondary">Code: <?php echo htmlspecialchars($school_code); ?></span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <span class="badge bg-info fs-6">Total Staff: <?php echo $overall_stats['total'] ?? 0; ?></span>
+                        <span class="badge bg-success fs-6 ms-2">Active: <?php echo $overall_stats['active'] ?? 0; ?></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <?php if ($is_super_admin && count($all_schools) > 1): ?>
+        <!-- School Selector for System Registrar -->
+        <div class="card mb-4">
+            <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
+                <h5 class="mb-0"><i class="fas fa-building me-2"></i>Select School</h5>
+            </div>
+            <div class="card-body">
+                <form method="GET" action="report_admin.php" class="row g-3">
+                    <div class="col-md-4">
+                        <select name="school_id" class="form-select" onchange="this.form.submit()">
+                            <option value="0">-- Select School --</option>
+                            <?php foreach ($all_schools as $school): ?>
+                                <option value="<?php echo $school['id']; ?>" 
+                                    <?php echo ($school_id == $school['id']) ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($school['school_name']); ?> (<?php echo htmlspecialchars($school['school_code']); ?>)
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <a href="report_admin.php" class="btn btn-outline-secondary">Reset</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <!-- Filter Card -->
         <div class="card mb-4">
-            <div class="card-header" style=" background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    color: var(--white);">
+            <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
                 <h4 class="mb-0">
                     <i class="fas fa-filter me-2"></i>Filter & Column Options
                 </h4>
             </div>
             <div class="card-body">
                 <form method="GET" action="report_admin.php" id="filterForm">
+                    <?php if ($is_super_admin && $school_id > 0): ?>
+                        <input type="hidden" name="school_id" value="<?php echo $school_id; ?>">
+                    <?php endif; ?>
+                    
                     <div class="row">
                         <!-- Role Filter -->
                         <div class="col-md-3 mb-3">
@@ -647,12 +782,14 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                                 <div>
                                     <span class="badge bg-info">Found: <?php echo $total_admins; ?> staff/teachers</span>
                                     <span class="badge bg-secondary ms-2">Ordered by Name</span>
+                                    <span class="badge bg-primary ms-2">School: <?php echo htmlspecialchars($school_name); ?></span>
                                 </div>
                                 <div>
                                     <button type="submit" class="btn btn-primary me-2">
                                         <i class="fas fa-search me-2"></i>Apply Filters
                                     </button>
-                                    <a href="report_admin.php" class="btn btn-outline-secondary">
+                                    <a href="report_admin.php<?php echo ($is_super_admin && $school_id > 0) ? '?school_id=' . $school_id : ''; ?>" 
+                                       class="btn btn-outline-secondary">
                                         <i class="fas fa-redo me-2"></i>Reset
                                     </a>
                                 </div>
@@ -665,28 +802,6 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
 
         <!-- Quick Stats -->
         <div class="row mb-4">
-            <?php
-            // Get overall statistics
-            $stats_sql = "SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN sex = 'Male' THEN 1 ELSE 0 END) as males,
-                SUM(CASE WHEN sex = 'Female' THEN 1 ELSE 0 END) as females,
-                SUM(CASE WHEN status = 1 THEN 1 ELSE 0 END) as active,
-                SUM(CASE WHEN status = 0 THEN 1 ELSE 0 END) as inactive,
-                SUM(CASE WHEN nida IS NOT NULL AND nida != '' THEN 1 ELSE 0 END) as has_nida
-                FROM admins";
-            
-            $stats_result = mysqli_query($conn, $stats_sql);
-            $overall_stats = mysqli_fetch_assoc($stats_result);
-            
-            // Get role count
-            $role_count_sql = "SELECT COUNT(DISTINCT ar.role_name) as role_count 
-                              FROM admin_roles ar
-                              JOIN admin_role_assignments ara ON ar.id = ara.role_id";
-            $role_count_result = mysqli_query($conn, $role_count_sql);
-            $role_count = mysqli_fetch_assoc($role_count_result)['role_count'];
-            ?>
-            
             <div class="col-md-2 col-sm-6 mb-3">
                 <div class="stats-card simple-card">
                     <div class="stats-icon">
@@ -758,8 +873,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
 
         <!-- Export Options Card -->
         <div class="card mb-4">
-            <div class="card-header" style=" background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    color: var(--white);">
+            <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
                 <h4 class="mb-0">
                     <i class="fas fa-download me-2"></i>Export Options
                 </h4>
@@ -770,9 +884,9 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                         <div class="export-option text-center p-4 mb-3" style="border: 2px dashed #dc3545; border-radius: 10px;">
                             <i class="fas fa-file-pdf fa-3x mb-3" style="color: #dc3545;"></i>
                             <h4>Export as PDF</h4>
-                            <p class="text-muted">Generate professional PDF report with logo</p>
+                            <p class="text-muted">Generate professional PDF report with school logo</p>
                             <?php
-                            $export_url = "report_admin.php?" . http_build_query([
+                            $export_params = [
                                 'role' => $filter_role,
                                 'gender' => $filter_gender,
                                 'status' => $filter_status == 'Both' ? '' : $filter_status,
@@ -784,7 +898,11 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                                 'include_roles' => $include_roles ? 1 : 0,
                                 'include_created' => $include_created ? 1 : 0,
                                 'export' => 'pdf'
-                            ]);
+                            ];
+                            if ($is_super_admin && $school_id > 0) {
+                                $export_params['school_id'] = $school_id;
+                            }
+                            $export_url = "report_admin.php?" . http_build_query($export_params);
                             ?>
                             <a href="<?php echo $export_url; ?>" class="btn btn-danger btn-lg">
                                 <i class="fas fa-download me-2"></i>Download PDF
@@ -798,7 +916,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                             <h4>Export as Excel</h4>
                             <p class="text-muted">Download as Excel spreadsheet for analysis</p>
                             <?php
-                            $export_excel_url = "report_admin.php?" . http_build_query([
+                            $export_excel_params = [
                                 'role' => $filter_role,
                                 'gender' => $filter_gender,
                                 'status' => $filter_status == 'Both' ? '' : $filter_status,
@@ -810,7 +928,11 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                                 'include_roles' => $include_roles ? 1 : 0,
                                 'include_created' => $include_created ? 1 : 0,
                                 'export' => 'excel'
-                            ]);
+                            ];
+                            if ($is_super_admin && $school_id > 0) {
+                                $export_excel_params['school_id'] = $school_id;
+                            }
+                            $export_excel_url = "report_admin.php?" . http_build_query($export_excel_params);
                             ?>
                             <a href="<?php echo $export_excel_url; ?>" class="btn btn-success btn-lg">
                                 <i class="fas fa-download me-2"></i>Download Excel
@@ -828,6 +950,9 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                         <li>Staff are ordered by name in alphabetical order</li>
                         <li>Only selected columns will be included in the export</li>
                         <li>N/A will be displayed for staff without NIDA numbers</li>
+                        <?php if ($is_super_admin): ?>
+                            <li><strong>System Registrar:</strong> Select a school from the dropdown above to view its staff</li>
+                        <?php endif; ?>
                     </ul>
                 </div>
             </div>
@@ -835,8 +960,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
 
         <!-- Preview Card -->
         <div class="card">
-            <div class="card-header" style=" background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    color: var(--white);">
+            <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
                 <div class="d-flex justify-content-between align-items-center">
                     <h4 class="mb-0">
                         <i class="fas fa-eye me-2"></i>Report Preview
@@ -848,6 +972,7 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                         <span class="badge bg-info ms-2">
                             <i class="fas fa-sort-alpha-up me-1"></i>Ordered by Name
                         </span>
+                        <span class="badge bg-primary ms-2"><?php echo htmlspecialchars($school_name); ?></span>
                     </div>
                 </div>
             </div>
@@ -978,7 +1103,8 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
                     <i class="fas fa-user-tie fa-3x text-muted mb-3"></i>
                     <h4>No staff/teachers found</h4>
                     <p class="text-muted">Try adjusting your filter criteria</p>
-                    <a href="report_admin.php" class="btn btn-primary">
+                    <a href="report_admin.php<?php echo ($is_super_admin && $school_id > 0) ? '?school_id=' . $school_id : ''; ?>" 
+                       class="btn btn-primary">
                         <i class="fas fa-redo me-2"></i>Reset Filters
                     </a>
                 </div>
@@ -989,7 +1115,6 @@ if (isset($_GET['export']) && $_GET['export'] == 'excel') {
 </div>
 
 <script>
-// Initialize form controls
 document.addEventListener('DOMContentLoaded', function() {
     // Update all switch labels
     const switches = ['includeNIDA', 'includeGender', 'includePhone', 'includeStatus', 'includeRoles', 'includeCreated'];
@@ -1013,17 +1138,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('filterForm').submit();
             });
         }
-    });
-    
-    // Add some interactivity to the preview table
-    const tableRows = document.querySelectorAll('#previewTable tbody tr');
-    tableRows.forEach(row => {
-        row.addEventListener('mouseenter', function() {
-            this.style.backgroundColor = 'rgba(59, 157, 179, 0.05)';
-        });
-        row.addEventListener('mouseleave', function() {
-            this.style.backgroundColor = '';
-        });
     });
     
     // Toggle all columns button
@@ -1050,121 +1164,9 @@ document.addEventListener('DOMContentLoaded', function() {
         columnOptionsDiv.insertBefore(toggleAllBtn, columnOptionsDiv.firstChild);
     }
 });
-
-// Print function
-function printPreview() {
-    const printContent = `
-        <html>
-        <head>
-            <title>Staff/Teachers Report - Muyovozi High School</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 20px; }
-                .header { text-align: center; margin-bottom: 30px; }
-                .header h1 { color: #3B9DB3; margin: 0; }
-                .header p { color: #666; margin: 5px 0; }
-                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-                th { background-color: #3B9DB3; color: white; padding: 10px; text-align: left; }
-                td { padding: 8px; border-bottom: 1px solid #ddd; }
-                .footer { margin-top: 30px; text-align: center; color: #666; font-size: 12px; }
-                .stats { display: flex; justify-content: space-between; margin-bottom: 20px; }
-                .stat-box { background: #f5f5f5; padding: 10px; border-radius: 5px; text-align: center; flex: 1; margin: 0 5px; }
-                .badge { padding: 3px 8px; border-radius: 10px; font-size: 12px; }
-                .badge-primary { background: #007bff; color: white; }
-                .badge-success { background: #28a745; color: white; }
-                .badge-info { background: #17a2b8; color: white; }
-                @media print {
-                    @page { margin: 0.5cm; }
-                    .no-print { display: none !important; }
-                }
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <h1>MUYOVOZI HIGH SCHOOL</h1>
-                <p>Staff/Teachers Report - Generated on <?php echo date('Y-m-d H:i:s'); ?></p>
-            </div>
-            
-            <div class="stats no-print">
-                <div class="stat-box">
-                    <strong>Total Staff:</strong><br>
-                    <?php echo $total_admins; ?>
-                </div>
-                <div class="stat-box">
-                    <strong>Role:</strong><br>
-                    <?php echo $filter_role ?: 'All'; ?>
-                </div>
-                <div class="stat-box">
-                    <strong>Gender:</strong><br>
-                    <?php echo $filter_gender ?: 'All'; ?>
-                </div>
-                <div class="stat-box">
-                    <strong>Status:</strong><br>
-                    <?php echo $filter_status; ?>
-                </div>
-            </div>
-            
-            <?php 
-            echo '<table>';
-            echo '<thead><tr>
-                    <th>S/N</th>
-                    <th>Full Name</th>
-                    <th>Email</th>';
-            
-            if ($include_roles) echo '<th>Roles</th>';
-            if ($include_gender) echo '<th>Gender</th>';
-            if ($include_status) echo '<th>Status</th>';
-            if ($include_phone) echo '<th>Phone</th>';
-            if ($include_nida) echo '<th>NIDA</th>';
-            if ($include_created) echo '<th>Created</th>';
-            
-            echo '</tr></thead><tbody>';
-            
-            foreach($admins as $index => $admin) {
-                echo '<tr>';
-                echo '<td>' . ($index + 1) . '</td>';
-                
-                // Full Name
-                $fullName = $admin['first_name'];
-                if (!empty($admin['middle_name'])) {
-                    $fullName .= ' ' . $admin['middle_name'];
-                }
-                $fullName .= ' ' . $admin['last_name'];
-                echo '<td>' . $fullName . '</td>';
-                
-                echo '<td>' . $admin['email'] . '</td>';
-                
-                if ($include_roles) echo '<td>' . $admin['roles'] . '</td>';
-                if ($include_gender) echo '<td>' . $admin['sex'] . '</td>';
-                if ($include_status) echo '<td>' . ($admin['status'] ? 'Active' : 'Inactive') . '</td>';
-                if ($include_phone) echo '<td>' . $admin['phone_number'] . '</td>';
-                if ($include_nida) echo '<td>' . ($admin['nida'] ?: 'N/A') . '</td>';
-                if ($include_created) echo '<td>' . date('Y-m-d', strtotime($admin['created_at'])) . '</td>';
-                
-                echo '</tr>';
-            }
-            
-            echo '</tbody></table>';
-            ?>
-            
-            <div class="footer">
-                <p>Generated by Administration System</p>
-            </div>
-            
-            <script>
-            window.onload = function() {
-                window.print();
-                setTimeout(function() {
-                    window.close();
-                }, 500);
-            }
-            </script>
-        </body>
-        </html>
- 
 </script>
 
 <style>
-/* Custom styles for report page */
 .export-option {
     transition: transform 0.3s ease;
 }
@@ -1181,6 +1183,7 @@ function printPreview() {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
 }
 
 .bg-pink {
@@ -1230,7 +1233,6 @@ function printPreview() {
     margin: 0;
 }
 
-/* Form controls */
 .form-select, .form-check-input {
     border-radius: 8px;
 }
@@ -1253,7 +1255,6 @@ function printPreview() {
     font-size: 1.1rem;
 }
 
-/* Column options styling */
 .row.mb-3 h6 {
     color: #3B9DB3;
     font-weight: 600;
@@ -1264,7 +1265,10 @@ function printPreview() {
     margin-bottom: 0.5rem;
 }
 
-/* Responsive adjustments */
+.logo-placeholder {
+    background: #3B9DB3 !important;
+}
+
 @media (max-width: 768px) {
     .stats-card.simple-card {
         padding: 15px;
@@ -1298,14 +1302,12 @@ function printPreview() {
         margin-right: 8px;
     }
     
-    /* Make badges wrap properly */
     .badge {
         white-space: normal;
         word-break: break-word;
     }
 }
 
-/* Print button */
 @media print {
     .no-print {
         display: none !important;
