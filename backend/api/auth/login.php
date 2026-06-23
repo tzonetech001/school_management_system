@@ -1,7 +1,8 @@
 <?php
-// Disable error reporting for API responses
-error_reporting(0);
-ini_set('display_errors', 0);
+// Enable error reporting for debugging 502 error
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
 
 require_once __DIR__ . '/../../config/database.php';
 
@@ -71,7 +72,8 @@ if (empty($phone)) {
             combination,
             index_number,
             admission_number,
-            sex
+            sex,
+            parent_name
         FROM students 
         WHERE (parent_phone = ? OR parent_phone = ?)
         AND status = 1 

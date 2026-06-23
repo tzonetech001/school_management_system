@@ -1,9 +1,115 @@
 <?php
 // fee/record_payment.php
 session_start();
+ob_start();
+
+// Simple test - if POST request, immediately return JSON
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    header('Content-Type: application/json');
+    echo json_encode(['success' => true, 'message' => 'POST received', 'post' => $_POST]);
+    exit();
+}
+
+// Handle AJAX requests FIRST
+if (isset($_POST['action'])) {
+    error_log("=== AJAX HANDLER REACHED ===");
+    error_log("Action: " . $_POST['action']);
+    
+    // Start session if not started
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
+    
+    require_once '../controller/db_connect.php';
+    
+    // Always return JSON for AJAX, even if not logged in
+    if (!isset($_SESSION['admin_id'])) {
+        ob_clean();
+        echo json_encode(['success' => false, 'message' => 'Session expired. Please login again.']);
+        exit();
+    }
+    
+    $admin_id = $_SESSION['admin_id'];
+    
+    $admin_sql = "SELECT school_id FROM admins WHERE id = ?";
+    $stmt = mysqli_prepare($conn, $admin_sql);
+    mysqli_stmt_bind_param($stmt, "i", $admin_id);
+    mysqli_stmt_execute($stmt);
+    $admin_result = mysqli_stmt_get_result($stmt);
+    $admin = mysqli_fetch_assoc($admin_result);
+    
+    if (!$admin) {
+        ob_clean();
+        echo json_encode(['success' => false, 'message' => 'Invalid admin']);
+        exit();
+    }
+    $school_id = $admin['school_id'];
+    
+    $role_sql = "SELECT COUNT(*) as count FROM admin_role_assignments WHERE admin_id = ? AND role_id IN (1, 8)";
+    $role_stmt = mysqli_prepare($conn, $role_sql);
+    mysqli_stmt_bind_param($role_stmt, "i", $admin_id);
+    mysqli_stmt_execute($role_stmt);
+    $role_result = mysqli_stmt_get_result($role_stmt);
+    $role_count = mysqli_fetch_assoc($role_result)['count'];
+    
+    if ($role_count == 0) {
+        ob_clean();
+        echo json_encode(['success' => false, 'message' => 'Unauthorized']);
+        exit();
+    }
+    
+    header('Content-Type: application/json');
+    
+    if ($_POST['action'] === 'record_payment') {
+        $student_id = intval($_POST['student_id']);
+        $amount = floatval($_POST['amount']);
+        $payment_date = mysqli_real_escape_string($conn, $_POST['payment_date']);
+        $payment_method = mysqli_real_escape_string($conn, $_POST['payment_method']);
+        $reference = mysqli_real_escape_string($conn, $_POST['reference'] ?? '');
+        $notes = mysqli_real_escape_string($conn, $_POST['notes'] ?? '');
+        
+        if ($student_id <= 0 || $amount <= 0) {
+            ob_clean();
+            echo json_encode(['success' => false, 'message' => 'Invalid student or amount']);
+            exit();
+        }
+        
+        $check_sql = "SELECT id FROM students WHERE id = ? AND school_id = ? AND status = 1";
+        $check_stmt = mysqli_prepare($conn, $check_sql);
+        mysqli_stmt_bind_param($check_stmt, "ii", $student_id, $school_id);
+        mysqli_stmt_execute($check_stmt);
+        $check_result = mysqli_stmt_get_result($check_stmt);
+        
+        if (mysqli_num_rows($check_result) == 0) {
+            ob_clean();
+            echo json_encode(['success' => false, 'message' => 'Student not found']);
+            exit();
+        }
+        mysqli_stmt_close($check_stmt);
+        
+        $insert_sql = "INSERT INTO student_payments (student_id, amount, payment_date, payment_method, reference_number, notes, recorded_by, school_id, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed')";
+        $insert_stmt = mysqli_prepare($conn, $insert_sql);
+        mysqli_stmt_bind_param($insert_stmt, "idssssi", $student_id, $amount, $payment_date, $payment_method, $reference, $notes, $admin_id, $school_id);
+        
+        ob_clean();
+        if (mysqli_stmt_execute($insert_stmt)) {
+            echo json_encode(['success' => true, 'message' => 'Payment recorded successfully!']);
+        } else {
+            echo json_encode(['success' => false, 'message' => 'Database error']);
+        }
+        mysqli_stmt_close($insert_stmt);
+        exit();
+    }
+    
+    ob_clean();
+    echo json_encode(['success' => false, 'message' => 'Invalid action']);
+    exit();
+}
+
+// Normal page load
+error_log("=== NORMAL PAGE LOAD ===");
 require_once '../controller/db_connect.php';
 
-// Check login
 if (!isset($_SESSION['admin_id'])) {
     header("Location: ../index.php");
     exit();
@@ -11,7 +117,6 @@ if (!isset($_SESSION['admin_id'])) {
 
 $admin_id = $_SESSION['admin_id'];
 
-// Get school_id
 $admin_sql = "SELECT school_id FROM admins WHERE id = ?";
 $stmt = mysqli_prepare($conn, $admin_sql);
 mysqli_stmt_bind_param($stmt, "i", $admin_id);
@@ -25,10 +130,7 @@ if (!$admin) {
 }
 $school_id = $admin['school_id'];
 
-// Check if user is Bursar (role_id = 8) OR Head Master (role_id = 1)
-$role_sql = "SELECT COUNT(*) as count 
-             FROM admin_role_assignments ara 
-             WHERE ara.admin_id = ? AND ara.role_id IN (1, 8)";
+$role_sql = "SELECT COUNT(*) as count FROM admin_role_assignments WHERE admin_id = ? AND role_id IN (1, 8)";
 $role_stmt = mysqli_prepare($conn, $role_sql);
 mysqli_stmt_bind_param($role_stmt, "i", $admin_id);
 mysqli_stmt_execute($role_stmt);
@@ -40,102 +142,6 @@ if ($role_count == 0) {
     exit();
 }
 
-// Handle AJAX requests
-if (isset($_POST['action'])) {
-    header('Content-Type: application/json');
-    
-    if ($_POST['action'] === 'search_students') {
-        $search = mysqli_real_escape_string($conn, $_POST['search'] ?? '');
-        $query = "SELECT id, index_number, CONCAT(first_name, ' ', last_name) as full_name, class 
-                  FROM students 
-                  WHERE school_id = ? AND status = 1 AND is_leaver = 0 ";
-        // If search is not empty, add conditions
-        if (!empty($search)) {
-            $like = "%$search%";
-            $query .= " AND (index_number LIKE ? OR first_name LIKE ? OR last_name LIKE ?)";
-        }
-        $query .= " ORDER BY last_name, first_name LIMIT 50";
-        
-        $stmt = mysqli_prepare($conn, $query);
-        if (!empty($search)) {
-            mysqli_stmt_bind_param($stmt, "isss", $school_id, $like, $like, $like);
-        } else {
-            mysqli_stmt_bind_param($stmt, "i", $school_id);
-        }
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
-        $students = [];
-        while ($row = mysqli_fetch_assoc($result)) {
-            $students[] = $row;
-        }
-        echo json_encode($students);
-        exit();
-    }
-    
-    if ($_POST['action'] === 'record_payment') {
-        $student_id = intval($_POST['student_id']);
-        $amount = floatval($_POST['amount']);
-        $payment_date = mysqli_real_escape_string($conn, $_POST['payment_date']);
-        $payment_method = mysqli_real_escape_string($conn, $_POST['payment_method']);
-        $reference = mysqli_real_escape_string($conn, $_POST['reference'] ?? '');
-        $notes = mysqli_real_escape_string($conn, $_POST['notes'] ?? '');
-        
-        // Validate
-        if ($student_id <= 0 || $amount <= 0) {
-            echo json_encode(['success' => false, 'message' => 'Invalid student or amount.']);
-            exit();
-        }
-        
-        // Check student belongs to this school
-        $check_sql = "SELECT id FROM students WHERE id = ? AND school_id = ? AND status = 1";
-        $check_stmt = mysqli_prepare($conn, $check_sql);
-        mysqli_stmt_bind_param($check_stmt, "ii", $student_id, $school_id);
-        mysqli_stmt_execute($check_stmt);
-        $check_result = mysqli_stmt_get_result($check_stmt);
-        if (mysqli_num_rows($check_result) == 0) {
-            echo json_encode(['success' => false, 'message' => 'Student not found in this school.']);
-            exit();
-        }
-        mysqli_stmt_close($check_stmt);
-        
-        // Insert payment
-        $insert_sql = "INSERT INTO student_payments 
-                       (student_id, amount, payment_date, payment_method, reference_number, notes, recorded_by, school_id, status)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'completed')";
-        $insert_stmt = mysqli_prepare($conn, $insert_sql);
-        mysqli_stmt_bind_param($insert_stmt, "idssssi", $student_id, $amount, $payment_date, $payment_method, $reference, $notes, $admin_id, $school_id);
-        
-        if (mysqli_stmt_execute($insert_stmt)) {
-            echo json_encode(['success' => true, 'message' => 'Payment recorded successfully!']);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Database error: ' . mysqli_error($conn)]);
-        }
-        mysqli_stmt_close($insert_stmt);
-        exit();
-    }
-    
-    if ($_POST['action'] === 'get_history') {
-        $student_id = intval($_POST['student_id']);
-        // Get payments
-        $query = "SELECT p.*, CONCAT(a.first_name, ' ', a.last_name) as recorded_by_name 
-                  FROM student_payments p
-                  LEFT JOIN admins a ON p.recorded_by = a.id
-                  WHERE p.student_id = ? AND p.school_id = ?
-                  ORDER BY p.payment_date DESC, p.created_at DESC";
-        $stmt = mysqli_prepare($conn, $query);
-        mysqli_stmt_bind_param($stmt, "ii", $student_id, $school_id);
-        mysqli_stmt_execute($stmt);
-        $result = mysqli_stmt_get_result($stmt);
-        $history = [];
-        while ($row = mysqli_fetch_assoc($result)) {
-            $history[] = $row;
-        }
-        echo json_encode($history);
-        exit();
-    }
-}
-
-// Get current fee settings for display
 $fee_settings = null;
 $settings_sql = "SELECT * FROM fee_settings WHERE school_id = ? ORDER BY updated_at DESC LIMIT 1";
 $settings_stmt = mysqli_prepare($conn, $settings_sql);
@@ -155,270 +161,273 @@ include '../controller/sidebar.php';
         border-radius: 15px;
         padding: 25px;
         box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+        max-width: 800px;
+        margin: 0 auto;
     }
-    .student-search-result {
+    .student-search-results-table {
+        max-height: 300px;
+        overflow-y: auto;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        margin-top: 10px;
+        display: none;
+    }
+    .student-row-select {
         cursor: pointer;
-        padding: 10px 15px;
-        border-bottom: 1px solid #f0f0f0;
-        transition: background 0.2s;
+        transition: all 0.2s;
     }
-    .student-search-result:hover {
-        background: var(--primary-color);
-        color: white;
-    }
-    .student-search-result:last-child {
-        border-bottom: none;
-    }
-    .payment-history-table {
-        font-size: 0.9rem;
-    }
-    .payment-history-table th {
-        background: var(--primary-color);
-        color: white;
-        font-weight: 600;
-    }
-    #totalPaidDisplay {
-        font-size: 2rem;
-        font-weight: 700;
-        color: var(--primary-color);
-    }
-    .student-fee-summary {
+    .student-row-select:hover {
         background: #f8f9fa;
-        border-radius: 10px;
+    }
+    .student-row-select.selected {
+        background: #e8f4f8;
+        border-left: 3px solid #3B9DB3;
+    }
+    .selected-student-summary {
+        background: linear-gradient(135deg, #f0fff4, #ffffff);
+        border: 2px solid #28a745;
+        border-radius: 8px;
         padding: 15px;
         margin-top: 10px;
+        display: none;
     }
 </style>
 
 <div class="main-content">
     <div class="container-fluid">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2><i class="fas fa-hand-holding-usd me-2" style="color: var(--primary-color);"></i>Record Payment</h2>
-            <div>
-                <?php if ($fee_settings): ?>
-                    <span class="badge bg-success p-2 me-2">
-                        Total Fee: TZS <?php echo number_format($fee_settings['total_fee'], 0); ?>
-                    </span>
-                <?php endif; ?>
-            </div>
-        </div>
+        <h2 class="mb-4"><i class="fas fa-hand-holding-usd me-2" style="color: var(--primary-color);"></i>Record Payment</h2>
 
-        <div class="row">
-            <!-- Left: Payment Form -->
-            <div class="col-lg-5">
-                <div class="payment-form-container">
-                    <h5 class="mb-3"><i class="fas fa-plus-circle me-2"></i>New Payment</h5>
-                    <form id="paymentForm">
-                        <div class="mb-3">
-                            <label class="form-label fw-bold">Student</label>
-                            <input type="text" class="form-control" id="studentSearch" placeholder="Search by Index No or Name... (leave empty to see all)" autocomplete="off">
-                            <div id="searchResults" class="mt-2" style="max-height: 250px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 8px; display: none;"></div>
-                            <input type="hidden" id="selectedStudentId" value="">
-                            <div id="selectedStudentDisplay" class="mt-2 text-muted" style="font-size: 0.9rem;"></div>
-                            <div id="studentFeeSummary" class="student-fee-summary" style="display:none;"></div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="amount" class="form-label fw-bold">Amount (TZS)</label>
-                            <input type="number" step="0.01" class="form-control" id="amount" placeholder="Enter amount" required>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label for="paymentDate" class="form-label">Payment Date</label>
-                                <input type="date" class="form-control" id="paymentDate" value="<?php echo date('Y-m-d'); ?>" required>
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label for="paymentMethod" class="form-label">Payment Method</label>
-                                <select class="form-select" id="paymentMethod">
-                                    <option value="cash">Cash</option>
-                                    <option value="bank_transfer">Bank Transfer</option>
-                                    <option value="mobile_money">Mobile Money</option>
-                                </select>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="reference" class="form-label">Reference Number (Optional)</label>
-                            <input type="text" class="form-control" id="reference" placeholder="Receipt or transaction ID">
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="notes" class="form-label">Notes (Optional)</label>
-                            <textarea class="form-control" id="notes" rows="2" placeholder="Additional notes..."></textarea>
-                        </div>
-
-                        <button type="submit" class="btn btn-primary w-100 py-2">
-                            <i class="fas fa-check me-2"></i>Record Payment
+        <div class="payment-form-container">
+            <h5 class="mb-3"><i class="fas fa-plus-circle me-2"></i>New Payment</h5>
+            <form id="paymentForm">
+                <div class="mb-3">
+                    <label class="form-label fw-bold">Student</label>
+                    <div class="input-group mb-2">
+                        <span class="input-group-text bg-primary text-white">
+                            <i class="fas fa-search"></i>
+                        </span>
+                        <input type="text" class="form-control" id="studentSearch" 
+                               placeholder="Type to search by name, index number, or admission number..." 
+                               autocomplete="off">
+                        <button class="btn btn-outline-secondary" type="button" id="clearSearch">
+                            <i class="fas fa-times"></i>
                         </button>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Right: Student Info & Payment History -->
-            <div class="col-lg-7">
-                <div class="payment-form-container">
-                    <h5 class="mb-3"><i class="fas fa-history me-2"></i>Student Payment History</h5>
-                    <div id="paymentHistoryContainer">
-                        <div class="text-center text-muted py-4">
-                            <i class="fas fa-search fa-3x mb-3 d-block opacity-50"></i>
-                            <p>Search and select a student to view their payment history.</p>
+                    </div>
+                    
+                    <div class="student-search-results-table" id="studentSearchResults" 
+                         style="max-height: 300px; overflow-y: auto; border: 1px solid #dee2e6; border-radius: 8px; display: none;">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="5%">Select</th>
+                                    <th width="25%">Name</th>
+                                    <th width="15%">Index Number</th>
+                                    <th width="15%">Class</th>
+                                    <th width="15%">Combination</th>
+                                </tr>
+                            </thead>
+                            <tbody id="studentResultsBody"></tbody>
+                        </table>
+                    </div>
+                    
+                    <div class="selected-student-summary" id="selectedStudentSummary" style="display: none;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <h6 class="mb-1"><i class="fas fa-check-circle text-success me-2"></i>Selected Student</h6>
+                                <div class="d-flex flex-wrap gap-3">
+                                    <div><strong>Name:</strong> <span id="selectedStudentName">-</span></div>
+                                    <div><strong>Index:</strong> <span id="selectedStudentIndex">-</span></div>
+                                    <div><strong>Class:</strong> <span id="selectedStudentClass">-</span></div>
+                                    <div><strong>Combination:</strong> <span id="selectedStudentCombination">-</span></div>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger" onclick="clearStudentSelection()">
+                                <i class="fas fa-times me-1"></i>Change
+                            </button>
                         </div>
                     </div>
+                    <input type="hidden" id="selectedStudentId" value="">
                 </div>
-            </div>
+
+                <div class="mb-3">
+                    <label for="amount" class="form-label fw-bold">Amount (TZS)</label>
+                    <input type="number" step="0.01" class="form-control" id="amount" placeholder="Enter amount" required>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="paymentDate" class="form-label">Payment Date</label>
+                        <input type="date" class="form-control" id="paymentDate" value="<?php echo date('Y-m-d'); ?>" required>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="paymentMethod" class="form-label">Payment Method</label>
+                        <select class="form-select" id="paymentMethod">
+                            <option value="cash">Cash</option>
+                            <option value="bank_transfer">Bank Transfer</option>
+                            <option value="mobile_money">Mobile Money</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="reference" class="form-label">Reference Number (Optional)</label>
+                    <input type="text" class="form-control" id="reference" placeholder="Receipt or transaction ID">
+                </div>
+
+                <div class="mb-3">
+                    <label for="notes" class="form-label">Notes (Optional)</label>
+                    <textarea class="form-control" id="notes" rows="2" placeholder="Additional notes..."></textarea>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 py-2">
+                    <i class="fas fa-check me-2"></i>Record Payment
+                </button>
+            </form>
         </div>
     </div>
 </div>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
-$(document).ready(function() {
-    let selectedStudentId = 0;
-    let selectedStudentName = '';
+try {
+    console.log('jQuery version:', $.fn.jquery);
+    console.log('Document ready starting...');
+} catch(e) {
+    console.error('jQuery not loaded:', e);
+}
 
-    // Function to load students
+$(document).ready(function() {
+    try {
+        console.log('Document ready fired');
+    } catch(e) {
+        console.error('Error in document ready:', e);
+    }
+    let selectedStudentId = 0;
+    let searchTimeout;
+
     function loadStudents(query) {
-        $.post('record_payment.php', { action: 'search_students', search: query }, function(data) {
-            if (data.length > 0) {
-                let html = '';
-                data.forEach(s => {
-                    html += `<div class="student-search-result" data-id="${s.id}" data-name="${s.full_name}">
-                                <strong>${s.full_name}</strong> 
-                                <span class="text-muted">(${s.index_number}) - ${s.class}</span>
-                            </div>`;
-                });
-                $('#searchResults').html(html).show();
-            } else {
-                $('#searchResults').html('<div class="p-3 text-muted text-center">No students found.</div>').show();
+        $.ajax({
+            url: 'search_students.php',
+            type: 'GET',
+            data: { q: query },
+            dataType: 'json',
+            success: function(data) {
+                const tbody = $('#studentResultsBody');
+                tbody.empty();
+                
+                if (!data || data.length === 0) {
+                    tbody.html('<tr><td colspan="5" class="text-center py-3 text-muted">No students found</td></tr>');
+                } else {
+                    data.forEach(s => {
+                        const tr = $(`
+                            <tr class="student-row-select">
+                                <td class="text-center">
+                                    <input type="radio" name="student_radio" value="${s.id}" 
+                                           onchange="selectStudent(${s.id}, '${(s.name || '').replace(/'/g, "\\'")}', 
+                                           '${s.index_number || ''}', '${s.class || ''}', '${s.combination || ''}')">
+                                </td>
+                                <td class="fw-bold">${s.name || 'N/A'}</td>
+                                <td>${s.index_number || '-'}</td>
+                                <td>${s.class || '-'}</td>
+                                <td>${s.combination || '-'}</td>
+                            </tr>
+                        `);
+                        tbody.append(tr);
+                    });
+                }
+                $('#studentSearchResults').show();
+            },
+            error: function(xhr, status, error) {
+                console.error('Search error:', error);
+                const tbody = $('#studentResultsBody');
+                tbody.html('<tr><td colspan="5" class="text-center py-3 text-danger">Error: ' + error + '</td></tr>');
+                $('#studentSearchResults').show();
             }
-        }, 'json');
+        });
     }
 
-    // Student search - trigger on input, and on focus if empty
     $('#studentSearch').on('input', function() {
+        clearTimeout(searchTimeout);
         const query = $(this).val().trim();
-        loadStudents(query);
+        
+        if (query.length < 1) {
+            $('#studentSearchResults').hide();
+            return;
+        }
+        
+        searchTimeout = setTimeout(() => loadStudents(query), 300);
     });
 
     $('#studentSearch').on('focus', function() {
         const query = $(this).val().trim();
-        loadStudents(query);
+        if (query.length >= 1) loadStudents(query);
     });
 
-    // Click outside to hide results
+    $('#clearSearch').on('click', function() {
+        $('#studentSearch').val('');
+        $('#studentSearchResults').hide();
+        clearStudentSelection();
+    });
+
     $(document).on('click', function(e) {
-        if (!$(e.target).closest('#studentSearch, #searchResults').length) {
-            $('#searchResults').hide();
+        if (!$(e.target).closest('#studentSearchResults') && 
+            !$(e.target).closest('#studentSearch') && 
+            !$(e.target).closest('#clearSearch')) {
+            $('#studentSearchResults').hide();
         }
     });
 
-    // Select student from search
-    $(document).on('click', '.student-search-result', function() {
-        selectedStudentId = $(this).data('id');
-        selectedStudentName = $(this).data('name');
-        $('#selectedStudentId').val(selectedStudentId);
-        $('#selectedStudentDisplay').html(`<i class="fas fa-check-circle text-success me-1"></i> Selected: <strong>${selectedStudentName}</strong>`);
-        $('#searchResults').hide();
-        $('#studentSearch').val(selectedStudentName);
+    window.selectStudent = function(studentId, studentName, indexNumber, studentClass, combination) {
+        selectedStudentId = studentId;
+        $('#selectedStudentId').val(studentId);
+        $('#selectedStudentName').text(studentName);
+        $('#selectedStudentIndex').text(indexNumber);
+        $('#selectedStudentClass').text(studentClass);
+        $('#selectedStudentCombination').text(combination || '-');
+        $('#selectedStudentSummary').show();
+        $('#studentSearchResults').hide();
+        $('#studentSearch').val(studentName);
         
-        // Load history and fee summary
-        loadPaymentHistory(selectedStudentId);
-        loadFeeSummary(selectedStudentId);
-    });
+        $('.student-row-select').removeClass('selected');
+        if (event && event.target) {
+            $(event.target).closest('tr').addClass('selected');
+        }
+    };
 
-    // Load fee summary (total fee, paid, balance)
-    function loadFeeSummary(studentId) {
-        $.post('record_payment.php', { action: 'get_history', student_id: studentId }, function(data) {
-            let totalPaid = 0;
-            data.forEach(p => {
-                totalPaid += parseFloat(p.amount);
-            });
-            // Get total fee from settings (we have it in PHP, but we need it client-side)
-            // We'll fetch from a hidden field or from a separate endpoint.
-            // For simplicity, we'll get it from the PHP variable passed to JS.
-            // We'll inject the total fee as a data attribute.
-            const totalFee = parseFloat('<?php echo $fee_settings ? $fee_settings['total_fee'] : 0; ?>') || 0;
-            const balance = totalFee - totalPaid;
-            const summaryHtml = `
-                <div class="row text-center">
-                    <div class="col-4">
-                        <strong>Total Fee</strong><br>
-                        <span class="text-primary">TZS ${totalFee.toLocaleString()}</span>
-                    </div>
-                    <div class="col-4">
-                        <strong>Paid</strong><br>
-                        <span class="text-success">TZS ${totalPaid.toLocaleString()}</span>
-                    </div>
-                    <div class="col-4">
-                        <strong>Balance</strong><br>
-                        <span class="text-${balance > 0 ? 'danger' : 'success'}">TZS ${balance.toLocaleString()}</span>
-                    </div>
-                </div>
-            `;
-            $('#studentFeeSummary').html(summaryHtml).show();
-        }, 'json');
-    }
+    window.clearStudentSelection = function() {
+        selectedStudentId = 0;
+        $('#selectedStudentId').val('');
+        $('#selectedStudentSummary').hide();
+        $('#studentSearch').val('');
+        $('#studentSearchResults').hide();
+        $('input[name="student_radio"]').prop('checked', false);
+        $('.student-row-select').removeClass('selected');
+    };
 
-    // Load payment history
-    function loadPaymentHistory(studentId) {
-        $('#paymentHistoryContainer').html('<div class="text-center py-4"><i class="fas fa-spinner fa-spin fa-2x"></i><p>Loading...</p></div>');
-        
-        $.post('record_payment.php', { action: 'get_history', student_id: studentId }, function(data) {
-            if (data.length === 0) {
-                $('#paymentHistoryContainer').html(`
-                    <div class="text-center text-muted py-4">
-                        <i class="fas fa-receipt fa-3x mb-3 d-block opacity-50"></i>
-                        <p>No payments recorded for this student yet.</p>
-                    </div>
-                `);
-                return;
-            }
-
-            let totalPaid = 0;
-            let html = `<div class="table-responsive">
-                            <table class="table payment-history-table table-hover">
-                                <thead>
-                                    <tr>
-                                        <th>Date</th>
-                                        <th>Amount (TZS)</th>
-                                        <th>Method</th>
-                                        <th>Reference</th>
-                                        <th>Recorded By</th>
-                                    </tr>
-                                </thead>
-                                <tbody>`;
-            data.forEach(p => {
-                totalPaid += parseFloat(p.amount);
-                html += `<tr>
-                            <td>${p.payment_date}</td>
-                            <td><strong>${Number(p.amount).toLocaleString()}</strong></td>
-                            <td><span class="badge bg-secondary">${p.payment_method}</span></td>
-                            <td>${p.reference_number || '-'}</td>
-                            <td>${p.recorded_by_name || 'System'}</td>
-                        </tr>`;
-            });
-            html += `</tbody></table></div>`;
-            html += `<div class="mt-3 p-3 bg-light rounded">
-                        <strong>Total Paid:</strong> 
-                        <span id="totalPaidDisplay">TZS ${totalPaid.toLocaleString()}</span>
-                     </div>`;
-            $('#paymentHistoryContainer').html(html);
-        }, 'json');
-    }
-
-    // Submit payment form
     $('#paymentForm').on('submit', function(e) {
-        e.preventDefault();
+        try {
+            console.log('Submit event triggered');
+            e.preventDefault();
+            
+            console.log('Form submitted');
+        } catch(e) {
+            console.error('Error in submit handler:', e);
+        }
         
         const studentId = $('#selectedStudentId').val();
+        console.log('Student ID:', studentId);
+        
         if (!studentId || studentId == 0) {
+            console.log('No student selected');
             Swal.fire('Error', 'Please select a student first.', 'error');
             return;
         }
 
         const amount = $('#amount').val();
+        console.log('Amount:', amount);
+        
         if (!amount || parseFloat(amount) <= 0) {
+            console.log('Invalid amount');
             Swal.fire('Error', 'Please enter a valid amount.', 'error');
             return;
         }
@@ -433,22 +442,46 @@ $(document).ready(function() {
             notes: $('#notes').val()
         };
 
-        $.post('record_payment.php', formData, function(response) {
-            if (response.success) {
-                Swal.fire('Success!', response.message, 'success');
-                // Reset form fields except student
-                $('#amount').val('');
-                $('#reference').val('');
-                $('#notes').val('');
-                // Reload history and summary
-                loadPaymentHistory(studentId);
-                loadFeeSummary(studentId);
-            } else {
-                Swal.fire('Error', response.message, 'error');
+        console.log('Sending data:', formData);
+        
+        try {
+            $.ajax({
+                url: 'record_payment.php',
+                type: 'POST',
+                data: formData,
+                dataType: 'json',
+                success: function(response) {
+                    console.log('Response:', response);
+                    if (response.success) {
+                        Swal.fire('Success!', response.message, 'success');
+                        $('#amount').val('');
+                        $('#reference').val('');
+                        $('#notes').val('');
+                    } else {
+                        Swal.fire('Error', response.message, 'error');
+                    }
+                },
+            error: function(xhr, status, error) {
+                console.error('AJAX Error:', status, error);
+                console.error('Full Response:', xhr.responseText);
+                console.error('Response length:', xhr.responseText.length);
+                console.error('First 1000 chars:', xhr.responseText.substring(0, 1000));
+                Swal.fire('Error', 'Failed: ' + error + '. Check console for details.', 'error');
             }
-        }, 'json');
+            });
+        } catch(e) {
+            console.error('Error in AJAX call:', e);
+            Swal.fire('Error', 'JavaScript error: ' + e.message, 'error');
+        }
     });
 });
+
+// Global error handler
+window.onerror = function(msg, url, lineNo, columnNo, error) {
+    console.error('JavaScript Error:', msg, url, lineNo, columnNo, error);
+    return false;
+};
+
 </script>
 
 <?php include '../controller/footer.php'; ?>
