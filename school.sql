@@ -1,3 +1,6 @@
+create database school;
+use school;
+
 -- phpMyAdmin SQL Dump
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
@@ -1215,22 +1218,7 @@ INSERT INTO `admin_roles` (`id`, `role_name`, `description`) VALUES
 (14, 'Shule Salama', 'School security and safety'),
 (15, 'Normal Teacher', 'Regular teaching duties'),
 (16, 'Maintainance', 'Maintanance of the school'),
-(1, 'Head Master', 'Head of the school'),
-(2, 'Second Master', 'Deputy head master'),
-(3, 'Academic Master', 'Responsible for academic affairs'),
-(4, 'Discipline Master', 'Responsible for student discipline'),
-(5, 'Class Teacher', 'Class teacher responsibilities'),
-(6, 'Sports & Games', 'Responsible for sports activities'),
-(7, 'Dormitory Teacher', 'Responsible for dormitories'),
-(8, 'School Bursar & store', 'Responsible for finances & store'),
-(9, 'Production', 'Responsible for production store'),
-(10, 'INS Coach', 'Instructional coach'),
-(11, 'Food Store', 'Responsible for food store'),
-(12, 'PS', 'Personal Secretary'),
-(13, 'Librarian', 'Library management'),
-(14, 'Shule Salama', 'School security and safety'),
-(15, 'Normal Teacher', 'Regular teaching duties'),
-(16, 'Maintainance', 'Maintanance of the school');
+
 
 -- --------------------------------------------------------
 
