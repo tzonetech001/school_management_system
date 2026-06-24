@@ -319,7 +319,7 @@ $sidebar_collapsed = isset($preferences['sidebar_collapsed']) && $preferences['s
         </div>
         <div class="sidebar-user-role">
             <i class="fas fa-crown me-1" style="font-size: 0.6rem;"></i>
-            System Administrator
+            School Registrar
         </div>
     </div>
 

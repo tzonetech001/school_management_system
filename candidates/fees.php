@@ -1,5 +1,5 @@
 <?php
-// candidates/my_fees.php - Student Contributions/Fees Page
+// candidates/fees.php - Student Contributions/Fees Page
 session_start();
 require_once '../controller/db_connect.php';
 
@@ -10,81 +10,106 @@ if (!isset($_SESSION['student_id'])) {
 }
 
 $student_id = $_SESSION['student_id'];
+$school_id = null;
 
-// Get student information
-$student_sql = "SELECT * FROM students WHERE id = $student_id";
-$student_result = mysqli_query($conn, $student_sql);
+// Get student information with school_id
+$student_sql = "SELECT s.*, sc.id as school_id, sc.school_name 
+                FROM students s
+                JOIN schools sc ON s.school_id = sc.id
+                WHERE s.id = ?";
+$stmt = mysqli_prepare($conn, $student_sql);
+mysqli_stmt_bind_param($stmt, "i", $student_id);
+mysqli_stmt_execute($stmt);
+$student_result = mysqli_stmt_get_result($stmt);
 $student = mysqli_fetch_assoc($student_result);
+mysqli_stmt_close($stmt);
 
-// Get contribution information from student_equipment table
-$contribution_sql = "SELECT 
-    contribution_target,
-    contribution_paid,
-    contribution_balance,
-    contribution_status,
-    contribution_last_payment,
-    updated_at
-FROM student_equipment 
-WHERE student_id = $student_id";
-
-$contribution_result = mysqli_query($conn, $contribution_sql);
-
-// If no record exists, create one
-if (mysqli_num_rows($contribution_result) == 0) {
-    $insert_sql = "INSERT INTO student_equipment (student_id, contribution_target, contribution_paid, contribution_balance, contribution_status) 
-                   VALUES ($student_id, 80000.00, 0.00, 80000.00, 'Not Paid')";
-    mysqli_query($conn, $insert_sql);
-    
-    // Fetch the new record
-    $contribution_result = mysqli_query($conn, $contribution_sql);
+if (!$student) {
+    header("Location: ../index.php");
+    exit();
 }
 
-$contribution = mysqli_fetch_assoc($contribution_result);
+$school_id = $student['school_id'];
 
-// Get payment history
+// Get fee settings for this school (total fee)
+$total_fee = 0;
+$settings_sql = "SELECT total_fee, term_1, term_2, academic_year 
+                 FROM fee_settings 
+                 WHERE school_id = ? 
+                 ORDER BY updated_at DESC LIMIT 1";
+$settings_stmt = mysqli_prepare($conn, $settings_sql);
+mysqli_stmt_bind_param($settings_stmt, "i", $school_id);
+mysqli_stmt_execute($settings_stmt);
+$settings_result = mysqli_stmt_get_result($settings_stmt);
+$settings = mysqli_fetch_assoc($settings_result);
+mysqli_stmt_close($settings_stmt);
+
+if ($settings) {
+    $total_fee = floatval($settings['total_fee']);
+    $academic_year = $settings['academic_year'] ?? '';
+} else {
+    // Default if no settings found
+    $total_fee = 80000.00;
+    $academic_year = date('Y') . '/' . (date('Y') + 1);
+}
+
+// Get all payments for this student
 $payments_sql = "SELECT 
-    cp.*,
-    a.first_name as admin_first,
-    a.last_name as admin_last
-FROM contribution_payments cp
-LEFT JOIN admins a ON cp.received_by = a.id
-WHERE cp.student_id = $student_id
-ORDER BY cp.payment_date DESC, cp.created_at DESC";
+    sp.*,
+    CONCAT(a.first_name, ' ', a.last_name) as admin_name
+FROM student_payments sp
+LEFT JOIN admins a ON sp.recorded_by = a.id
+WHERE sp.student_id = ? AND sp.school_id = ?
+ORDER BY sp.payment_date DESC, sp.created_at DESC";
 
-$payments_result = mysqli_query($conn, $payments_sql);
+$payments_stmt = mysqli_prepare($conn, $payments_sql);
+mysqli_stmt_bind_param($payments_stmt, "ii", $student_id, $school_id);
+mysqli_stmt_execute($payments_stmt);
+$payments_result = mysqli_stmt_get_result($payments_stmt);
+
 $payments = [];
+$total_paid = 0;
 if ($payments_result && mysqli_num_rows($payments_result) > 0) {
     while ($row = mysqli_fetch_assoc($payments_result)) {
         $payments[] = $row;
+        if ($row['status'] == 'completed') {
+            $total_paid += floatval($row['amount']);
+        }
     }
 }
+mysqli_stmt_close($payments_stmt);
 
-// Calculate progress percentage
-$target = $contribution['contribution_target'] ?: 80000.00;
-$paid = $contribution['contribution_paid'] ?: 0.00;
-$progress_percentage = $target > 0 ? min(round(($paid / $target) * 100, 1), 100) : 0;
+// Calculate balance
+$balance = max(0, $total_fee - $total_paid);
 
-// Get status color and message
-$status_colors = [
-    'Paid' => 'success',
-    'Partially Paid' => 'warning',
-    'Not Paid' => 'danger'
-];
+// Determine status
+if ($balance <= 0 && $total_paid > 0) {
+    $status = 'Paid';
+    $status_color = 'success';
+    $status_message = 'Your contribution is fully paid. Thank you!';
+    $status_icon = 'check-circle';
+} elseif ($total_paid > 0) {
+    $status = 'Partially Paid';
+    $status_color = 'warning';
+    $status_message = 'You have made partial payment. Please clear the balance.';
+    $status_icon = 'exclamation-circle';
+} else {
+    $status = 'Not Paid';
+    $status_color = 'danger';
+    $status_message = 'No payment has been recorded yet. Please make your contribution.';
+    $status_icon = 'exclamation-circle';
+}
 
-$status_messages = [
-    'Paid' => 'Your contribution is fully paid. Thank you!',
-    'Partially Paid' => 'You have made partial payment. Please clear the balance.',
-    'Not Paid' => 'No payment has been recorded yet. Please make your contribution.'
-];
-
-$status_color = $status_colors[$contribution['contribution_status']] ?? 'secondary';
-$status_message = $status_messages[$contribution['contribution_status']] ?? 'Payment status unknown';
+$progress_percentage = $total_fee > 0 ? min(round(($total_paid / $total_fee) * 100, 1), 100) : 0;
 
 // Calculate due date (end of academic year assumption)
 $current_year = date('Y');
 $next_year = $current_year + 1;
-$due_date = "$next_year-06-30"; // Assuming academic year ends June 30th
+$due_date = "$next_year-06-30";
 $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
+
+// Get last payment date
+$last_payment_date = !empty($payments) ? $payments[0]['payment_date'] : null;
 ?>
 
 <?php include 'header.php'; ?>
@@ -117,11 +142,16 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                                 <p class="text-muted mb-0">
                                     <i class="fas fa-graduation-cap me-2"></i><?php echo htmlspecialchars($student['class'] . ' - ' . $student['combination']); ?>
                                 </p>
+                                <?php if ($academic_year): ?>
+                                <p class="text-muted mb-0 small">
+                                    <i class="fas fa-calendar-alt me-2"></i>Academic Year: <?php echo htmlspecialchars($academic_year); ?>
+                                </p>
+                                <?php endif; ?>
                             </div>
                             <div class="col-md-6 text-md-end">
                                 <span class="badge bg-<?php echo $status_color; ?> p-3" style="font-size: 1rem;">
-                                    <i class="fas fa-<?php echo $contribution['contribution_status'] == 'Paid' ? 'check-circle' : 'exclamation-circle'; ?> me-2"></i>
-                                    Status: <?php echo $contribution['contribution_status']; ?>
+                                    <i class="fas fa-<?php echo $status_icon; ?> me-2"></i>
+                                    Status: <?php echo $status; ?>
                                 </span>
                             </div>
                         </div>
@@ -143,8 +173,8 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                     <div class="card-body">
                         <!-- Progress Section -->
                         <div class="text-center mb-4">
-                            <h2 class="display-4 fw-bold text-primary">TZS <?php echo number_format($paid, 0); ?></h2>
-                            <p class="text-muted">of TZS <?php echo number_format($target, 0); ?> target</p>
+                            <h2 class="display-4 fw-bold text-primary">TZS <?php echo number_format($total_paid, 0); ?></h2>
+                            <p class="text-muted">of TZS <?php echo number_format($total_fee, 0); ?> target</p>
                             
                             <div class="progress mb-3" style="height: 30px;">
                                 <div class="progress-bar bg-<?php echo $status_color; ?>" 
@@ -161,20 +191,20 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                                 <div class="col-4">
                                     <div class="p-3 bg-light rounded">
                                         <small class="text-muted d-block">Target Amount</small>
-                                        <strong>TZS <?php echo number_format($target, 0); ?></strong>
+                                        <strong>TZS <?php echo number_format($total_fee, 0); ?></strong>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="p-3 bg-light rounded">
                                         <small class="text-muted d-block">Paid Amount</small>
-                                        <strong class="text-success">TZS <?php echo number_format($paid, 0); ?></strong>
+                                        <strong class="text-success">TZS <?php echo number_format($total_paid, 0); ?></strong>
                                     </div>
                                 </div>
                                 <div class="col-4">
                                     <div class="p-3 bg-light rounded">
                                         <small class="text-muted d-block">Balance</small>
-                                        <strong class="<?php echo $contribution['contribution_balance'] > 0 ? 'text-danger' : 'text-success'; ?>">
-                                            TZS <?php echo number_format($contribution['contribution_balance'], 0); ?>
+                                        <strong class="<?php echo $balance > 0 ? 'text-danger' : 'text-success'; ?>">
+                                            TZS <?php echo number_format($balance, 0); ?>
                                         </strong>
                                     </div>
                                 </div>
@@ -187,12 +217,12 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                             <?php echo $status_message; ?>
                         </div>
                         
-                        <!-- Payment Info -->
-                        <?php if ($contribution['contribution_last_payment']): ?>
+                        <!-- Last Payment Info -->
+                        <?php if ($last_payment_date): ?>
                             <div class="alert alert-info mt-3">
                                 <i class="fas fa-clock me-2"></i>
                                 Last payment recorded on: 
-                                <strong><?php echo date('F j, Y', strtotime($contribution['contribution_last_payment'])); ?></strong>
+                                <strong><?php echo date('F j, Y', strtotime($last_payment_date)); ?></strong>
                             </div>
                         <?php endif; ?>
                         
@@ -201,6 +231,18 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                             <i class="fas fa-calendar-alt me-2"></i>
                             <strong>Payment Due Date:</strong> <?php echo date('F j, Y', strtotime($due_date)); ?>
                             (<?php echo $days_left; ?> days left)
+                        </div>
+                        
+                        <!-- Total Fee Info -->
+                        <div class="alert alert-secondary mt-3">
+                            <i class="fas fa-info-circle me-2"></i>
+                            <strong>Total School Fee:</strong> TZS <?php echo number_format($total_fee, 0); ?>
+                            <?php if ($settings && ($settings['term_1'] > 0 || $settings['term_2'] > 0)): ?>
+                            <br><small>
+                                Term 1: TZS <?php echo number_format($settings['term_1'], 0); ?> | 
+                                Term 2: TZS <?php echo number_format($settings['term_2'], 0); ?>
+                            </small>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -220,8 +262,8 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                             <h6><i class="fas fa-university me-2 text-primary"></i>Bank Transfer</h6>
                             <p class="text-muted small">
                                 <strong>Bank:</strong> CRDB Bank<br>
-                                <strong>Account Name:</strong> Muyovozi High School<br>
-                                <strong>Account Number:</strong> No account number.<br>
+                                <strong>Account Name:</strong> <?php echo htmlspecialchars($student['school_name'] ?? 'School'); ?><br>
+                                <strong>Account Number:</strong> 01J2010456900<br>
                                 <strong>Reference:</strong> <?php echo $student['index_number']; ?>
                             </p>
                         </div>
@@ -240,7 +282,7 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                             <h6><i class="fas fa-cash-register me-2 text-warning"></i>Cash Payment</h6>
                             <p class="text-muted small">
                                 Payments can be made at the school bursar's office during working hours.<br>
-                                <strong>Office Hours:</strong> Mon-Fri All the time.
+                                <strong>Office Hours:</strong> Mon-Fri 8:00 AM - 4:00 PM
                             </p>
                         </div>
                         
@@ -279,6 +321,7 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                                             <th>Amount</th>
                                             <th>Payment Method</th>
                                             <th>Reference</th>
+                                            <th>Status</th>
                                             <th>Received By</th>
                                             <th>Notes</th>
                                         </tr>
@@ -292,7 +335,7 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                                                 <strong class="text-success">TZS <?php echo number_format($payment['amount'], 0); ?></strong>
                                             </td>
                                             <td>
-                                                <span class="badge bg-info"><?php echo $payment['payment_method']; ?></span>
+                                                <span class="badge bg-info"><?php echo ucfirst(str_replace('_', ' ', $payment['payment_method'])); ?></span>
                                             </td>
                                             <td>
                                                 <?php if (!empty($payment['reference_number'])): ?>
@@ -302,8 +345,13 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                                                 <?php endif; ?>
                                             </td>
                                             <td>
-                                                <?php if (!empty($payment['admin_first'])): ?>
-                                                    <?php echo htmlspecialchars($payment['admin_first'] . ' ' . $payment['admin_last']); ?>
+                                                <span class="badge bg-<?php echo $payment['status'] == 'completed' ? 'success' : ($payment['status'] == 'pending' ? 'warning' : 'danger'); ?>">
+                                                    <?php echo ucfirst($payment['status']); ?>
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <?php if (!empty($payment['admin_name'])): ?>
+                                                    <?php echo htmlspecialchars($payment['admin_name']); ?>
                                                 <?php else: ?>
                                                     <span class="text-muted">System</span>
                                                 <?php endif; ?>
@@ -322,7 +370,7 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                                         <tr>
                                             <th colspan="2" class="text-end">Total:</th>
                                             <th>TZS <?php echo number_format(array_sum(array_column($payments, 'amount')), 0); ?></th>
-                                            <th colspan="4"></th>
+                                            <th colspan="5"></th>
                                         </tr>
                                     </tfoot>
                                 </table>
@@ -353,9 +401,9 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                                 </h2>
                                 <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
                                     <div class="accordion-body">
-                                        The contribution of TZS 80,000 is for school equipment including farming tools, 
-                                        cleaning equipment, and other school necessities. This helps ensure all students 
-                                        have access to necessary tools for school activities.
+                                        The contribution of TZS <?php echo number_format($total_fee, 0); ?> is for school fees which cover various school activities, 
+                                        equipment including farming tools, cleaning equipment, and other school necessities. 
+                                        This helps ensure all students have access to necessary tools for school activities.
                                     </div>
                                 </div>
                             </div>
@@ -402,10 +450,30 @@ $days_left = ceil((strtotime($due_date) - time()) / (60 * 60 * 24));
                                     </div>
                                 </div>
                             </div>
+                            
+                            <div class="accordion-item">
+                                <h2 class="accordion-header">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                                        How do I check my payment status?
+                                    </button>
+                                </h2>
+                                <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                    <div class="accordion-body">
+                                        You can check your payment status on this page. The status will show as 
+                                        "Paid", "Partially Paid", or "Not Paid". You can also view your complete 
+                                        payment history in the table above.
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+        </div>
+        
+        <!-- Footer -->
+        <div style="text-align: center; margin-top: 32px; font-size: 13px; color: var(--text-muted); border-top: 1px solid rgba(0,0,0,0.06); padding-top: 20px;">
+            &copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars($student['school_name'] ?? 'School'); ?> • Student Contributions
         </div>
     </div>
 </div>

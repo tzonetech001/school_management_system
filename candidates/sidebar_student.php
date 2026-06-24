@@ -17,9 +17,20 @@ if (!isset($conn) || !$conn) {
 
 $student_id = $_SESSION['student_id'];
 $student = null;
+$school_id = null;
+$school_name = "School Management System";
+$school_logo_path = null;
 
-// Fetch student info with error handling
-$student_sql = "SELECT * FROM students WHERE id = ?";
+// Fetch student info with school details
+$student_sql = "SELECT s.*, 
+                       sc.id as school_id, 
+                       sc.school_name, 
+                       sc.school_motto,
+                       sc.school_code,
+                       sc.logo_path as school_logo
+                FROM students s
+                JOIN schools sc ON s.school_id = sc.id
+                WHERE s.id = ? AND s.status = 1 AND sc.status = 'Active'";
 $stmt = mysqli_prepare($conn, $student_sql);
 
 if ($stmt) {
@@ -29,6 +40,9 @@ if ($stmt) {
     
     if ($student_result && mysqli_num_rows($student_result) > 0) {
         $student = mysqli_fetch_assoc($student_result);
+        $school_id = $student['school_id'] ?? null;
+        $school_name = $student['school_name'] ?? "School Management System";
+        $school_logo_path = $student['school_logo'] ?? null;
     }
     mysqli_stmt_close($stmt);
 }
@@ -64,11 +78,17 @@ if (!$student) {
 
 // Get unread notifications count with error handling
 $unread_count = 0;
-$unread_sql = "SELECT COUNT(*) as unread FROM notification_views WHERE viewer_id = ? ";
+$unread_sql = "SELECT COUNT(DISTINCT n.id) as unread 
+               FROM notifications n
+               LEFT JOIN notification_views nv ON n.id = nv.notification_id AND nv.viewer_id = ? AND nv.viewer_type = 'student'
+               WHERE n.status = 'active' 
+               AND n.school_id = ?
+               AND (n.visibility = 'public' OR n.visibility = 'students_only')
+               AND nv.id IS NULL";
 $unread_stmt = mysqli_prepare($conn, $unread_sql);
 
 if ($unread_stmt) {
-    mysqli_stmt_bind_param($unread_stmt, "i", $viewer_id);
+    mysqli_stmt_bind_param($unread_stmt, "ii", $student_id, $school_id);
     mysqli_stmt_execute($unread_stmt);
     $unread_result = mysqli_stmt_get_result($unread_stmt);
     if ($unread_result && mysqli_num_rows($unread_result) > 0) {
@@ -78,11 +98,28 @@ if ($unread_stmt) {
     mysqli_stmt_close($unread_stmt);
 }
 
-
-
+// Get school logo for sidebar
+$logo_path = '';
+if (!empty($school_logo_path) && file_exists('../' . $school_logo_path)) {
+    $logo_path = '../' . $school_logo_path;
+} elseif (file_exists("../muyovozi.jpg")) {
+    $logo_path = "../muyovozi.jpg";
+}
 ?>
 
 <nav class="sidebar" id="sidebar">
+    <!-- School Logo in Sidebar -->
+    <div class="sidebar-brand d-none d-lg-block">
+        <?php if (!empty($logo_path)): ?>
+            <img src="<?php echo htmlspecialchars($logo_path); ?>" alt="<?php echo htmlspecialchars($school_name); ?>" class="sidebar-logo">
+        <?php else: ?>
+            <div class="sidebar-logo-placeholder">
+                <?php echo substr($school_name, 0, 1); ?>
+            </div>
+        <?php endif; ?>
+        <span class="sidebar-brand-text"><?php echo htmlspecialchars($school_name); ?></span>
+    </div>
+
     <!-- Mobile User Profile (Hidden on Desktop) -->
     <div class="mobile-user-profile d-lg-none" id="mobileUserProfile">
         <div class="user-info">
@@ -114,17 +151,6 @@ if ($unread_stmt) {
             </a>
         </li>
         
-        <!-- Notifications with Badge -->
-        <li>
-            <a href="../candidates/notifications.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'notifications.php') ? 'active' : ''; ?>">
-                <i class="fas fa-bell"></i>
-                <span class="menu-text">Notifications</span>
-                <?php if ($unread_count > 0): ?>
-                <span class="badge bg-danger rounded-pill ms-auto"><?php echo $unread_count; ?></span>
-                <?php endif; ?>
-            </a>
-        </li>
-        
         <!-- Academic Section -->
         <li class="sidebar-dropdown">
             <a href="#" class="<?php echo (in_array(basename($_SERVER['PHP_SELF']), ['results.php', 'timetable.php', 'assignments.php'])) ? 'active' : ''; ?>">
@@ -141,23 +167,7 @@ if ($unread_stmt) {
                         <span>My Results</span>
                     </a>
                 </li>
-                <li>
-                    <a href="../candidates/timetable.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'timetable.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-calendar-alt"></i>
-                        <span>Class Timetable</span>
-                    </a>
-                </li>
-               
             </ul>
-        </li>
-        
-        <!-- Shule Salama -->
-        <li>
-            <a href="../candidates/shulesalama.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'shulesalama.php') ? 'active' : ''; ?>">
-                <i class="fas fa-shield-alt"></i>
-                <span class="menu-text">Shule Salama</span>
-                
-            </a>
         </li>
         
         <!-- Discipline -->
@@ -165,28 +175,21 @@ if ($unread_stmt) {
             <a href="../candidates/discipline.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'discipline.php') ? 'active' : ''; ?>">
                 <i class="fas fa-balance-scale"></i>
                 <span class="menu-text">Discipline</span>
-                
             </a>
         </li>
         
         <!-- Financial Section -->
         <li>
-                    <a href="../candidates/fees.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'fees.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-money-bill-wave"></i>
-                        <span>School Fee</span>
-                    </a>
-                </li>
+            <a href="../candidates/fees.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'fees.php') ? 'active' : ''; ?>">
+                <i class="fas fa-money-bill-wave"></i>
+                <span>School Fee</span>
+            </a>
+        </li>
         
-        <!-- Equipment & Assets -->
-      <li>
-         <a href="../candidates/equipment.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'equipment.php') ? 'active' : ''; ?>">
-                        <i class="fas fa-box"></i>
-                        <span>Equipment</span>
-                    </a>
-                </li>
-         <li>
+        <!-- Maintenance -->
+        <li>
             <a href="../candidates/maintenance.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'maintenance.php') ? 'active' : ''; ?>">
-                <i class="fas fa-tachometer-alt"></i>
+                <i class="fas fa-tools"></i>
                 <span>Maintenance</span>
             </a>
         </li>
@@ -198,16 +201,8 @@ if ($unread_stmt) {
                 <span class="menu-text">My Dormitory</span>
             </a>
         </li>
+     
         
-        <!-- Library -->
-        <li>
-            <a href="../candidates/library.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'library.php') ? 'active' : ''; ?>">
-                <i class="fas fa-book"></i>
-                <span class="menu-text">Library</span>
-            </a>
-        </li>
-        
-       
         <!-- My Profile -->
         <li>
             <a href="../candidates/profile.php" class="<?php echo (basename($_SERVER['PHP_SELF']) == 'profile.php') ? 'active' : ''; ?>">
@@ -215,8 +210,6 @@ if ($unread_stmt) {
                 <span class="menu-text">My Profile</span>
             </a>
         </li>
-        
-    
         
         <!-- Logout (styled as menu item) -->
         <li class="mt-4">
@@ -227,61 +220,225 @@ if ($unread_stmt) {
         </li>
     </ul>
 
- 
+    <!-- Sidebar Footer -->
+    <div class="sidebar-footer">
+        <small class="text-white-50">
+            <i class="fas fa-school me-1"></i>
+            <?php echo htmlspecialchars($school_name); ?>
+        </small>
+        <small class="text-white-50 d-block" style="font-size: 10px;">
+            v2.0 &copy; <?php echo date('Y'); ?>
+        </small>
+    </div>
 </nav>
 
 <style>
 /* Student Sidebar Specific Styles */
-.student-info {
-    background: rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    padding: 10px;
+.sidebar {
+    background: linear-gradient(180deg, var(--primary-color, #3B9DB3), var(--primary-dark, #2d7c8f));
+    min-height: calc(100vh - 60px);
+    box-shadow: 3px 0 15px rgba(0,0,0,0.1);
+    padding: 0;
+    transition: all 0.3s ease;
+    position: fixed;
+    left: -270px;
+    top: 60px;
+    width: 270px;
+    z-index: 999;
+    overflow-y: auto;
+    max-height: calc(100vh - 60px);
+    display: flex;
+    flex-direction: column;
 }
 
-.student-info .info-item {
+@media (min-width: 992px) {
+    .sidebar {
+        left: 0;
+        width: 250px;
+    }
+}
+
+.sidebar.active {
+    left: 0;
+}
+
+/* Sidebar Brand / Logo */
+.sidebar-brand {
     display: flex;
     align-items: center;
-    gap: 8px;
-    color: rgba(255, 255, 255, 0.9);
-    font-size: 12px;
-    padding: 5px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 15px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    gap: 10px;
 }
 
-.student-info .info-item:last-child {
-    border-bottom: none;
+.sidebar-logo {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid rgba(255,255,255,0.3);
 }
 
-.student-info .info-item i {
-    width: 16px;
+.sidebar-logo-placeholder {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 20px;
+    font-weight: bold;
+    border: 2px solid rgba(255,255,255,0.3);
+}
+
+.sidebar-brand-text {
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Sidebar Menu */
+.sidebar-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.sidebar-menu li {
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar-menu a {
+    color: rgba(255, 255, 255, 0.85);
+    display: flex;
+    align-items: center;
+    padding: 12px 20px;
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+    border-left: 4px solid transparent;
+    min-height: 48px;
+    gap: 12px;
+}
+
+.sidebar-menu a:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+    border-left-color: rgba(255, 255, 255, 0.5);
+}
+
+.sidebar-menu a.active {
+    background: rgba(255, 255, 255, 0.15);
+    color: white;
+    font-weight: 600;
+    border-left-color: white;
+}
+
+.sidebar-menu i {
+    width: 22px;
     text-align: center;
-    color: rgba(255, 255, 255, 0.7);
+    font-size: 16px;
+    flex-shrink: 0;
 }
 
-.quick-info {
-    margin-top: auto;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+.sidebar-menu .menu-text {
+    flex: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
-/* Logout button styling */
-.logout-btn {
-    color: #ff6b6b !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    margin-top: 10px;
-}
-
-.logout-btn:hover {
-    background: rgba(220, 53, 69, 0.2) !important;
-    border-left-color: #dc3545 !important;
-    color: #ff8a8a !important;
-}
-
-/* Badge styling */
-.badge {
+/* Badge in sidebar */
+.sidebar-menu .badge {
     font-size: 10px;
-    padding: 3px 6px;
+    padding: 3px 8px;
     min-width: 20px;
     text-align: center;
+    background: #dc3545;
+    color: white;
+    border-radius: 20px;
+}
+
+/* Dropdown styles */
+.sidebar-dropdown {
+    position: relative;
+}
+
+.sidebar-dropdown > a {
+    cursor: pointer;
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.dropdown-arrow {
+    font-size: 12px;
+    transition: transform 0.3s ease;
+    opacity: 0.7;
+    margin-left: auto;
+}
+
+.sidebar-dropdown.active > a .dropdown-arrow {
+    transform: rotate(180deg);
+}
+
+.sub-menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.sidebar-dropdown.active .sub-menu {
+    max-height: 500px;
+}
+
+.sub-menu li {
+    margin: 0;
+}
+
+.sub-menu a {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px 10px 52px;
+    color: rgba(255, 255, 255, 0.8);
+    text-decoration: none;
+    transition: all 0.3s ease;
+    font-size: 13px;
+    border-left: 3px solid transparent;
+    min-height: 40px;
+}
+
+.sub-menu a:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    border-left-color: rgba(255, 255, 255, 0.5);
+}
+
+.sub-menu a.active {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-weight: 500;
+    border-left-color: white;
+}
+
+.sub-menu i {
+    width: 18px;
+    text-align: center;
+    margin-right: 10px;
+    font-size: 12px;
 }
 
 /* Mobile User Profile */
@@ -307,11 +464,12 @@ if ($unread_stmt) {
     display: flex;
     align-items: center;
     justify-content: center;
-    color: var(--primary-color);
+    color: var(--primary-color, #3B9DB3);
     font-weight: bold;
     font-size: 18px;
     border: 2px solid rgba(255, 255, 255, 0.3);
     overflow: hidden;
+    flex-shrink: 0;
 }
 
 .mobile-user-profile .user-avatar img {
@@ -333,82 +491,38 @@ if ($unread_stmt) {
     color: rgba(255, 255, 255, 0.9);
 }
 
-/* Dropdown styles */
-.sidebar-dropdown {
-    position: relative;
-}
-
-.sidebar-dropdown > a {
-    cursor: pointer;
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-
-.dropdown-arrow {
-    font-size: 12px;
-    transition: transform 0.3s ease;
-    opacity: 0.7;
-}
-
-.sidebar-dropdown.active > a .dropdown-arrow {
-    transform: rotate(180deg);
-}
-
-.sub-menu {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-    background: rgba(0, 0, 0, 0.15);
-}
-
-.sidebar-dropdown.active .sub-menu {
-    max-height: 500px;
-}
-
-.sub-menu li {
-    margin: 0;
-}
-
-.sub-menu a {
-    display: flex;
-    align-items: center;
-    padding: 10px 15px 10px 45px;
-    color: rgba(255, 255, 255, 0.8);
-    text-decoration: none;
-    transition: all 0.3s ease;
-    font-size: 13px;
-    border-left: 3px solid transparent;
-}
-
-.sub-menu a:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: white;
-    border-left-color: rgba(255, 255, 255, 0.5);
-}
-
-.sub-menu a.active {
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-    font-weight: 500;
-    border-left-color: white;
-}
-
-.sub-menu i {
-    width: 18px;
+/* Sidebar Footer */
+.sidebar-footer {
+    padding: 12px 20px;
+    border-top: 1px solid rgba(255,255,255,0.1);
     text-align: center;
-    margin-right: 10px;
-    font-size: 12px;
+    margin-top: auto;
+}
+
+/* Logout button styling */
+.logout-btn {
+    color: #ff6b6b !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    margin-top: 5px;
+}
+
+.logout-btn:hover {
+    background: rgba(220, 53, 69, 0.2) !important;
+    border-left-color: #dc3545 !important;
+    color: #ff8a8a !important;
 }
 
 /* Section Titles */
-.sidebar-section-title {
-    background: rgba(0, 0, 0, 0.1);
-    border-radius: 4px;
-    margin: 5px 10px;
+.sidebar-section {
+    padding: 10px 20px 5px;
+}
+
+.sidebar-section small {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: 0.6;
 }
 
 /* Mobile-specific adjustments */
@@ -422,7 +536,8 @@ if ($unread_stmt) {
     }
     
     .sidebar:not(.active) .sidebar-section,
-    .sidebar:not(.active) .quick-info,
+    .sidebar:not(.active) .sidebar-footer,
+    .sidebar:not(.active) .sidebar-brand,
     .sidebar:not(.active) .mobile-user-profile {
         display: none;
     }
@@ -435,7 +550,7 @@ if ($unread_stmt) {
 /* Desktop optimizations */
 @media (min-width: 992px) {
     .sub-menu {
-        background: rgba(0, 0, 0, 0.1);
+        background: rgba(0, 0, 0, 0.15);
     }
     
     .mobile-user-profile {
@@ -455,7 +570,25 @@ if ($unread_stmt) {
 /* Active state improvements */
 .sidebar-menu a.active {
     font-weight: 600;
-    background: linear-gradient(90deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
+}
+
+/* Scrollbar styling */
+.sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.3);
+    border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.5);
 }
 </style>
 
