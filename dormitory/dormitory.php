@@ -1,5 +1,4 @@
 <?php
-
 require_once '../controller/db_connect.php';
 
 $error = '';
@@ -8,8 +7,28 @@ $success = '';
 // current_school_id is provided by controller/db_connect.php (null for super-admin)
 $current_school_id = isset($current_school_id) ? $current_school_id : null;
 
-// Check if user has permission (Head Master or Second Master only)
+// If school_id not set, get from session or admin
+if ($current_school_id === null) {
+    $current_school_id = $_SESSION['school_id'] ?? 0;
+    
+    if ($current_school_id == 0) {
+        $admin_id = $_SESSION['admin_id'] ?? 0;
+        $school_sql = "SELECT school_id FROM admins WHERE id = ?";
+        $school_stmt = $conn->prepare($school_sql);
+        $school_stmt->bind_param("i", $admin_id);
+        $school_stmt->execute();
+        $school_result = $school_stmt->get_result();
+        if ($school_row = $school_result->fetch_assoc()) {
+            $current_school_id = $school_row['school_id'];
+            $_SESSION['school_id'] = $current_school_id;
+        }
+        $school_stmt->close();
+    }
+}
+
+// Check if user has permission (Head Master, Second Master, or Dormitory Teacher)
 $admin_id = $_SESSION['admin_id'] ?? 0;
+$is_super_admin = isset($_SESSION['super_admin_id']);
 
 // Get current user's roles
 $user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
@@ -22,23 +41,22 @@ while ($row = $user_roles_result->fetch_assoc()) {
     $user_role_ids[] = $row['role_id'];
 }
 
-// Check if user has Head Master (1) or Second Master (2) role
+// Check if user has Head Master (1), Second Master (2), or Dormitory Teacher (7) role
 $has_permission = false;
 foreach ($user_role_ids as $role_id) {
-    if ($role_id == 1 || $role_id == 2 || $role_id == 7) { // Head Master or Second Master
+    if ($role_id == 1 || $role_id == 2 || $role_id == 7) {
         $has_permission = true;
         break;
     }
 }
 
-if (!$has_permission) {
-    $_SESSION['error'] = "You don't have permission to view staff members.";
-    header("Location:  ../404.php");
+if (!$has_permission && !$is_super_admin) {
+    $_SESSION['error'] = "You don't have permission to view dormitory management.";
+    header("Location: ../404.php");
     exit();
 }
 
-
-// Get all roles from database (excluding Super Admin if it exists)
+// Get all roles from database
 $roles = [];
 $roles_sql = "SELECT * FROM admin_roles WHERE role_name != 'Super Admin' ORDER BY role_name";
 $roles_result = mysqli_query($conn, $roles_sql);
@@ -153,7 +171,7 @@ if ($students_result && mysqli_num_rows($students_result) > 0) {
 }
 
 // Get all dormitory assignments for active students
- $sd_school_filter = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
+$sd_school_filter = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
 $assignments_sql = "SELECT sd.*, s.first_name, s.last_name, s.index_number, s.class, s.combination, s.sex,
                    s.is_leaver, s.graduation_status,
                    d.dorm_name, d.dorm_type, dr.room_number, dr.room_label, 
@@ -205,6 +223,18 @@ if ($dormitories_result && mysqli_num_rows($dormitories_result) > 0) {
         }
     }
 }
+
+// Get ALL dormitories for management (including inactive)
+$all_dorms_sql = "SELECT * FROM dormitories WHERE school_id = ? ORDER BY dorm_type, dorm_name";
+$all_dorms_stmt = $conn->prepare($all_dorms_sql);
+$all_dorms_stmt->bind_param("i", $current_school_id);
+$all_dorms_stmt->execute();
+$all_dorms_result = $all_dorms_stmt->get_result();
+$all_dormitories = [];
+while ($row = mysqli_fetch_assoc($all_dorms_result)) {
+    $all_dormitories[] = $row;
+}
+$all_dorms_stmt->close();
 
 // Handle dormitory assignment using stored procedure
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_student'])) {
@@ -536,8 +566,7 @@ function getAvailableRooms($conn, $dormitory_id) {
         <div class="row mb-4">
             <div class="col-md-12 mb-3">
                 <div class="card">
-                    <div class="card-header" style=" background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    color: var(--white);">
+                    <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
                         <h5 class="mb-0"><i class="fas fa-chart-bar me-2"></i>Overall Statistics</h5>
                     </div>
                     <div class="card-body">
@@ -640,6 +669,149 @@ function getAvailableRooms($conn, $dormitory_id) {
                             </div>
                         </div>
                         <small class="text-muted">Assignment Rate: <?php echo $total_female_students > 0 ? number_format($total_female_assigned / $total_female_students * 100, 1) : 0; ?>%</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Manage Dormitories Section -->
+        <div class="row mb-4">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
+                        <h5 class="mb-0">
+                            <i class="fas fa-building me-2"></i>Manage Dormitories
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="nav nav-tabs mb-3" id="dormitoryManageTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="add-dorm-tab" data-bs-toggle="tab" data-bs-target="#add-dorm" type="button" role="tab">
+                                    <i class="fas fa-plus-circle me-2"></i>Add Dormitory
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="list-dorm-tab" data-bs-toggle="tab" data-bs-target="#list-dorm" type="button" role="tab">
+                                    <i class="fas fa-list me-2"></i>All Dormitories
+                                </button>
+                            </li>
+                        </ul>
+                        
+                        <div class="tab-content">
+                            <!-- Add Dormitory Tab -->
+                            <div class="tab-pane fade show active" id="add-dorm" role="tabpanel">
+                                <form method="POST" action="dormitory_actions.php" class="row g-3">
+                                    <input type="hidden" name="school_id" value="<?php echo $current_school_id; ?>">
+                                    
+                                    <div class="col-md-4">
+                                        <label class="form-label">Dormitory Name *</label>
+                                        <input type="text" class="form-control" name="dorm_name" required placeholder="e.g., Magufuli, Safina">
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label">Dormitory Type *</label>
+                                        <select class="form-select" name="dorm_type" required>
+                                            <option value="">Select Type...</option>
+                                            <option value="Male">Male</option>
+                                            <option value="Female">Female</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Rooms Count *</label>
+                                        <input type="number" class="form-control" name="rooms_count" min="1" required placeholder="e.g., 10">
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="form-label">Capacity/Room *</label>
+                                        <input type="number" class="form-control" name="capacity_per_room" min="1" required placeholder="e.g., 6">
+                                    </div>
+                                    <div class="col-md-12">
+                                        <label class="form-label">Description</label>
+                                        <input type="text" class="form-control" name="description" placeholder="Optional description e.g., Magufuli Male Dormitory - Rooms A1 to B10">
+                                    </div>
+                                    <div class="col-md-12">
+                                        <button type="submit" name="add_dormitory" class="btn btn-primary">
+                                            <i class="fas fa-save me-2"></i>Add Dormitory
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                            
+                            <!-- List Dormitories Tab -->
+                            <div class="tab-pane fade" id="list-dorm" role="tabpanel">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Dormitory Name</th>
+                                                <th>Type</th>
+                                                <th>Rooms</th>
+                                                <th>Capacity/Room</th>
+                                                <th>Total Capacity</th>
+                                                <th>Occupancy</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php 
+                                            $dorm_index = 1;
+                                            foreach ($all_dormitories as $dorm): 
+                                            ?>
+                                            <tr>
+                                                <td><?php echo $dorm_index++; ?></td>
+                                                <td><strong><?php echo htmlspecialchars($dorm['dorm_name']); ?></strong></td>
+                                                <td>
+                                                    <span class="badge <?php echo $dorm['dorm_type'] == 'Male' ? 'bg-primary' : 'bg-pink'; ?>">
+                                                        <?php echo $dorm['dorm_type']; ?>
+                                                    </span>
+                                                </td>
+                                                <td><?php echo $dorm['rooms_count']; ?></td>
+                                                <td><?php echo $dorm['capacity_per_room']; ?></td>
+                                                <td><?php echo $dorm['total_capacity']; ?></td>
+                                                <td>
+                                                    <?php echo $dorm['current_occupancy']; ?>
+                                                    <?php if ($dorm['total_capacity'] > 0): ?>
+                                                        (<?php echo round(($dorm['current_occupancy'] / $dorm['total_capacity']) * 100); ?>%)
+                                                    <?php endif; ?>
+                                                </td>
+                                                <td>
+                                                    <span class="badge <?php echo $dorm['status'] == 'Active' ? 'bg-success' : ($dorm['status'] == 'Full' ? 'bg-warning' : 'bg-danger'); ?>">
+                                                        <?php echo $dorm['status']; ?>
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div class="btn-group btn-group-sm">
+                                                        <button class="btn btn-outline-info edit-dorm-btn" 
+                                                                data-bs-toggle="modal" 
+                                                                data-bs-target="#editDormitoryModal"
+                                                                data-id="<?php echo $dorm['id']; ?>"
+                                                                data-name="<?php echo htmlspecialchars($dorm['dorm_name']); ?>"
+                                                                data-type="<?php echo $dorm['dorm_type']; ?>"
+                                                                data-rooms="<?php echo $dorm['rooms_count']; ?>"
+                                                                data-capacity="<?php echo $dorm['capacity_per_room']; ?>"
+                                                                data-description="<?php echo htmlspecialchars($dorm['description'] ?? ''); ?>"
+                                                                data-status="<?php echo $dorm['status']; ?>">
+                                                            <i class="fas fa-edit"></i>
+                                                        </button>
+                                                        <a href="dormitory_actions.php?delete_dormitory=<?php echo $dorm['id']; ?>&school_id=<?php echo $current_school_id; ?>" 
+                                                           class="btn btn-outline-danger delete-dorm-btn"
+                                                           onclick="return confirm('Are you sure you want to delete this dormitory? This will also delete all rooms.')">
+                                                            <i class="fas fa-trash"></i>
+                                                        </a>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            <?php endforeach; ?>
+                                            <?php if (empty($all_dormitories)): ?>
+                                            <tr>
+                                                <td colspan="9" class="text-center">No dormitories found. Click "Add Dormitory" to create one.</td>
+                                            </tr>
+                                            <?php endif; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -764,8 +936,7 @@ function getAvailableRooms($conn, $dormitory_id) {
             <!-- All Students Tab -->
             <div class="tab-pane fade show active" id="all-tab-pane" role="tabpanel" tabindex="0">
                 <div class="card">
-                    <div class="card-header" style=" background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    color: var(--white);">
+                    <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
                         <h4 class="mb-0">
                             <i class="fas fa-list me-2"></i>
                             All Dormitory Assignments
@@ -1306,6 +1477,56 @@ function getAvailableRooms($conn, $dormitory_id) {
     </div>
 </div>
 
+<!-- Edit Dormitory Modal -->
+<div class="modal fade" id="editDormitoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
+                <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Dormitory</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="dormitory_actions.php">
+                <div class="modal-body">
+                    <input type="hidden" name="dormitory_id" id="editDormId">
+                    <input type="hidden" name="school_id" value="<?php echo $current_school_id; ?>">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Dormitory Name *</label>
+                        <input type="text" class="form-control" name="dorm_name" id="editDormName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rooms Count *</label>
+                        <input type="number" class="form-control" name="rooms_count" id="editDormRooms" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Capacity per Room *</label>
+                        <input type="number" class="form-control" name="capacity_per_room" id="editDormCapacity" min="1" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control" name="description" id="editDormDescription" placeholder="Optional description">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" name="status" id="editDormStatus">
+                            <option value="Active">Active</option>
+                            <option value="Full">Full</option>
+                            <option value="Maintenance">Maintenance</option>
+                            <option value="Closed">Closed</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" name="edit_dormitory" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Update Dormitory
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Remove Assignment Confirmation Modal -->
 <div class="modal fade" id="removeAssignmentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
@@ -1562,6 +1783,21 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
+// Edit Dormitory button click
+document.addEventListener('DOMContentLoaded', function() {
+    const editDormButtons = document.querySelectorAll('.edit-dorm-btn');
+    editDormButtons.forEach(button => {
+        button.addEventListener('click', function() {
+            document.getElementById('editDormId').value = this.getAttribute('data-id');
+            document.getElementById('editDormName').value = this.getAttribute('data-name');
+            document.getElementById('editDormRooms').value = this.getAttribute('data-rooms');
+            document.getElementById('editDormCapacity').value = this.getAttribute('data-capacity');
+            document.getElementById('editDormDescription').value = this.getAttribute('data-description') || '';
+            document.getElementById('editDormStatus').value = this.getAttribute('data-status') || 'Active';
+        });
+    });
+});
+
 // Remove assignment button click
 document.addEventListener('DOMContentLoaded', function() {
     const removeButtons = document.querySelectorAll('.remove-assignment');
@@ -1750,6 +1986,11 @@ document.querySelectorAll('#dormitoryTabs button').forEach(tab => {
 
 .badge.bg-warning {
     color: #212529 !important;
+}
+
+.bg-pink {
+    background-color: #e83e8c !important;
+    color: white !important;
 }
 
 @media (max-width: 768px) {
