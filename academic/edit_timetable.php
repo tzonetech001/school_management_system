@@ -12,7 +12,7 @@ $user_id = intval($_SESSION['admin_id']);
 $timetable_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
 if ($timetable_id == 0) {
-    header('Location: teacher_timetable.php');
+    header('Location: timetable.php');
     exit();
 }
 
@@ -24,7 +24,7 @@ $stmt->execute();
 $result = $stmt->get_result();
 
 if ($result->num_rows == 0) {
-    header('Location: teacher_timetable.php');
+    header('Location: timetable.php');
     exit();
 }
 
@@ -43,7 +43,7 @@ if ($admin_roles_result && mysqli_num_rows($admin_roles_result) > 0) {
 
 if (!$has_admin_role && $timetable['generated_by'] != $user_id) {
     $_SESSION['error'] = "You don't have permission to edit this timetable.";
-    header('Location: teacher_timetable.php');
+    header('Location: timetable.php');
     exit();
 }
 
@@ -323,13 +323,16 @@ $compact_mode = isset($preferences['compact_mode']) && $preferences['compact_mod
                         <div class="row mt-3">
                             <div class="col-md-6">
                                 <label class="form-label"><i class="fas fa-clock me-1"></i>Generated Timestamp</label>
+                                <div class="alert alert-light border py-2 px-3 mb-3">
+                                    <small class="text-muted">Choose how the timetable's generated time should be stored after regeneration.</small>
+                                </div>
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="generated_action" id="gen_keep" value="keep" checked>
-                                    <label class="form-check-label" for="gen_keep">Keep existing</label>
+                                    <label class="form-check-label" for="gen_keep">Keep existing timestamp</label>
                                 </div>
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="generated_action" id="gen_now" value="now">
-                                    <label class="form-check-label" for="gen_now">Set to now</label>
+                                    <label class="form-check-label" for="gen_now">Set to current date and time</label>
                                 </div>
                                 <div class="form-check">
                                     <input class="form-check-input" type="radio" name="generated_action" id="gen_clear" value="clear">
@@ -337,10 +340,10 @@ $compact_mode = isset($preferences['compact_mode']) && $preferences['compact_mod
                                 </div>
                                 <div class="form-check mt-2">
                                     <input class="form-check-input" type="radio" name="generated_action" id="gen_custom" value="custom">
-                                    <label class="form-check-label" for="gen_custom">Set custom</label>
-                                    <input type="datetime-local" name="custom_generated_at" id="custom_generated_at" class="form-control mt-2" style="max-width:260px;" disabled>
+                                    <label class="form-check-label" for="gen_custom">Set a new custom date and time</label>
+                                    <input type="datetime-local" name="custom_generated_at" id="custom_generated_at" class="form-control mt-2" style="max-width:320px;" disabled>
                                 </div>
-                                <div class="form-text">Choose whether to update or clear the generated timestamp.</div>
+                                <div class="form-text">Select <strong>Set a new custom date and time</strong> if you want to choose a specific generated time.</div>
                             </div>
                         </div>
 
@@ -372,6 +375,12 @@ $compact_mode = isset($preferences['compact_mode']) && $preferences['compact_mod
             
             $('select[name="term"], #yearInput').on('change keyup', updateDocPreview);
             updateDocPreview();
+
+            const currentGeneratedAt = <?php echo json_encode($timetable['generated_at'] ?? ''); ?>;
+            if (currentGeneratedAt) {
+                const normalized = currentGeneratedAt.replace(' ', 'T').slice(0, 16);
+                $('#custom_generated_at').val(normalized);
+            }
 
             // Toggle custom generated_at input
             $('input[name="generated_action"]').on('change', function() {

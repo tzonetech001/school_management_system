@@ -1,12 +1,9 @@
-create database school;
-use school;
-
 -- phpMyAdmin SQL Dump
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jun 23, 2026 at 12:05 PM
+-- Generation Time: Jul 08, 2026 at 10:25 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -267,7 +264,7 @@ CREATE TABLE `admins` (
 --
 
 INSERT INTO `admins` (`id`, `first_name`, `middle_name`, `last_name`, `sex`, `email`, `check_number`, `phone_number`, `nida`, `password`, `reset_otp`, `reset_otp_expiry`, `last_password_change`, `profile_image`, `status`, `created_at`, `updated_at`, `last_notification_check`, `address`, `updated_by_admin`, `failed_login_attempts`, `locked_until`, `last_login_attempt`, `school_id`, `is_super_admin`) VALUES
-(12, 'muyovozi', '', 'muyovozi', 'Male', 'admin@muyovozi.ac.tz', '', '255714343162', NULL, '$2y$10$GHOZRQ9z/0/4qTXwt3TvT.tMDmYoTlHRXIJODTTfKE5lIt0cfDtR6', NULL, NULL, NULL, 'admin_12_1768193337.jpeg', 1, '2026-01-06 04:26:58', '2026-06-22 17:04:40', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-06-22 10:04:40', 1, 0),
+(12, 'muyovozi', '', 'muyovozi', 'Male', 'admin@muyovozi.ac.tz', '', '255714343162', NULL, '$2y$10$GHOZRQ9z/0/4qTXwt3TvT.tMDmYoTlHRXIJODTTfKE5lIt0cfDtR6', NULL, NULL, NULL, 'admin_12_1768193337.jpeg', 1, '2026-01-06 04:26:58', '2026-07-08 14:35:07', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-07-08 07:35:07', 1, 0),
 (13, 'ashura', 'tophic', 'mussa', 'Female', 'ashuu@gmail.com', '6578887654', '255790909090', '67543234569769767779', '$2y$10$4ECTtphQWimaAKTBC.akk.92NCZLARYoYMc.IiIEfokh9JK3FS3VG', NULL, NULL, NULL, 'admin_13_1773396332.jpg', 1, '2026-01-07 11:53:03', '2026-05-17 15:07:21', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-05-17 18:07:21', 1, 0),
 (14, 'samson', 'tophic', 'smith', 'Male', 'sam@gmail.com', '', '255790909087', '67549874567890987658', '$2y$10$sA7LcE/vF6AO4gB.mZ7kzu5ZB6Xlc8L9s9Qb0zItuhE9KO11UFpTq', NULL, NULL, NULL, '', 1, '2026-01-09 11:44:30', '2026-04-05 07:55:15', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-04-05 10:55:15', 1, 0),
 (15, 'aujenia', 'tophic', 'leo', 'Female', 'jen@gmail.com', '', '255714343162', NULL, '$2y$10$lPtgR8Q4VoNdTalk16tfs.5GsoOT4RJgEZFELQr3Uabf/ILdJAo1y', NULL, NULL, NULL, NULL, 1, '2026-01-21 15:05:50', '2026-04-04 16:36:04', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, NULL, 1, 0),
@@ -275,12 +272,12 @@ INSERT INTO `admins` (`id`, `first_name`, `middle_name`, `last_name`, `sex`, `em
 (26, 'Nazakia', 'Japan', 'Martine', 'Male', 'nazakiamartine04@gmail.com', '', '255763243765', NULL, '$2y$10$9HNZgvLKij6pCxoxZPbUd.A3GtipTzy3dmwbGdtUqCantZZWFYUii', NULL, NULL, NULL, 'admin_26_1773393622.jpg', 1, '2026-03-08 05:37:43', '2026-06-23 07:44:19', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-06-23 10:04:15', 1, 0),
 (28, 'kafunsi', 'juma', 'kafunsi', 'Male', 'kafunsi@gmail.com', '', '255712837307', NULL, '$2y$10$BzYbZE67L4c8yHpZPEufjeyYTZ9WzCa06BXpeyBSBGn/56KgtyP56', NULL, NULL, NULL, NULL, 1, '2026-03-11 17:33:32', '2026-06-23 09:51:22', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, '2026-06-23 12:51:22', 1, 0),
 (29, 'bamfu', 'leonard', 'bamfu', 'Male', 'bbamfu@gmail.com', '', '255823792374', NULL, '$2y$10$zT3feIqVAf8FGRX.20xzeub8wA.tcGwEcofwH9zPgBIqS1xN488su', NULL, NULL, NULL, NULL, 1, '2026-03-13 12:11:33', '2026-06-23 08:51:00', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, '2026-04-06 23:13:11', 1, 0),
-(32, 'TZONE', 'tz', 'TECH', 'Male', 'tzone@gmail.com', '', '255783626760', '', '$2y$10$kIolP6g4tYSj79RB7OvMtuCqEHVOHBvJvRrLGzbzC4.wy0M3H2sr.', NULL, NULL, NULL, '', 1, '2026-03-13 13:10:00', '2026-06-23 09:53:33', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-06-23 12:53:33', 1, 0),
+(32, 'TZONE', 'tz', 'TECH', 'Male', 'tzone@gmail.com', '', '255783626760', '', '$2y$10$hnSnka1aFOh3pWt2Ckp3WOvBfXD/Z/wcyHYav25uhaFu37XpJ.hjm', NULL, NULL, NULL, '', 1, '2026-03-13 13:10:00', '2026-07-07 21:12:35', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-07-07 14:12:35', 1, 0),
 (34, 'Halima', 'leonard', 'peter', 'Female', 'fdiva5045@gmail.com', '', '255672389209', NULL, '$2y$10$4pa7e4B3hU1ofNKDsFg50OwZeXYVz0rbUbzzaoC1KwDMiSoPccOva', NULL, NULL, NULL, NULL, 1, '2026-03-14 15:26:23', '2026-04-04 16:36:04', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, NULL, 1, 0),
-(35, 'vivian', 'wiston', 'jacob', 'Female', 'vivian@gmail.com', '', '255755914218', NULL, '$2y$10$kghEh1Enfg3fyged8N/AReH65MrBhRXO3GLcsbXoiC2bt/kIu1O7a', NULL, NULL, NULL, 'admin_35_1774606773.jpg', 1, '2026-03-27 10:17:22', '2026-06-22 17:09:54', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-06-22 10:09:54', 1, 0),
+(35, 'vivian', 'wiston', 'jacob', 'Female', 'vivian@gmail.com', '', '255755914218', NULL, '$2y$10$kghEh1Enfg3fyged8N/AReH65MrBhRXO3GLcsbXoiC2bt/kIu1O7a', NULL, NULL, NULL, 'admin_35_1774606773.jpg', 1, '2026-03-27 10:17:22', '2026-07-08 18:34:39', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-07-08 11:34:39', 1, 0),
 (36, 'Mkurugenzi', 'tz', 'Rashid', 'Male', 'ee@gmail.com', '', '255694372484', NULL, '$2y$10$SUYyskxjnnZaB2kl8Syrreb0gNuWU9kM7ESZoRDH6JFeYkKIrVlN2', NULL, NULL, NULL, NULL, 1, '2026-04-02 10:36:08', '2026-04-05 06:47:41', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, '2026-04-05 09:45:11', 1, 0),
 (37, 'tungilo', 'tungi', 'tungilo', 'Male', 'muyovozimuyovozi2@gmail.com', '', '255755082167', NULL, '$2y$10$JkbBLAZp8MKTMoXtRb21T.phJqy4MdCO3ppeXCwZGRnLQHayXO4LK', NULL, NULL, NULL, NULL, 1, '2026-04-08 14:32:38', '2026-04-11 07:45:33', NULL, NULL, NULL, 0, NULL, '2026-04-10 19:55:27', 1, 0),
-(39, 'Roberto', 'John', 'Lyando', 'Male', 'jacksonmwalongo370@gmail.com', '', '255712345678', NULL, '$2y$10$tWWmxJ43wny8hmDlphQKe.UWc7BWVzjOfI.jSXfRmUp9nNJfJZf06', NULL, NULL, NULL, NULL, 1, '2026-06-11 07:43:18', '2026-06-21 10:55:32', NULL, NULL, NULL, 0, NULL, '2026-06-21 03:55:32', 1, 0),
+(39, 'Roberto', 'John', 'Lyando', 'Male', 'jacksonmwalongo370@gmail.com', '', '255712345678', NULL, '$2y$10$tWWmxJ43wny8hmDlphQKe.UWc7BWVzjOfI.jSXfRmUp9nNJfJZf06', NULL, NULL, NULL, NULL, 1, '2026-06-11 07:43:18', '2026-07-07 20:14:08', NULL, NULL, NULL, 0, NULL, '2026-07-07 13:14:08', 1, 0),
 (40, 'Jackson', '', 'Mwalongo', 'Male', 'jackson@gmail.com', '', '764275301', '', '$2y$10$ScSw/iBaK2nQuNNQ5k8hFuKGgB3jgfioz0rEtahG.vhkrBpO.L0Bq', NULL, NULL, NULL, 'admin_40_1781819578.jpeg', 1, '2026-06-18 21:49:51', '2026-06-23 06:48:25', NULL, '', NULL, 0, NULL, '2026-06-23 09:48:25', 1, 0),
 (41, 'JACKSON', '', 'MWALONGO', 'Male', 'tz@gmail.com', NULL, '25578654523', '', '$2y$10$7sUkFYOHZ5BVfdrIyTDAyOdY3rMBBND16yWoX9ff2NRItwa7aacy.', NULL, NULL, NULL, NULL, 1, '2026-06-22 17:57:29', '2026-06-23 09:08:23', NULL, '', NULL, 0, NULL, '2026-06-23 12:08:23', 2, 0);
 
@@ -1183,6 +1180,732 @@ INSERT INTO `admin_logs` (`id`, `admin_id`, `action`, `description`, `details`, 
 (0, 32, 'Assign Subject', NULL, 'Assigned geo to teacher ID 39 for Form Five (2026)', NULL, NULL, '2026-06-11 16:58:39', 1),
 (0, 32, 'register_teacher', 'Registered new teacher: Jackson Mwalongo (ID: 40)', NULL, '::1', NULL, '2026-06-18 21:49:52', 1),
 (0, 32, 'edit_teacher', 'Edited teacher: Nazakia Martine (ID: 26)', NULL, '::1', NULL, '2026-06-23 07:44:19', 1),
+(0, 32, 'edit_teacher', 'Edited teacher: bamfu bamfu (ID: 29)', NULL, '::1', NULL, '2026-06-23 08:51:00', 1),
+(109, 12, 'Shule Salama Post', NULL, 'Posted: fgfg (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 15:43:09', 1),
+(110, 12, 'Shule Salama Post', NULL, 'Posted: errerer (ID: 12)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:00', 1),
+(111, 12, 'Shule Salama Post', NULL, 'Posted: eaferer (ID: 13)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:14', 1),
+(112, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 12', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:22', 1),
+(113, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 9', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:33', 1),
+(114, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 13', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:42', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 08:28:33', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.122', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 09:46:16', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: hello (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 13:43:18', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: hkgvgfgb (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 14:25:26', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: uiuiui (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 14:58:43', 1),
+(0, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 0', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:02:01', 1),
+(0, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 7', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:02:19', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0', '2026-02-06 15:04:02', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: tazan the greatest (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:06:05', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:37:33', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: helo herena (ID: 0)', '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:41:40', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: fdsd (ID: 0)', '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:59:34', 1),
+(0, 12, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:03:40', 1),
+(0, 16, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:03:59', 1),
+(0, 16, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:23', 1),
+(0, 13, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:38', 1),
+(0, 13, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:41', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:55', 1),
+(0, 12, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:58', 1),
+(0, 17, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:55:41', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0', '2026-02-07 08:38:20', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.105', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36', '2026-02-07 15:52:56', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 06:47:59', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 06:52:38', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 08:22:17', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-02-26 15:04:05', 1),
+(109, 12, 'Shule Salama Post', NULL, 'Posted: fgfg (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 15:43:09', 1),
+(110, 12, 'Shule Salama Post', NULL, 'Posted: errerer (ID: 12)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:00', 1),
+(111, 12, 'Shule Salama Post', NULL, 'Posted: eaferer (ID: 13)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:14', 1),
+(112, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 12', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:22', 1),
+(113, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 9', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:33', 1),
+(114, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 13', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:42', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 08:28:33', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.122', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 09:46:16', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: hello (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 13:43:18', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: hkgvgfgb (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 14:25:26', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: uiuiui (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 14:58:43', 1),
+(0, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 0', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:02:01', 1),
+(0, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 7', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:02:19', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0', '2026-02-06 15:04:02', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: tazan the greatest (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:06:05', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:37:33', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: helo herena (ID: 0)', '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:41:40', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: fdsd (ID: 0)', '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:59:34', 1),
+(0, 12, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:03:40', 1),
+(0, 16, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:03:59', 1),
+(0, 16, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:23', 1),
+(0, 13, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:38', 1),
+(0, 13, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:41', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:55', 1),
+(0, 12, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:58', 1),
+(0, 17, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:55:41', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0', '2026-02-07 08:38:20', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.105', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36', '2026-02-07 15:52:56', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 06:47:59', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 06:52:38', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 08:22:17', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 13:29:17', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 13:37:43', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 21:41:48', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: hello (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 21:42:29', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 21:42:45', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 23:22:40', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 23:52:25', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 23:59:38', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:05:39', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:06:40', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:06:50', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:06:59', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:07:21', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:08:18', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:12:58', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:13:54', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:14:42', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-08 01:35:15', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 04:06:42', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 04:16:39', 1),
+(0, 26, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-10 11:37:05', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-10 11:38:35', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:07:18', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:07:24', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:17:59', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:18:30', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:51:09', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:51:30', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 14:21:01', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 14:21:19', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 14:46:49', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 14:46:58', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 15:04:57', 1),
+(0, 12, 'Student Registered', 'Registered student: aaaaa 89y7y (Admission: 121212) with default password as parent phone', NULL, '::1', NULL, '2026-03-10 15:44:16', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 15:45:05', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 08:50:27', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 08:56:22', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-11 09:08:03', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-11 09:08:35', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-11 09:09:31', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 09:48:26', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 09:48:35', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 11:16:56', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 11:17:06', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-11 11:24:50', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 12:42:26', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 13:59:24', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-11 14:02:49', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 16:25:48', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 05:16:43', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 07:34:16', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 07:38:12', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:39:05', 1),
+(0, 13, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:39:19', 1),
+(0, 13, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:39:38', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:40:28', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:40:40', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:40:50', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:50:22', 1),
+(0, 13, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:50:34', 1),
+(0, 13, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:01:52', 1),
+(0, 26, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:02:06', 1),
+(0, 26, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:21:01', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:21:19', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:29:26', 1),
+(0, 28, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:29:47', 1),
+(0, 28, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:01:49', 1),
+(0, 13, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:02:07', 1),
+(0, 13, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:05:45', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:05:53', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:08:54', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:11:23', 1),
+(0, 14, 'Login', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-13 10:25:54', 1),
+(0, 14, 'Logout', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-13 10:26:35', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:29:34', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:29:46', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-13 10:30:18', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-13 10:31:04', 1),
+(0, 29, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-13 12:12:38', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 12:48:56', 1);
+INSERT INTO `admin_logs` (`id`, `admin_id`, `action`, `description`, `details`, `ip_address`, `user_agent`, `created_at`, `school_id`) VALUES
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:05:49', 1),
+(0, 31, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:14:47', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:15:15', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:46:06', 1),
+(0, 26, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:46:32', 1),
+(0, 26, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:53:34', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:54:33', 1),
+(0, 31, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:55:35', 1),
+(0, 29, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:55:57', 1),
+(0, 29, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:04:48', 1),
+(0, 29, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:05:13', 1),
+(0, 29, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:05:25', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:05:41', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:12:10', 1),
+(0, 13, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:12:30', 1),
+(0, 13, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:20:21', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:20:39', 1),
+(0, 31, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:42:12', 1),
+(0, 31, 'Login', NULL, NULL, '192.168.1.131', 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.0.0 Safari/537.36', '2026-03-13 15:43:08', 1),
+(0, 31, 'Logout', NULL, NULL, '192.168.1.131', 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.0.0 Safari/537.36', '2026-03-13 15:43:53', 1),
+(0, 29, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 19:29:54', 1),
+(0, 29, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 19:40:34', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 19:40:54', 1),
+(0, 31, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 19:58:54', 1),
+(0, 13, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 19:59:08', 1),
+(0, 13, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 20:57:56', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 20:58:13', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 20:58:34', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 20:58:52', 1),
+(0, 14, 'Login', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 08:13:33', 1),
+(0, 14, 'Login', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 08:16:27', 1),
+(0, 31, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:25:55', 1),
+(0, 26, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:26:22', 1),
+(0, 26, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:46:15', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:46:30', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:48:17', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:48:32', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 12:53:47', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 12:56:41', 1),
+(0, 26, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 12:57:26', 1),
+(0, 26, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:21:15', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:21:41', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:41:52', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:42:08', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:45:56', 1),
+(0, 17, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:46:08', 1),
+(0, 17, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 14:16:10', 1),
+(0, 29, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 14:16:59', 1),
+(0, 31, 'register_teacher', 'Registered new teacher: Halima peter (ID: 34)', NULL, '::1', NULL, '2026-03-14 15:26:23', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 16:30:12', 1),
+(0, 29, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 16:50:56', 1),
+(0, 31, 'Login', NULL, NULL, '192.168.1.186', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 17:26:32', 1),
+(0, 14, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 17:48:40', 1),
+(0, 14, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 17:55:48', 1),
+(0, 31, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 17:56:00', 1),
+(0, 31, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 18:01:51', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-24 16:52:28', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-26 05:19:40', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 07:14:06', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 07:17:31', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 07:17:43', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 07:50:54', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 10:10:02', 1),
+(0, 32, 'Student Registered', 'Registered student: princess toy (Admission: y78) with default password as parent phone', NULL, '::1', NULL, '2026-03-27 10:12:05', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 10:12:32', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 10:15:52', 1),
+(0, 32, 'register_teacher', 'Registered new teacher: agness taze (ID: 35)', NULL, '::1', NULL, '2026-03-27 10:17:22', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 10:17:29', 1),
+(0, 35, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 10:17:48', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 11:27:13', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-28 01:49:04', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-28 08:23:27', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-28 08:23:46', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36', '2026-03-28 08:29:49', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36', '2026-03-28 08:31:43', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-29 09:03:48', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-31 16:07:21', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-03-31 18:33:20', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-03-31 18:33:41', 1),
+(0, 28, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-03-31 18:33:50', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 06:03:01', 1),
+(0, 28, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-04-01 06:10:39', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 07:21:44', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'deactivated exam type: Terminal Exam 2', NULL, NULL, '2026-04-01 08:25:09', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:01:41', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:05:04', 1),
+(0, 35, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:05:22', 1),
+(0, 35, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:12:53', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:17:11', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:25:48', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:27:28', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-02 07:26:12', 1),
+(0, 32, 'Login', NULL, NULL, '10.98.187.64', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-04-02 08:05:00', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-02 10:26:21', 1),
+(0, 32, 'register_teacher', 'Registered new teacher: herjmpew mzima (ID: 36)', NULL, '::1', NULL, '2026-04-02 10:36:08', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (m33) for Form Six in year 2026', NULL, NULL, '2026-04-02 11:28:24', 1),
+(0, 32, 'Duplicate Exam Type', NULL, 'Duplicated exam type from m33 to m33_F6_2027 for year 2027', NULL, NULL, '2026-04-02 11:28:38', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (m33_F6_2027) for Form Six in year 2027', NULL, NULL, '2026-04-02 11:46:22', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 11:46:28', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'deactivated exam type: school_exam', NULL, NULL, '2026-04-02 11:46:33', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: Mid-Term 1 (MT1) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:47:12', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: Mid-Term 2 (MT2) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:47:16', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: Terminal Exam 1 (TE1) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:47:19', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: School Exam (SE) for Form Five in year 2026 with 54 associated results', NULL, NULL, '2026-04-02 11:47:24', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: Terminal Exam 2 (TE2) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:47:28', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: Pre-NECTA (PN) for Form Five in year 2026 with 71 associated results', NULL, NULL, '2026-04-02 11:47:34', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (m33) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:48:52', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (m33) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:49:08', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (m33) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:49:26', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (y77) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:01:35', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 13:04:16', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (y77) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:07:02', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (y77) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:09:23', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 13:09:28', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'deactivated exam type: school_exam', NULL, NULL, '2026-04-02 13:19:34', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (y77) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:19:41', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (m34) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:25:32', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 13:25:38', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (y77) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:49:24', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'deactivated exam type: school_exam', NULL, NULL, '2026-04-02 13:49:35', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 13:50:21', 1),
+(0, 32, 'Edit Exam Type', NULL, 'Edited exam type ID 18: school', NULL, NULL, '2026-04-02 13:50:36', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 14:16:16', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school', NULL, NULL, '2026-04-02 14:19:39', 1),
+(0, 35, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-04-02 14:30:51', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (y77) for Form Six in year 2026 with 1 associated results', NULL, NULL, '2026-04-02 14:51:00', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-02 16:01:49', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 16:02:15', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-02 18:06:40', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 03:51:44', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 03:57:31', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (m33) for Form Five in year 2026 with 5 associated results', NULL, NULL, '2026-04-03 05:08:33', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: hello_exam (89) for Form Five in year 2026', NULL, NULL, '2026-04-03 05:09:06', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: hello_exam', NULL, NULL, '2026-04-03 05:09:14', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned ac to teacher ID 35 for Form Five (2026)', NULL, NULL, '2026-04-03 06:16:03', 1),
+(0, 35, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-04-03 06:16:56', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed ac from agness taze for Form Five', NULL, NULL, '2026-04-03 06:46:13', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned b_math to teacher ID 35 for Form Five (2026)', NULL, NULL, '2026-04-03 06:46:32', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned his to teacher ID 35 for Form Six (2026)', NULL, NULL, '2026-04-03 07:13:36', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: tzine (yy) for Form Five in year 2026', NULL, NULL, '2026-04-03 07:24:09', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 09:18:52', 1),
+(0, 35, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 09:19:42', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 16:07:17', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 16:14:02', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 17:26:31', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 17:56:42', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 17:56:54', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 17:57:08', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 17:57:14', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 18:10:03', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 18:14:22', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 18:21:28', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 20:22:34', 1),
+(0, 32, 'Student Registered', 'Registered student: agness world (Admission: t6re56778) with default password as parent phone', NULL, '::1', NULL, '2026-04-03 20:47:28', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 20:52:48', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 20:56:17', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 20:56:50', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 06:25:00', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 06:33:23', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 15:01:33', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 15:17:49', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 15:18:16', 1),
+(0, 31, 'Login', NULL, NULL, '10.98.187.248', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 15:47:58', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 20:46:36', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36', '2026-04-04 22:04:08', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 23:15:30', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 04:25:21', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 04:36:18', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 05:13:54', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 05:54:15', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 06:11:27', 1),
+(0, 36, 'Login', NULL, NULL, '10.98.187.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36', '2026-04-05 06:45:11', 1),
+(0, 14, 'Login', NULL, NULL, '10.98.187.248', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 06:51:31', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: pre-necta (777) for Form Six in year 2026', NULL, NULL, '2026-04-05 06:56:14', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: pre-necta', NULL, NULL, '2026-04-05 06:56:23', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned geo to teacher ID 36 for Form Six (2026)', NULL, NULL, '2026-04-05 06:57:21', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 07:39:34', 1),
+(0, 14, 'Login', NULL, NULL, '10.98.187.248', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 07:55:15', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned b_math to teacher ID 14 for Form Six (2026)', NULL, NULL, '2026-04-05 08:14:24', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed geo from Mkurugenzi Rashid for Form Six', NULL, NULL, '2026-04-05 08:16:31', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed b_math from samson smith for Form Six', NULL, NULL, '2026-04-05 08:16:46', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed his from agness taze for Form Six', NULL, NULL, '2026-04-05 08:16:54', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-06 19:27:56', 1),
+(0, 32, 'register_teacher', 'Registered new teacher: jkkfwlekwlcjnm wefqwe (ID: 37)', NULL, '::1', NULL, '2026-04-08 14:32:38', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned htm to teacher ID 35 for Form Six (2026)', NULL, NULL, '2026-04-09 10:56:18', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed htm from agness taze for Form Six', NULL, NULL, '2026-04-09 10:56:26', 1),
+(0, 32, 'Edit Exam Type', NULL, 'Edited exam type ID 21: school', NULL, NULL, '2026-04-11 05:44:13', 1),
+(0, 32, 'Edit Exam Type', NULL, 'Edited exam type ID 20: mid_exam', NULL, NULL, '2026-04-11 05:44:43', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned ac to teacher ID 13 for Form Five (2026)', NULL, NULL, '2026-04-11 06:19:11', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned htm to teacher ID 28 for Form Five (2026)', NULL, NULL, '2026-04-11 06:19:30', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned his to teacher ID 26 for Form Five (2026)', NULL, NULL, '2026-04-11 06:19:47', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned ac to teacher ID 14 for Form Five (2026)', NULL, NULL, '2026-04-11 06:20:00', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned eco to teacher ID 35 for Form Five (2026)', NULL, NULL, '2026-04-11 06:34:57', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned eco to teacher ID 35 for Form Six (2026)', NULL, NULL, '2026-04-12 10:34:52', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school', NULL, NULL, '2026-04-12 13:30:27', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: mid_exam', NULL, NULL, '2026-04-12 13:30:33', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: tzoneu (hgdrurt) for Form Five in year 2026', NULL, NULL, '2026-04-12 13:30:49', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: tzoneu', NULL, NULL, '2026-04-12 13:30:56', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: mid_exam', NULL, NULL, '2026-04-12 13:31:01', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed ac from ashura mussa for Form Five', NULL, NULL, '2026-04-12 13:42:42', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed htm from kafunsi kafunsi for Form Five', NULL, NULL, '2026-04-12 13:42:47', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed ac from samson smith for Form Five', NULL, NULL, '2026-04-12 13:42:54', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed his from Franc peter for Form Five', NULL, NULL, '2026-04-12 13:43:00', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed b_math from agness taze for Form Five', NULL, NULL, '2026-04-12 13:43:05', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed eco from agness taze for Form Five', NULL, NULL, '2026-04-12 13:43:12', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed eco from agness taze for Form Six', NULL, NULL, '2026-04-12 13:43:20', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school', NULL, NULL, '2026-04-12 13:53:12', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school (m34) for Form Six in year 2026 with 57 associated results', NULL, NULL, '2026-04-12 13:55:03', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (uihui) for Form Six in year 2026', NULL, NULL, '2026-04-12 13:55:14', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-12 13:55:20', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned eco to teacher ID 35 for Form Five (2026)', NULL, NULL, '2026-04-12 14:04:41', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned eco to teacher ID 35 for Form Six (2026)', NULL, NULL, '2026-04-12 14:04:58', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned b_math to teacher ID 35 for Form Six (2026)', NULL, NULL, '2026-04-12 14:05:15', 1),
+(0, 32, 'Student Registered', 'Registered student: nakupenda uje (Admission: 909090hjj) with default password as parent phone', NULL, '::1', NULL, '2026-04-21 10:10:56', 1),
+(0, 26, 'Toggle Exam Status', NULL, 'deactivated exam type: school', NULL, NULL, '2026-05-21 06:22:34', 1),
+(0, 26, 'Toggle Exam Status', NULL, 'activated exam type: mid_exam', NULL, NULL, '2026-05-21 06:22:40', 1),
+(109, 12, 'Shule Salama Post', NULL, 'Posted: fgfg (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 15:43:09', 1),
+(110, 12, 'Shule Salama Post', NULL, 'Posted: errerer (ID: 12)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:00', 1),
+(111, 12, 'Shule Salama Post', NULL, 'Posted: eaferer (ID: 13)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:14', 1),
+(112, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 12', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:22', 1),
+(113, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 9', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:33', 1),
+(114, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 13', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:42', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 08:28:33', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.122', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 09:46:16', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: hello (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 13:43:18', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: hkgvgfgb (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 14:25:26', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: uiuiui (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 14:58:43', 1),
+(0, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 0', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:02:01', 1),
+(0, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 7', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:02:19', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0', '2026-02-06 15:04:02', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: tazan the greatest (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:06:05', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:37:33', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: helo herena (ID: 0)', '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:41:40', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: fdsd (ID: 0)', '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:59:34', 1),
+(0, 12, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:03:40', 1),
+(0, 16, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:03:59', 1),
+(0, 16, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:23', 1),
+(0, 13, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:38', 1),
+(0, 13, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:41', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:55', 1),
+(0, 12, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:58', 1),
+(0, 17, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:55:41', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0', '2026-02-07 08:38:20', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.105', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36', '2026-02-07 15:52:56', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 06:47:59', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 06:52:38', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 08:22:17', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-02-26 15:04:05', 1),
+(109, 12, 'Shule Salama Post', NULL, 'Posted: fgfg (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 15:43:09', 1),
+(110, 12, 'Shule Salama Post', NULL, 'Posted: errerer (ID: 12)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:00', 1),
+(111, 12, 'Shule Salama Post', NULL, 'Posted: eaferer (ID: 13)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:14', 1),
+(112, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 12', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:22', 1),
+(113, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 9', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:33', 1),
+(114, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 13', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-05 16:01:42', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 08:28:33', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.122', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 09:46:16', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: hello (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 13:43:18', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: hkgvgfgb (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 14:25:26', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: uiuiui (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 14:58:43', 1),
+(0, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 0', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:02:01', 1),
+(0, 12, 'Shule Salama Delete', NULL, 'Deleted post ID: 7', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:02:19', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0', '2026-02-06 15:04:02', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: tazan the greatest (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:06:05', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:37:33', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: helo herena (ID: 0)', '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:41:40', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: fdsd (ID: 0)', '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 15:59:34', 1),
+(0, 12, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:03:40', 1),
+(0, 16, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:03:59', 1),
+(0, 16, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:23', 1),
+(0, 13, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:38', 1),
+(0, 13, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:41', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:55', 1),
+(0, 12, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:49:58', 1),
+(0, 17, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-06 16:55:41', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0', '2026-02-07 08:38:20', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.105', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Mobile Safari/537.36', '2026-02-07 15:52:56', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 06:47:59', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 06:52:38', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36', '2026-02-08 08:22:17', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 13:29:17', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 13:37:43', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 21:41:48', 1),
+(0, 12, 'Shule Salama Post', NULL, 'Posted: hello (ID: 0)', '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 21:42:29', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 21:42:45', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 23:22:40', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 23:52:25', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-07 23:59:38', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:05:39', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:06:40', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:06:50', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:06:59', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:07:21', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:08:18', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:12:58', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:13:54', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 00:14:42', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-08 01:35:15', 1);
+INSERT INTO `admin_logs` (`id`, `admin_id`, `action`, `description`, `details`, `ip_address`, `user_agent`, `created_at`, `school_id`) VALUES
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 04:06:42', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-08 04:16:39', 1),
+(0, 26, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-10 11:37:05', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-10 11:38:35', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:07:18', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:07:24', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:17:59', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:18:30', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:51:09', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 13:51:30', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 14:21:01', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 14:21:19', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 14:46:49', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 14:46:58', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 15:04:57', 1),
+(0, 12, 'Student Registered', 'Registered student: aaaaa 89y7y (Admission: 121212) with default password as parent phone', NULL, '::1', NULL, '2026-03-10 15:44:16', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-10 15:45:05', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 08:50:27', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 08:56:22', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-11 09:08:03', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-11 09:08:35', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-11 09:09:31', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 09:48:26', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 09:48:35', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 11:16:56', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 11:17:06', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-11 11:24:50', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 12:42:26', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 13:59:24', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-11 14:02:49', 1),
+(0, 12, 'Login', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-11 16:25:48', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 05:16:43', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 07:34:16', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 07:38:12', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:39:05', 1),
+(0, 13, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:39:19', 1),
+(0, 13, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:39:38', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:40:28', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:40:40', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:40:50', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:50:22', 1),
+(0, 13, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 08:50:34', 1),
+(0, 13, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:01:52', 1),
+(0, 26, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:02:06', 1),
+(0, 26, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:21:01', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:21:19', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:29:26', 1),
+(0, 28, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 09:29:47', 1),
+(0, 28, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:01:49', 1),
+(0, 13, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:02:07', 1),
+(0, 13, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:05:45', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:05:53', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:08:54', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:11:23', 1),
+(0, 14, 'Login', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-13 10:25:54', 1),
+(0, 14, 'Logout', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-13 10:26:35', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:29:34', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 10:29:46', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-13 10:30:18', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-13 10:31:04', 1),
+(0, 29, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-13 12:12:38', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 12:48:56', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:05:49', 1),
+(0, 31, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:14:47', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:15:15', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:46:06', 1),
+(0, 26, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:46:32', 1),
+(0, 26, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:53:34', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:54:33', 1),
+(0, 31, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:55:35', 1),
+(0, 29, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 13:55:57', 1),
+(0, 29, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:04:48', 1),
+(0, 29, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:05:13', 1),
+(0, 29, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:05:25', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:05:41', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:12:10', 1),
+(0, 13, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:12:30', 1),
+(0, 13, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:20:21', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:20:39', 1),
+(0, 31, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 15:42:12', 1),
+(0, 31, 'Login', NULL, NULL, '192.168.1.131', 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.0.0 Safari/537.36', '2026-03-13 15:43:08', 1),
+(0, 31, 'Logout', NULL, NULL, '192.168.1.131', 'Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/101.0.0.0 Safari/537.36', '2026-03-13 15:43:53', 1),
+(0, 29, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 19:29:54', 1),
+(0, 29, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 19:40:34', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 19:40:54', 1),
+(0, 31, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 19:58:54', 1),
+(0, 13, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 19:59:08', 1),
+(0, 13, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 20:57:56', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 20:58:13', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 20:58:34', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-13 20:58:52', 1),
+(0, 14, 'Login', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 08:13:33', 1),
+(0, 14, 'Login', NULL, NULL, '192.168.1.110', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 08:16:27', 1),
+(0, 31, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:25:55', 1),
+(0, 26, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:26:22', 1),
+(0, 26, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:46:15', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:46:30', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:48:17', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 12:48:32', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 12:53:47', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 12:56:41', 1),
+(0, 26, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 12:57:26', 1),
+(0, 26, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:21:15', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:21:41', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:41:52', 1),
+(0, 12, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:42:08', 1),
+(0, 12, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:45:56', 1),
+(0, 17, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 13:46:08', 1),
+(0, 17, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 14:16:10', 1),
+(0, 29, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 14:16:59', 1),
+(0, 31, 'register_teacher', 'Registered new teacher: Halima peter (ID: 34)', NULL, '::1', NULL, '2026-03-14 15:26:23', 1),
+(0, 31, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-14 16:30:12', 1),
+(0, 29, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36 Edg/145.0.0.0', '2026-03-14 16:50:56', 1),
+(0, 31, 'Login', NULL, NULL, '192.168.1.186', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 17:26:32', 1),
+(0, 14, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 17:48:40', 1),
+(0, 14, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 17:55:48', 1),
+(0, 31, 'Login', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 17:56:00', 1),
+(0, 31, 'Logout', NULL, NULL, '192.168.1.172', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-03-14 18:01:51', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-24 16:52:28', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-26 05:19:40', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 07:14:06', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 07:17:31', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 07:17:43', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 07:50:54', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 10:10:02', 1),
+(0, 32, 'Student Registered', 'Registered student: princess toy (Admission: y78) with default password as parent phone', NULL, '::1', NULL, '2026-03-27 10:12:05', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 10:12:32', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 10:15:52', 1),
+(0, 32, 'register_teacher', 'Registered new teacher: agness taze (ID: 35)', NULL, '::1', NULL, '2026-03-27 10:17:22', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 10:17:29', 1),
+(0, 35, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 10:17:48', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-27 11:27:13', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-28 01:49:04', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-28 08:23:27', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-28 08:23:46', 1),
+(0, 14, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36', '2026-03-28 08:29:49', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36', '2026-03-28 08:31:43', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-29 09:03:48', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-03-31 16:07:21', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-03-31 18:33:20', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-03-31 18:33:41', 1),
+(0, 28, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-03-31 18:33:50', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 06:03:01', 1),
+(0, 28, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-04-01 06:10:39', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 07:21:44', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'deactivated exam type: Terminal Exam 2', NULL, NULL, '2026-04-01 08:25:09', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:01:41', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:05:04', 1),
+(0, 35, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:05:22', 1),
+(0, 35, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:12:53', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:17:11', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:25:48', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-01 22:27:28', 1),
+(0, 14, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-02 07:26:12', 1),
+(0, 32, 'Login', NULL, NULL, '10.98.187.64', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36', '2026-04-02 08:05:00', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-02 10:26:21', 1),
+(0, 32, 'register_teacher', 'Registered new teacher: herjmpew mzima (ID: 36)', NULL, '::1', NULL, '2026-04-02 10:36:08', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (m33) for Form Six in year 2026', NULL, NULL, '2026-04-02 11:28:24', 1),
+(0, 32, 'Duplicate Exam Type', NULL, 'Duplicated exam type from m33 to m33_F6_2027 for year 2027', NULL, NULL, '2026-04-02 11:28:38', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (m33_F6_2027) for Form Six in year 2027', NULL, NULL, '2026-04-02 11:46:22', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 11:46:28', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'deactivated exam type: school_exam', NULL, NULL, '2026-04-02 11:46:33', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: Mid-Term 1 (MT1) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:47:12', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: Mid-Term 2 (MT2) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:47:16', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: Terminal Exam 1 (TE1) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:47:19', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: School Exam (SE) for Form Five in year 2026 with 54 associated results', NULL, NULL, '2026-04-02 11:47:24', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: Terminal Exam 2 (TE2) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:47:28', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: Pre-NECTA (PN) for Form Five in year 2026 with 71 associated results', NULL, NULL, '2026-04-02 11:47:34', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (m33) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:48:52', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (m33) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:49:08', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (m33) for Form Five in year 2026', NULL, NULL, '2026-04-02 11:49:26', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (y77) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:01:35', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 13:04:16', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (y77) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:07:02', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (y77) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:09:23', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 13:09:28', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'deactivated exam type: school_exam', NULL, NULL, '2026-04-02 13:19:34', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (y77) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:19:41', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (m34) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:25:32', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 13:25:38', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (y77) for Form Six in year 2026', NULL, NULL, '2026-04-02 13:49:24', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'deactivated exam type: school_exam', NULL, NULL, '2026-04-02 13:49:35', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 13:50:21', 1),
+(0, 32, 'Edit Exam Type', NULL, 'Edited exam type ID 18: school', NULL, NULL, '2026-04-02 13:50:36', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 14:16:16', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school', NULL, NULL, '2026-04-02 14:19:39', 1),
+(0, 35, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-04-02 14:30:51', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (y77) for Form Six in year 2026 with 1 associated results', NULL, NULL, '2026-04-02 14:51:00', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-02 16:01:49', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-02 16:02:15', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-02 18:06:40', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 03:51:44', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 03:57:31', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school_exam (m33) for Form Five in year 2026 with 5 associated results', NULL, NULL, '2026-04-03 05:08:33', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: hello_exam (89) for Form Five in year 2026', NULL, NULL, '2026-04-03 05:09:06', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: hello_exam', NULL, NULL, '2026-04-03 05:09:14', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned ac to teacher ID 35 for Form Five (2026)', NULL, NULL, '2026-04-03 06:16:03', 1),
+(0, 35, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36 Edg/146.0.0.0', '2026-04-03 06:16:56', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed ac from agness taze for Form Five', NULL, NULL, '2026-04-03 06:46:13', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned b_math to teacher ID 35 for Form Five (2026)', NULL, NULL, '2026-04-03 06:46:32', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned his to teacher ID 35 for Form Six (2026)', NULL, NULL, '2026-04-03 07:13:36', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: tzine (yy) for Form Five in year 2026', NULL, NULL, '2026-04-03 07:24:09', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 09:18:52', 1),
+(0, 35, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 09:19:42', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 16:07:17', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 16:14:02', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 17:26:31', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 17:56:42', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 17:56:54', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 17:57:08', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 17:57:14', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 18:10:03', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 18:14:22', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 18:21:28', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 20:22:34', 1),
+(0, 32, 'Student Registered', 'Registered student: agness world (Admission: t6re56778) with default password as parent phone', NULL, '::1', NULL, '2026-04-03 20:47:28', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 20:52:48', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 20:56:17', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-03 20:56:50', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 06:25:00', 1),
+(0, 32, 'Logout', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 06:33:23', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 15:01:33', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 15:17:49', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 15:18:16', 1),
+(0, 31, 'Login', NULL, NULL, '10.98.187.248', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 15:47:58', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 20:46:36', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36', '2026-04-04 22:04:08', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-04 23:15:30', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 04:25:21', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 04:36:18', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 05:13:54', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 05:54:15', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 06:11:27', 1),
+(0, 36, 'Login', NULL, NULL, '10.98.187.63', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Mobile Safari/537.36', '2026-04-05 06:45:11', 1),
+(0, 14, 'Login', NULL, NULL, '10.98.187.248', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 06:51:31', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: pre-necta (777) for Form Six in year 2026', NULL, NULL, '2026-04-05 06:56:14', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: pre-necta', NULL, NULL, '2026-04-05 06:56:23', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned geo to teacher ID 36 for Form Six (2026)', NULL, NULL, '2026-04-05 06:57:21', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 07:39:34', 1),
+(0, 14, 'Login', NULL, NULL, '10.98.187.248', 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-05 07:55:15', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned b_math to teacher ID 14 for Form Six (2026)', NULL, NULL, '2026-04-05 08:14:24', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed geo from Mkurugenzi Rashid for Form Six', NULL, NULL, '2026-04-05 08:16:31', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed b_math from samson smith for Form Six', NULL, NULL, '2026-04-05 08:16:46', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed his from agness taze for Form Six', NULL, NULL, '2026-04-05 08:16:54', 1),
+(0, 32, 'Login', NULL, NULL, '::1', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36', '2026-04-06 19:27:56', 1),
+(0, 32, 'register_teacher', 'Registered new teacher: jkkfwlekwlcjnm wefqwe (ID: 37)', NULL, '::1', NULL, '2026-04-08 14:32:38', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned htm to teacher ID 35 for Form Six (2026)', NULL, NULL, '2026-04-09 10:56:18', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed htm from agness taze for Form Six', NULL, NULL, '2026-04-09 10:56:26', 1),
+(0, 32, 'Edit Exam Type', NULL, 'Edited exam type ID 21: school', NULL, NULL, '2026-04-11 05:44:13', 1),
+(0, 32, 'Edit Exam Type', NULL, 'Edited exam type ID 20: mid_exam', NULL, NULL, '2026-04-11 05:44:43', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned ac to teacher ID 13 for Form Five (2026)', NULL, NULL, '2026-04-11 06:19:11', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned htm to teacher ID 28 for Form Five (2026)', NULL, NULL, '2026-04-11 06:19:30', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned his to teacher ID 26 for Form Five (2026)', NULL, NULL, '2026-04-11 06:19:47', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned ac to teacher ID 14 for Form Five (2026)', NULL, NULL, '2026-04-11 06:20:00', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned eco to teacher ID 35 for Form Five (2026)', NULL, NULL, '2026-04-11 06:34:57', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned eco to teacher ID 35 for Form Six (2026)', NULL, NULL, '2026-04-12 10:34:52', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school', NULL, NULL, '2026-04-12 13:30:27', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: mid_exam', NULL, NULL, '2026-04-12 13:30:33', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: tzoneu (hgdrurt) for Form Five in year 2026', NULL, NULL, '2026-04-12 13:30:49', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: tzoneu', NULL, NULL, '2026-04-12 13:30:56', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: mid_exam', NULL, NULL, '2026-04-12 13:31:01', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed ac from ashura mussa for Form Five', NULL, NULL, '2026-04-12 13:42:42', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed htm from kafunsi kafunsi for Form Five', NULL, NULL, '2026-04-12 13:42:47', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed ac from samson smith for Form Five', NULL, NULL, '2026-04-12 13:42:54', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed his from Franc peter for Form Five', NULL, NULL, '2026-04-12 13:43:00', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed b_math from agness taze for Form Five', NULL, NULL, '2026-04-12 13:43:05', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed eco from agness taze for Form Five', NULL, NULL, '2026-04-12 13:43:12', 1),
+(0, 32, 'Remove Subject Assignment', NULL, 'Removed eco from agness taze for Form Six', NULL, NULL, '2026-04-12 13:43:20', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school', NULL, NULL, '2026-04-12 13:53:12', 1),
+(0, 32, 'Delete Exam Type', NULL, 'Deleted exam type: school (m34) for Form Six in year 2026 with 57 associated results', NULL, NULL, '2026-04-12 13:55:03', 1),
+(0, 32, 'Add Exam Type', NULL, 'Added exam type: school_exam (uihui) for Form Six in year 2026', NULL, NULL, '2026-04-12 13:55:14', 1),
+(0, 32, 'Toggle Exam Status', NULL, 'activated exam type: school_exam', NULL, NULL, '2026-04-12 13:55:20', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned eco to teacher ID 35 for Form Five (2026)', NULL, NULL, '2026-04-12 14:04:41', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned eco to teacher ID 35 for Form Six (2026)', NULL, NULL, '2026-04-12 14:04:58', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned b_math to teacher ID 35 for Form Six (2026)', NULL, NULL, '2026-04-12 14:05:15', 1),
+(0, 32, 'Student Registered', 'Registered student: nakupenda uje (Admission: 909090hjj) with default password as parent phone', NULL, '::1', NULL, '2026-04-21 10:10:56', 1),
+(0, 26, 'Toggle Exam Status', NULL, 'deactivated exam type: school', NULL, NULL, '2026-05-21 06:22:34', 1),
+(0, 26, 'Toggle Exam Status', NULL, 'activated exam type: mid_exam', NULL, NULL, '2026-05-21 06:22:40', 1),
+(0, 32, 'Student Registered', 'Registered student: Jackson Mwalongo (Admission: S0964/0076/2026) with default password as parent phone', NULL, '::1', NULL, '2026-06-10 20:49:37', 1),
+(0, 32, 'register_teacher', 'Registered new teacher: Roberto Lyando (ID: 39)', NULL, '::1', NULL, '2026-06-11 07:43:19', 1),
+(0, 32, 'Assign Subject', NULL, 'Assigned geo to teacher ID 39 for Form Five (2026)', NULL, NULL, '2026-06-11 16:58:39', 1),
+(0, 32, 'register_teacher', 'Registered new teacher: Jackson Mwalongo (ID: 40)', NULL, '::1', NULL, '2026-06-18 21:49:52', 1),
+(0, 32, 'edit_teacher', 'Edited teacher: Nazakia Martine (ID: 26)', NULL, '::1', NULL, '2026-06-23 07:44:19', 1),
 (0, 32, 'edit_teacher', 'Edited teacher: bamfu bamfu (ID: 29)', NULL, '::1', NULL, '2026-06-23 08:51:00', 1);
 
 -- --------------------------------------------------------
@@ -1217,8 +1940,23 @@ INSERT INTO `admin_roles` (`id`, `role_name`, `description`) VALUES
 (13, 'Librarian', 'Library management'),
 (14, 'Shule Salama', 'School security and safety'),
 (15, 'Normal Teacher', 'Regular teaching duties'),
+(16, 'Maintainance', 'Maintanance of the school'),
+(1, 'Head Master', 'Head of the school'),
+(2, 'Second Master', 'Deputy head master'),
+(3, 'Academic Master', 'Responsible for academic affairs'),
+(4, 'Discipline Master', 'Responsible for student discipline'),
+(5, 'Class Teacher', 'Class teacher responsibilities'),
+(6, 'Sports & Games', 'Responsible for sports activities'),
+(7, 'Dormitory Teacher', 'Responsible for dormitories'),
+(8, 'School Bursar & store', 'Responsible for finances & store'),
+(9, 'Production', 'Responsible for production store'),
+(10, 'INS Coach', 'Instructional coach'),
+(11, 'Food Store', 'Responsible for food store'),
+(12, 'PS', 'Personal Secretary'),
+(13, 'Librarian', 'Library management'),
+(14, 'Shule Salama', 'School security and safety'),
+(15, 'Normal Teacher', 'Regular teaching duties'),
 (16, 'Maintainance', 'Maintanance of the school');
-
 
 -- --------------------------------------------------------
 
@@ -1239,6 +1977,72 @@ CREATE TABLE `admin_role_assignments` (
 --
 
 INSERT INTO `admin_role_assignments` (`id`, `admin_id`, `role_id`, `is_primary`, `assigned_at`) VALUES
+(13, 11, 7, 0, '2026-01-07 11:45:53'),
+(14, 11, 11, 1, '2026-01-07 11:45:53'),
+(15, 13, 16, 1, '2026-01-07 11:53:03'),
+(20, 14, 5, 1, '2026-01-09 11:44:30'),
+(21, 15, 4, 1, '2026-01-21 15:05:50'),
+(0, 25, 16, 1, '2026-02-06 16:21:17'),
+(13, 11, 7, 0, '2026-01-07 11:45:53'),
+(14, 11, 11, 1, '2026-01-07 11:45:53'),
+(15, 13, 16, 1, '2026-01-07 11:53:03'),
+(20, 14, 5, 1, '2026-01-09 11:44:30'),
+(21, 15, 4, 1, '2026-01-21 15:05:50'),
+(0, 25, 16, 1, '2026-02-06 16:21:17'),
+(0, 0, 3, 0, '2026-03-08 05:33:05'),
+(0, 0, 3, 0, '2026-03-08 05:33:05'),
+(0, 0, 4, 1, '2026-03-08 05:33:05'),
+(0, 0, 4, 1, '2026-03-08 05:33:05'),
+(0, 12, 13, 0, '2026-03-13 12:42:26'),
+(0, 12, 8, 1, '2026-03-13 12:42:26'),
+(0, 32, 1, 1, '2026-03-14 14:12:23'),
+(0, 17, 2, 1, '2026-03-14 14:12:54'),
+(0, 34, 6, 1, '2026-03-14 15:26:23'),
+(0, 36, 13, 0, '2026-04-05 06:47:41'),
+(0, 36, 9, 1, '2026-04-05 06:47:41'),
+(0, 37, 3, 1, '2026-04-11 07:45:33'),
+(0, 35, 3, 1, '2026-05-21 11:15:05'),
+(0, 28, 7, 1, '2026-05-21 11:15:53'),
+(0, 28, 15, 0, '2026-05-21 11:15:53'),
+(13, 11, 7, 0, '2026-01-07 11:45:53'),
+(14, 11, 11, 1, '2026-01-07 11:45:53'),
+(15, 13, 16, 1, '2026-01-07 11:53:03'),
+(20, 14, 5, 1, '2026-01-09 11:44:30'),
+(21, 15, 4, 1, '2026-01-21 15:05:50'),
+(0, 25, 16, 1, '2026-02-06 16:21:17'),
+(13, 11, 7, 0, '2026-01-07 11:45:53'),
+(14, 11, 11, 1, '2026-01-07 11:45:53'),
+(15, 13, 16, 1, '2026-01-07 11:53:03'),
+(20, 14, 5, 1, '2026-01-09 11:44:30'),
+(21, 15, 4, 1, '2026-01-21 15:05:50'),
+(0, 25, 16, 1, '2026-02-06 16:21:17'),
+(0, 0, 3, 0, '2026-03-08 05:33:05'),
+(0, 0, 3, 0, '2026-03-08 05:33:05'),
+(0, 0, 4, 1, '2026-03-08 05:33:05'),
+(0, 0, 4, 1, '2026-03-08 05:33:05'),
+(0, 12, 13, 0, '2026-03-13 12:42:26'),
+(0, 12, 8, 1, '2026-03-13 12:42:26'),
+(0, 32, 1, 1, '2026-03-14 14:12:23'),
+(0, 17, 2, 1, '2026-03-14 14:12:54'),
+(0, 34, 6, 1, '2026-03-14 15:26:23'),
+(0, 36, 13, 0, '2026-04-05 06:47:41'),
+(0, 36, 9, 1, '2026-04-05 06:47:41'),
+(0, 37, 3, 1, '2026-04-11 07:45:33'),
+(0, 35, 3, 1, '2026-05-21 11:15:05'),
+(0, 28, 7, 1, '2026-05-21 11:15:53'),
+(0, 28, 15, 0, '2026-05-21 11:15:53'),
+(0, 39, 15, 1, '2026-06-11 07:43:18'),
+(0, 39, 15, 1, '2026-06-11 07:43:19'),
+(0, 40, 8, 1, '2026-06-18 21:49:52'),
+(0, 40, 8, 1, '2026-06-18 21:49:52'),
+(0, 41, 1, 1, '2026-06-22 17:57:29'),
+(0, 26, 3, 1, '2026-06-23 07:44:19'),
+(0, 26, 3, 1, '2026-06-23 07:44:19'),
+(0, 26, 5, 0, '2026-06-23 07:44:19'),
+(0, 29, 5, 0, '2026-06-23 08:51:00'),
+(0, 29, 12, 1, '2026-06-23 08:51:00'),
+(0, 29, 12, 1, '2026-06-23 08:51:00'),
+(0, 29, 2, 0, '2026-06-23 08:51:00'),
 (13, 11, 7, 0, '2026-01-07 11:45:53'),
 (14, 11, 11, 1, '2026-01-07 11:45:53'),
 (15, 13, 16, 1, '2026-01-07 11:53:03'),
@@ -1475,6 +2279,10 @@ CREATE TABLE `discipline_records` (
 --
 
 INSERT INTO `discipline_records` (`id`, `student_id`, `list_type`, `record_type`, `short_note`, `file_path`, `file_type`, `file_name`, `file_size`, `recorded_by`, `is_visible_to_student`, `severity_level`, `follow_up_required`, `follow_up_due_date`, `follow_up_completed`, `follow_up_notes`, `status`, `created_at`, `updated_at`, `school_id`) VALUES
+(0, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
+(0, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1),
+(0, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
+(0, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1),
 (0, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
 (0, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1),
 (0, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
@@ -1748,6 +2556,7 @@ CREATE TRIGGER `update_dormitory_occupancy` AFTER UPDATE ON `dormitory_rooms` FO
             updated_at = CURRENT_TIMESTAMP
         WHERE id = NEW.dormitory_id;
         
+
         -- Update dormitory status
         UPDATE dormitories 
         SET status = CASE 
@@ -2203,15 +3012,16 @@ CREATE TABLE `generated_timetables` (
   `sessions_per_day` int(11) DEFAULT 6,
   `break_after` int(11) DEFAULT 2,
   `break_length` int(11) DEFAULT 30,
-  `days` varchar(255) DEFAULT 'Monday, Tuesday, Wednesday, Thursday, Friday'
+  `days` varchar(255) DEFAULT 'Monday, Tuesday, Wednesday, Thursday, Friday',
+  `signature` varchar(64) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `generated_timetables`
 --
 
-INSERT INTO `generated_timetables` (`id`, `term`, `year`, `filename`, `document_name`, `generated_by`, `last_updated_by`, `generated_at`, `last_updated_at`, `school_id`, `start_time`, `session_length`, `sessions_per_day`, `break_after`, `break_length`, `days`) VALUES
-(20, 'Term 01', 2026, 'Term_01_Timetable_-_2026', 'Term 01 Timetable - 2026', 35, 35, '2026-06-20 19:25:51', '2026-06-22 19:13:06', 1, '00:00:08', 60, 4, 2, 15, 'Monday, Tuesday, Wednesday, Thursday, Friday, Saturday');
+INSERT INTO `generated_timetables` (`id`, `term`, `year`, `filename`, `document_name`, `generated_by`, `last_updated_by`, `generated_at`, `last_updated_at`, `school_id`, `start_time`, `session_length`, `sessions_per_day`, `break_after`, `break_length`, `days`, `signature`) VALUES
+(0, 'Term 02', 2026, 'Term_02_Timetable_-_2026', 'Term 02 Timetable - 2026', 35, 35, '2026-07-08 18:27:17', '2026-07-08 18:27:17', 1, '00:00:08', 60, 5, 2, 30, 'Monday, Tuesday, Wednesday, Thursday, Friday, Saturday', '941dd8110574ed4038cabd4865329586');
 
 -- --------------------------------------------------------
 
@@ -4830,7 +5640,10 @@ INSERT INTO `student_payments` (`id`, `student_id`, `amount`, `payment_date`, `p
 (15, 409, 500.00, '2026-04-22', 'cash', '', 'completed', '', 32, '2026-04-22 07:43:54', 1),
 (16, 205, 30000.00, '2026-04-22', 'cash', '78987654', 'completed', 'very good', 32, '2026-04-22 08:03:39', 1),
 (17, 27, 40000.00, '2026-04-22', 'cash', '', 'completed', '', 32, '2026-04-22 12:34:26', 1),
-(18, 28, 10000.00, '2026-04-23', 'cash', '', 'completed', '', 32, '2026-04-23 18:27:12', 1);
+(18, 28, 10000.00, '2026-04-23', 'cash', '', 'completed', '', 32, '2026-04-23 18:27:12', 1),
+(20, 24, 50000.00, '2026-07-08', 'cash', '', 'completed', '', 12, '2026-07-08 14:51:25', 1),
+(21, 1, 700000.00, '2026-07-08', 'cash', '', 'completed', '', 12, '2026-07-08 14:54:07', 1),
+(22, 43, 300000.00, '2026-07-08', 'cash', '', 'completed', '', 12, '2026-07-08 14:54:55', 1);
 
 -- --------------------------------------------------------
 
@@ -4888,10 +5701,17 @@ CREATE TABLE `subject_teacher_assignments` (
 --
 
 INSERT INTO `subject_teacher_assignments` (`id`, `teacher_id`, `subject`, `form_level`, `academic_year`, `is_primary`, `can_enter_results`, `assigned_by`, `assigned_at`, `updated_at`, `school_id`) VALUES
-(0, 39, 'geo', 'Form Five', '2026', 1, 1, 32, '2026-06-11 16:58:38', '2026-06-11 16:58:38', 1),
+(1, 39, 'geo', 'Form Five', '2026', 1, 1, 32, '2026-06-11 16:58:38', '2026-06-11 16:58:38', 1),
 (13, 35, 'eco', 'Form Five', '2026', 0, 1, 32, '2026-04-12 14:04:41', '2026-04-12 14:04:41', 1),
 (14, 35, 'eco', 'Form Six', '2026', 0, 1, 32, '2026-04-12 14:04:58', '2026-04-12 14:04:58', 1),
-(15, 35, 'b_math', 'Form Six', '2026', 0, 1, 32, '2026-04-12 14:05:15', '2026-04-12 14:05:15', 1);
+(15, 35, 'b_math', 'Form Six', '2026', 0, 1, 32, '2026-04-12 14:05:15', '2026-04-12 14:05:15', 1),
+(16, 13, 'his', 'Form Five', '2026', 1, 1, 35, '2026-07-07 18:40:22', '2026-07-07 18:40:22', 1),
+(17, 34, 'kisw', 'Form Five', '2026', 1, 1, 35, '2026-07-07 18:41:08', '2026-07-07 18:41:08', 1),
+(18, 14, 'ac', 'Form Five', '2026', 0, 1, 35, '2026-07-07 18:58:59', '2026-07-07 18:58:59', 1),
+(19, 26, 'htm', 'Form Five', '2026', 0, 1, 35, '2026-07-07 18:59:26', '2026-07-07 18:59:26', 1),
+(20, 37, 'eng', 'Form Five', '2026', 1, 1, 35, '2026-07-07 19:00:32', '2026-07-07 19:00:32', 1),
+(21, 40, 'adv_m', 'Form Five', '2026', 1, 1, 35, '2026-07-07 19:01:32', '2026-07-07 19:01:32', 1),
+(22, 15, 'b_math', 'Form Five', '2026', 1, 1, 35, '2026-07-07 19:01:56', '2026-07-07 19:01:56', 1);
 
 -- --------------------------------------------------------
 
@@ -4921,7 +5741,7 @@ CREATE TABLE `super_admins` (
 --
 
 INSERT INTO `super_admins` (`id`, `first_name`, `last_name`, `email`, `phone`, `role`, `password`, `profile_image`, `last_login`, `last_login_ip`, `status`, `created_at`, `updated_at`, `created_by`) VALUES
-(1, 'Tzone', 'IT', 'tzone1@gmail.com', '255714343162', 'Super Admin', '$2y$10$ySOHa0diO137FUZdOCXXee6yQZlQ4Lg.FEBJIT4m0iFoODTqzTH.u', NULL, '2026-06-23 11:58:56', '::1', 1, '2026-06-02 08:31:43', '2026-06-23 08:58:56', NULL);
+(1, 'Tzone', 'IT', 'tzone1@gmail.com', '255714343162', 'Super Admin', '$2y$10$ySOHa0diO137FUZdOCXXee6yQZlQ4Lg.FEBJIT4m0iFoODTqzTH.u', NULL, '2026-07-06 09:52:58', '::1', 1, '2026-06-02 08:31:43', '2026-07-06 16:52:58', NULL);
 
 -- --------------------------------------------------------
 
@@ -6006,184 +6826,16 @@ ALTER TABLE `dormitories`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
 
 --
--- AUTO_INCREMENT for table `dormitory_rooms`
+-- AUTO_INCREMENT for table `student_payments`
 --
-ALTER TABLE `dormitory_rooms`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=123;
+ALTER TABLE `student_payments`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 
 --
--- AUTO_INCREMENT for table `exam_types`
+-- AUTO_INCREMENT for table `subject_teacher_assignments`
 --
-ALTER TABLE `exam_types`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=25;
-
---
--- AUTO_INCREMENT for table `fee_settings`
---
-ALTER TABLE `fee_settings`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
-
---
--- AUTO_INCREMENT for table `food_stock`
---
-ALTER TABLE `food_stock`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
-
---
--- AUTO_INCREMENT for table `food_stock_history`
---
-ALTER TABLE `food_stock_history`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
-
---
--- AUTO_INCREMENT for table `forms`
---
-ALTER TABLE `forms`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
-
---
--- AUTO_INCREMENT for table `form_five_results`
---
-ALTER TABLE `form_five_results`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=115;
-
---
--- AUTO_INCREMENT for table `form_six_results`
---
-ALTER TABLE `form_six_results`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=131;
-
---
--- AUTO_INCREMENT for table `game_types`
---
-ALTER TABLE `game_types`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
-
---
--- AUTO_INCREMENT for table `generated_timetables`
---
-ALTER TABLE `generated_timetables`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
-
---
--- AUTO_INCREMENT for table `holiday_packages`
---
-ALTER TABLE `holiday_packages`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
-
---
--- AUTO_INCREMENT for table `learning_materials`
---
-ALTER TABLE `learning_materials`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
-
---
--- AUTO_INCREMENT for table `leaver_equipment_history`
---
-ALTER TABLE `leaver_equipment_history`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `library_assignments`
---
-ALTER TABLE `library_assignments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=8;
-
---
--- AUTO_INCREMENT for table `login_notifications`
---
-ALTER TABLE `login_notifications`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `maintenance_assignments`
---
-ALTER TABLE `maintenance_assignments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=17;
-
---
--- AUTO_INCREMENT for table `maintenance_items`
---
-ALTER TABLE `maintenance_items`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=7;
-
---
--- AUTO_INCREMENT for table `maintenance_logs`
---
-ALTER TABLE `maintenance_logs`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=45;
-
---
--- AUTO_INCREMENT for table `maintenance_staff_assignments`
---
-ALTER TABLE `maintenance_staff_assignments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
-
---
--- AUTO_INCREMENT for table `matches`
---
-ALTER TABLE `matches`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=28;
-
---
--- AUTO_INCREMENT for table `matches_schedule`
---
-ALTER TABLE `matches_schedule`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `match_officials`
---
-ALTER TABLE `match_officials`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `match_statistics`
---
-ALTER TABLE `match_statistics`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
-
---
--- AUTO_INCREMENT for table `non_staff`
---
-ALTER TABLE `non_staff`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=2;
-
---
--- AUTO_INCREMENT for table `password_resets`
---
-ALTER TABLE `password_resets`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=64;
-
---
--- AUTO_INCREMENT for table `students`
---
-ALTER TABLE `students`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=410;
-
---
--- AUTO_INCREMENT for table `teacher_class_assignments`
---
-ALTER TABLE `teacher_class_assignments`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
-
---
--- Constraints for dumped tables
---
-
---
--- Constraints for table `attendance_records`
---
-ALTER TABLE `attendance_records`
-  ADD CONSTRAINT `attendance_records_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `students` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `attendance_records_ibfk_2` FOREIGN KEY (`teacher_id`) REFERENCES `admins` (`id`);
-
---
--- Constraints for table `teacher_class_assignments`
---
-ALTER TABLE `teacher_class_assignments`
-  ADD CONSTRAINT `teacher_class_assignments_ibfk_1` FOREIGN KEY (`teacher_id`) REFERENCES `admins` (`id`) ON DELETE CASCADE,
-  ADD CONSTRAINT `teacher_class_assignments_ibfk_2` FOREIGN KEY (`assigned_by`) REFERENCES `admins` (`id`);
+ALTER TABLE `subject_teacher_assignments`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;

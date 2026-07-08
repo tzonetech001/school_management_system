@@ -144,7 +144,12 @@ include '../controller/sidebar.php';
 <div class="main-content">
     <div class="container-fluid">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2><i class="fas fa-file-invoice me-2" style="color: var(--primary-color);"></i>Payment Report</h2>
+            <div>
+                <h2><i class="fas fa-file-invoice me-2" style="color: var(--primary-color);"></i>Payment Report</h2>
+                <a href="record_payment.php" class="btn btn-sm btn-primary mt-2">
+                    <i class="fas fa-plus-circle me-1"></i>Record Payment
+                </a>
+            </div>
             <div>
                 <?php if ($fee_settings): ?>
                     <span class="badge bg-success p-2">
@@ -285,3 +290,18 @@ include '../controller/sidebar.php';
 </div>
 
 <?php include '../controller/footer.php'; ?>
+
+<script>
+// Listen for payments update from other tabs and reload to reflect changes
+window.addEventListener('storage', function(e) {
+    if (e.key === 'payments_update') {
+        try {
+            var data = JSON.parse(e.newValue);
+            // Optionally: reload only when relevant student changed; for simplicity reload all
+            location.reload();
+        } catch (err) {
+            location.reload();
+        }
+    }
+});
+</script>

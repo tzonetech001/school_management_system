@@ -14,7 +14,7 @@ if (session_status() === PHP_SESSION_NONE) {
         'domain' => '',
         'secure' => false,
         'httponly' => true,
-        'samesite' => 'Strict'
+        'samesite' => 'Lax'  // Changed to Lax to allow AJAX requests
     ]);
     
     session_start();

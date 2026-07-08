@@ -30,9 +30,9 @@ if ($user_roles_result && mysqli_num_rows($user_roles_result) > 0) {
     }
 }
 
-// If user is a regular teacher (no academic admin role), redirect to teacher view
+// Non-academic users should use the teacher-facing timetable view.
 if (!$is_academic_admin) {
-    header("Location: teacher_timetable.php");
+    header('Location: teacher_timetable.php');
     exit();
 }
 
@@ -42,7 +42,7 @@ $school_result = mysqli_query($conn, $school_query);
 $school_data = mysqli_fetch_assoc($school_result);
 $school_id = $school_data['school_id'];
 
-// Handle delete - ADMIN CAN DELETE ANY TIMETABLE
+// Handle delete - ADMIN CAN DELETE ANY TIMETABLE, others can delete only timetables they created
 if (isset($_GET['delete']) && isset($_GET['id'])) {
     $timetable_id = intval($_GET['id']);
     
@@ -637,16 +637,16 @@ $teacher_name = $teacher['first_name'] . ' ' . $teacher['last_name'];
                                         <?php endif; ?>
                                     </p>
                                     <div class="action-buttons">
-                                        <button class="btn-download" onclick="downloadTimetable('<?php echo htmlspecialchars($timetable['filename']); ?>')">
+                                        <button type="button" class="btn-download" onclick="event.preventDefault(); downloadTimetable('<?php echo htmlspecialchars($timetable['filename']); ?>')">
                                             <i class="fas fa-download me-1"></i>Download
                                         </button>
-                                        <button class="btn-view" onclick="viewTimetable('<?php echo htmlspecialchars($timetable['filename']); ?>')">
+                                        <button type="button" class="btn-view" onclick="event.preventDefault(); viewTimetable('<?php echo htmlspecialchars($timetable['filename']); ?>')">
                                             <i class="fas fa-eye me-1"></i>View
                                         </button>
-                                        <button class="btn-edit" onclick="editTimetable(<?php echo $timetable['id']; ?>)">
+                                        <button type="button" class="btn-edit" onclick="event.preventDefault(); editTimetable(<?php echo $timetable['id']; ?>)">
                                             <i class="fas fa-edit me-1"></i>Edit
                                         </button>
-                                        <button class="btn-delete" onclick="deleteTimetable(<?php echo $timetable['id']; ?>)">
+                                        <button type="button" class="btn-delete" onclick="event.preventDefault(); deleteTimetable(<?php echo $timetable['id']; ?>)">
                                             <i class="fas fa-trash me-1"></i>Delete
                                         </button>
                                     </div>
@@ -802,7 +802,7 @@ $teacher_name = $teacher['first_name'] . ' ' . $teacher['last_name'];
         }
         
         function editTimetable(id) {
-            window.location.href = 'edit_timetable.php?id=' + id;
+            window.location.href = 'session_timetable.php?edit=1&id=' + encodeURIComponent(id);
         }
         
         $('#printModalBtn').on('click', function() {

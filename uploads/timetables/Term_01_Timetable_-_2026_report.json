@@ -1,0 +1,1617 @@
+{
+    "unassigned": [
+        {
+            "class": "Form 6 - HGF",
+            "day": "Monday",
+            "session": 1,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Monday",
+            "session": 1,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Monday",
+            "session": 1,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Monday",
+            "session": 1,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Monday",
+            "session": 1,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Monday",
+            "session": 1,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - EGM",
+            "day": "Monday",
+            "session": 1,
+            "subject": "adv_m"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Monday",
+            "session": 2,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Monday",
+            "session": 2,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Monday",
+            "session": 2,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Monday",
+            "session": 2,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Monday",
+            "session": 2,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HGE",
+            "day": "Monday",
+            "session": 2,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Monday",
+            "session": 2,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Monday",
+            "session": 2,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Monday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Monday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Monday",
+            "session": 3,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Monday",
+            "session": 3,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Monday",
+            "session": 3,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Monday",
+            "session": 3,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Monday",
+            "session": 3,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - EGM",
+            "day": "Monday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Monday",
+            "session": 3,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Monday",
+            "session": 3,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Monday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Monday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Monday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Monday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Monday",
+            "session": 4,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Monday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Monday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Monday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Monday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Monday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Monday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Monday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Monday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Monday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Monday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Monday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Monday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Monday",
+            "session": 5,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Monday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Monday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGE",
+            "day": "Monday",
+            "session": 6,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Monday",
+            "session": 6,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Monday",
+            "session": 6,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Monday",
+            "session": 6,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Monday",
+            "session": 6,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Monday",
+            "session": 6,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Monday",
+            "session": 6,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Monday",
+            "session": 6,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Monday",
+            "session": 6,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Tuesday",
+            "session": 1,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Tuesday",
+            "session": 1,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Tuesday",
+            "session": 1,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Tuesday",
+            "session": 1,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Tuesday",
+            "session": 1,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Tuesday",
+            "session": 1,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Tuesday",
+            "session": 1,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Tuesday",
+            "session": 2,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Tuesday",
+            "session": 2,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Tuesday",
+            "session": 2,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - EGM",
+            "day": "Tuesday",
+            "session": 2,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Tuesday",
+            "session": 2,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Tuesday",
+            "session": 2,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Tuesday",
+            "session": 2,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Tuesday",
+            "session": 3,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Tuesday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Tuesday",
+            "session": 3,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Tuesday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Tuesday",
+            "session": 3,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Tuesday",
+            "session": 3,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Tuesday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - EGM",
+            "day": "Tuesday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Tuesday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Tuesday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Tuesday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Tuesday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Tuesday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Tuesday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Tuesday",
+            "session": 4,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Tuesday",
+            "session": 4,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Tuesday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Tuesday",
+            "session": 4,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Tuesday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Tuesday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Tuesday",
+            "session": 5,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Tuesday",
+            "session": 6,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Tuesday",
+            "session": 6,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGE",
+            "day": "Tuesday",
+            "session": 6,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Tuesday",
+            "session": 6,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Tuesday",
+            "session": 6,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Tuesday",
+            "session": 6,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Tuesday",
+            "session": 6,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Tuesday",
+            "session": 6,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Tuesday",
+            "session": 6,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Wednesday",
+            "session": 1,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Wednesday",
+            "session": 1,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Wednesday",
+            "session": 1,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Wednesday",
+            "session": 1,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Wednesday",
+            "session": 1,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Wednesday",
+            "session": 1,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Wednesday",
+            "session": 1,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Wednesday",
+            "session": 2,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Wednesday",
+            "session": 2,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Wednesday",
+            "session": 2,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Wednesday",
+            "session": 2,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Wednesday",
+            "session": 2,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Wednesday",
+            "session": 2,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Wednesday",
+            "session": 2,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Wednesday",
+            "session": 3,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Wednesday",
+            "session": 3,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Wednesday",
+            "session": 3,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Wednesday",
+            "session": 3,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Wednesday",
+            "session": 3,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGE",
+            "day": "Wednesday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Wednesday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Wednesday",
+            "session": 3,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Wednesday",
+            "session": 3,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGE",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - EGM",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Wednesday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HGE",
+            "day": "Wednesday",
+            "session": 5,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Wednesday",
+            "session": 6,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Wednesday",
+            "session": 6,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Wednesday",
+            "session": 6,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Wednesday",
+            "session": 6,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Wednesday",
+            "session": 6,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Wednesday",
+            "session": 6,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Wednesday",
+            "session": 6,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Wednesday",
+            "session": 6,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Wednesday",
+            "session": 6,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Thursday",
+            "session": 1,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Thursday",
+            "session": 1,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Thursday",
+            "session": 1,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 5 - EGM",
+            "day": "Thursday",
+            "session": 1,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Thursday",
+            "session": 1,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Thursday",
+            "session": 1,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Thursday",
+            "session": 1,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Thursday",
+            "session": 1,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Thursday",
+            "session": 2,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Thursday",
+            "session": 2,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Thursday",
+            "session": 2,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Thursday",
+            "session": 2,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Thursday",
+            "session": 2,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGE",
+            "day": "Thursday",
+            "session": 2,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Thursday",
+            "session": 2,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Thursday",
+            "session": 2,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Thursday",
+            "session": 3,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Thursday",
+            "session": 3,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Thursday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Thursday",
+            "session": 3,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Thursday",
+            "session": 3,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Thursday",
+            "session": 3,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Thursday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Thursday",
+            "session": 3,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Thursday",
+            "session": 4,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Thursday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Thursday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Thursday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Thursday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Thursday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Thursday",
+            "session": 4,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - EGM",
+            "day": "Thursday",
+            "session": 4,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGE",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - EGM",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Thursday",
+            "session": 5,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Thursday",
+            "session": 6,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Thursday",
+            "session": 6,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Thursday",
+            "session": 6,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Thursday",
+            "session": 6,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Thursday",
+            "session": 6,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Thursday",
+            "session": 6,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HGE",
+            "day": "Thursday",
+            "session": 6,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Thursday",
+            "session": 6,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Thursday",
+            "session": 6,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Friday",
+            "session": 1,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Friday",
+            "session": 1,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Friday",
+            "session": 1,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Friday",
+            "session": 1,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Friday",
+            "session": 1,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Friday",
+            "session": 1,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Friday",
+            "session": 1,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Friday",
+            "session": 2,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Friday",
+            "session": 2,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Friday",
+            "session": 2,
+            "subject": "kisw"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Friday",
+            "session": 2,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Friday",
+            "session": 2,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Friday",
+            "session": 2,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Friday",
+            "session": 2,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HKL",
+            "day": "Friday",
+            "session": 2,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Friday",
+            "session": 3,
+            "subject": "eco"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Friday",
+            "session": 3,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Friday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Friday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Friday",
+            "session": 3,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Friday",
+            "session": 3,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 5 - EGM",
+            "day": "Friday",
+            "session": 3,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Friday",
+            "session": 3,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Friday",
+            "session": 3,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Friday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Friday",
+            "session": 4,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Friday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Friday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Friday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Friday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Friday",
+            "session": 4,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Friday",
+            "session": 4,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - EGM",
+            "day": "Friday",
+            "session": 4,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Friday",
+            "session": 4,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Friday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Friday",
+            "session": 5,
+            "subject": "his"
+        },
+        {
+            "class": "Form 6 - HKL",
+            "day": "Friday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Friday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 5 - EGM",
+            "day": "Friday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Friday",
+            "session": 5,
+            "subject": "ac"
+        },
+        {
+            "class": "Form 6 - KLF",
+            "day": "Friday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Friday",
+            "session": 5,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGF",
+            "day": "Friday",
+            "session": 5,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGE",
+            "day": "Friday",
+            "session": 6,
+            "subject": "htm"
+        },
+        {
+            "class": "Form 5 - HGL",
+            "day": "Friday",
+            "session": 6,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - HGE",
+            "day": "Friday",
+            "session": 6,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HGF",
+            "day": "Friday",
+            "session": 6,
+            "subject": "fren"
+        },
+        {
+            "class": "Form 5 - HLF",
+            "day": "Friday",
+            "session": 6,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - KLF",
+            "day": "Friday",
+            "session": 6,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - HLF",
+            "day": "Friday",
+            "session": 6,
+            "subject": "eng"
+        },
+        {
+            "class": "Form 6 - HGK",
+            "day": "Friday",
+            "session": 6,
+            "subject": "his"
+        },
+        {
+            "class": "Form 5 - HGK",
+            "day": "Friday",
+            "session": 6,
+            "subject": "geo"
+        },
+        {
+            "class": "Form 6 - HGL",
+            "day": "Friday",
+            "session": 6,
+            "subject": "ac"
+        }
+    ],
+    "skipped": [],
+    "clashes": [],
+    "attempts": 1,
+    "signature": "79ff3793d6d259dec00fbaba637bb597",
+    "previous_signature": ""
+}

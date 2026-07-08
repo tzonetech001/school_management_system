@@ -43,8 +43,8 @@ $subjects_data = mysqli_fetch_assoc($subjects_result);
 
 // Subject display names
 $subject_display = [
-    'ac' => ['name' => 'Accountancy', 'code' => 'AC'],
-    'htm' => ['name' => 'Hotel Management', 'code' => 'HTM'],
+    'ac' => ['name' => 'Academic Communication', 'code' => 'AC'],
+    'htm' => ['name' => 'Historia ya Tanzania na Maaadili', 'code' => 'HTM'],
     'his' => ['name' => 'History', 'code' => 'HIST'],
     'geo' => ['name' => 'Geography', 'code' => 'GEO'],
     'kisw' => ['name' => 'Kiswahili', 'code' => 'KISW'],

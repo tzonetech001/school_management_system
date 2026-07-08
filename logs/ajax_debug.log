@@ -1,0 +1,30 @@
+[2026-07-07T18:58:02+02:00] AJAX entry
+REMOTE_ADDR=127.0.0.1
+REQUEST_URI=/fee/record_payment.php
+ACTION=record_payment
+SESSION_ADMIN=none
+POST={"action":"record_payment","student_id":"1","amount":"100","payment_date":"2026-07-07","payment_method":"cash","reference":"test","notes":"test"}
+HEADERS={"Host":"127.0.0.1:8000","User-Agent":"curl\/8.13.0","Accept":"*\/*","Content-Length":"115","Content-Type":"application\/x-www-form-urlencoded"}
+COOKIES=[]
+RAW=action=record_payment&student_id=1&amount=100&payment_date=2026-07-07&payment_method=cash&reference=test&notes=test
+
+[2026-07-07T19:10:37+02:00] AJAX entry
+REMOTE_ADDR=cli
+REQUEST_URI=
+ACTION=record_payment
+SESSION_ADMIN=1
+POST={"action":"record_payment","student_id":1,"amount":100,"payment_date":"2026-07-07","payment_method":"cash","reference":"test","notes":"test"}
+HEADERS=[]
+COOKIES=[]
+RAW=
+
+[2026-07-07T19:12:03+02:00] AJAX entry
+REMOTE_ADDR=cli
+REQUEST_URI=
+ACTION=record_payment
+SESSION_ADMIN=12
+POST={"action":"record_payment","student_id":1,"amount":100,"payment_date":"2026-07-07","payment_method":"cash","reference":"test","notes":"test"}
+HEADERS=[]
+COOKIES=[]
+RAW=
+
