@@ -89,9 +89,9 @@ $animation_speed = isset($preferences['animation_speed']) ? $preferences['animat
 $animation_time = $animation_speed === 'slow' ? '0.5s' : ($animation_speed === 'fast' ? '0.15s' : '0.3s');
 
 // Beem Africa API Credentials
-define('BEEM_API_KEY', '5e3de5075687abf8');
-define('BEEM_SECRET_KEY', 'MDRhM2MxNGUxZGNmYmRjNDMzYzVmYjlkY2MyM2UxNTRmNjMyNzU2YTg2OGRjMmQ5YmMxZjdiODRkZTg2ZjQwYQ==');
-define('BEEM_SOURCE_ADDR', 'MUYOVOZI HS');
+define('BEEM_API_KEY', '11626be139e6df2e');
+define('BEEM_SECRET_KEY', 'MmIyNmExOTRhZjU4NTUwNGIwODVlZmI1MDk4MTM1YjM2ZjBmYTJlZDlmZWM2OTE3MzI5YzRjNWUyZTEyNmUyZA==');
+define('BEEM_SOURCE_ADDR', 'SHOOL SIMS');
 define('SMS_MAX_CHARS', 160);
 define('SMS_WARNING_LIMIT', 140);
 

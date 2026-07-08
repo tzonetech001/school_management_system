@@ -58,7 +58,7 @@ date_default_timezone_set('Africa/Dar_es_Salaam');
 // Beem Africa API Credentials
 define('BEEM_API_KEY', '11626be139e6df2e');
 define('BEEM_SECRET_KEY', 'MmIyNmExOTRhZjU4NTUwNGIwODVlZmI1MDk4MTM1YjM2ZjBmYTJlZDlmZWM2OTE3MzI5YzRjNWUyZTEyNmUyZA==');
-define('BEEM_SOURCE_ADDR', 'UVINZA STRY');
+define('BEEM_SOURCE_ADDR', 'SHOOL SIMS');
 define('SMS_MAX_CHARS', 160);
 define('SMS_WARNING_LIMIT', 140);
 
@@ -73,7 +73,7 @@ function formatPhoneNumber($phone) {
     }
     if (substr($phone, 0, 1) === '7' || substr($phone, 0, 1) === '6') {
         return '255' . $phone;
-    }
+    } 
     return '255' . $phone;
 }
 

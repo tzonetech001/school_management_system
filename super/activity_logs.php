@@ -21,7 +21,7 @@ if (!$super_admin) {
     header("Location: ../mhs/login.php");
     exit();
 }
-
+  
 // ==================== DELETE SINGLE LOG ====================
 if (isset($_GET['delete_single']) && isset($_GET['id']) && isset($_GET['table'])) {
     $log_id = (int)$_GET['id'];
