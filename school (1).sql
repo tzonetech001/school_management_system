@@ -1,13 +1,9 @@
-create database school;
-use school;
-
-
 -- phpMyAdmin SQL Dump
 -- version 5.2.1
 -- https://www.phpmyadmin.net/
 --
 -- Host: 127.0.0.1
--- Generation Time: Jul 08, 2026 at 10:25 PM
+-- Generation Time: Jul 09, 2026 at 12:49 PM
 -- Server version: 10.4.32-MariaDB
 -- PHP Version: 8.2.12
 
@@ -31,16 +27,66 @@ DELIMITER $$
 --
 CREATE DEFINER=`root`@`localhost` PROCEDURE `assign_student_to_dormitory` (IN `p_student_id` INT, IN `p_dormitory_id` INT, IN `p_room_id` INT, IN `p_bed_number` VARCHAR(10), IN `p_assigned_by` INT, IN `p_notes` TEXT)   BEGIN
     DECLARE v_student_name VARCHAR(201);
+    DECLARE v_school_id INT;
     
     START TRANSACTION;
     
-    -- Get student name for error messages
-    SELECT CONCAT(first_name, ' ', last_name) INTO v_student_name
+    -- Get student name and school_id
+    SELECT CONCAT(first_name, ' ', last_name), school_id INTO v_student_name, v_school_id
     FROM students WHERE id = p_student_id;
     
+    -- Check if student already has active assignment
+    IF EXISTS (SELECT 1 FROM student_dormitory WHERE student_id = p_student_id AND status = 'Active') THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Student already has an active dormitory assignment!';
+    END IF;
+    
+    -- Check if room has capacity
+    IF EXISTS (SELECT 1 FROM dormitory_rooms WHERE id = p_room_id AND current_occupancy >= capacity) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Room is already at full capacity!';
+    END IF;
+    
     -- Insert the assignment
-    INSERT INTO student_dormitory (student_id, dormitory_id, room_id, bed_number, assigned_by, status, notes)
-    VALUES (p_student_id, p_dormitory_id, p_room_id, p_bed_number, p_assigned_by, 'Active', p_notes);
+    INSERT INTO student_dormitory (
+        student_id, 
+        dormitory_id, 
+        room_id, 
+        bed_number, 
+        assigned_by, 
+        status, 
+        notes,
+        school_id
+    )
+    VALUES (
+        p_student_id, 
+        p_dormitory_id, 
+        p_room_id, 
+        p_bed_number, 
+        p_assigned_by, 
+        'Active', 
+        p_notes,
+        v_school_id
+    );
+    
+    -- Update room occupancy (trigger will handle this, but explicit update ensures it)
+    UPDATE dormitory_rooms 
+    SET current_occupancy = current_occupancy + 1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = p_room_id;
+    
+    -- Update dormitory occupancy
+    UPDATE dormitories 
+    SET current_occupancy = (
+        SELECT COALESCE(SUM(current_occupancy), 0)
+        FROM dormitory_rooms
+        WHERE dormitory_id = p_dormitory_id
+    ),
+    status = CASE 
+        WHEN (SELECT COALESCE(SUM(current_occupancy), 0) FROM dormitory_rooms WHERE dormitory_id = p_dormitory_id) >= total_capacity 
+        THEN 'Full'
+        ELSE 'Active'
+    END,
+    updated_at = CURRENT_TIMESTAMP
+    WHERE id = p_dormitory_id;
     
     COMMIT;
     
@@ -158,25 +204,50 @@ END$$
 CREATE DEFINER=`root`@`localhost` PROCEDURE `remove_dormitory_assignment` (IN `p_assignment_id` INT, IN `p_notes` TEXT)   BEGIN
     DECLARE v_student_name VARCHAR(201);
     DECLARE v_student_id INT;
+    DECLARE v_room_id INT;
+    DECLARE v_dormitory_id INT;
+    DECLARE v_school_id INT;
     
     START TRANSACTION;
     
     -- Get student info
-    SELECT s.id, CONCAT(s.first_name, ' ', s.last_name) INTO v_student_id, v_student_name
+    SELECT s.id, CONCAT(s.first_name, ' ', s.last_name), sd.room_id, sd.dormitory_id, sd.school_id
+    INTO v_student_id, v_student_name, v_room_id, v_dormitory_id, v_school_id
     FROM student_dormitory sd
     JOIN students s ON sd.student_id = s.id
-    WHERE sd.id = p_assignment_id;
+    WHERE sd.id = p_assignment_id AND sd.status = 'Active';
     
     IF v_student_id IS NULL THEN
-        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Assignment not found!';
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Active assignment not found!';
     END IF;
     
-    -- Update assignment status (triggers will handle occupancy)
+    -- Update assignment status
     UPDATE student_dormitory 
     SET status = 'Left', 
         notes = CONCAT(COALESCE(notes, ''), ' | Removed: ', p_notes),
         updated_at = CURRENT_TIMESTAMP
     WHERE id = p_assignment_id;
+    
+    -- Update room occupancy
+    UPDATE dormitory_rooms 
+    SET current_occupancy = GREATEST(current_occupancy - 1, 0),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = v_room_id;
+    
+    -- Update dormitory occupancy
+    UPDATE dormitories 
+    SET current_occupancy = (
+        SELECT COALESCE(SUM(current_occupancy), 0)
+        FROM dormitory_rooms
+        WHERE dormitory_id = v_dormitory_id
+    ),
+    status = CASE 
+        WHEN (SELECT COALESCE(SUM(current_occupancy), 0) FROM dormitory_rooms WHERE dormitory_id = v_dormitory_id) >= total_capacity 
+        THEN 'Full'
+        ELSE 'Active'
+    END,
+    updated_at = CURRENT_TIMESTAMP
+    WHERE id = v_dormitory_id;
     
     COMMIT;
     
@@ -188,11 +259,13 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `update_student_dormitory` (IN `p_as
     DECLARE v_old_dormitory_id INT;
     DECLARE v_student_id INT;
     DECLARE v_student_name VARCHAR(201);
+    DECLARE v_school_id INT;
     
     START TRANSACTION;
     
     -- Get current assignment details
-    SELECT room_id, dormitory_id, student_id INTO v_old_room_id, v_old_dormitory_id, v_student_id
+    SELECT room_id, dormitory_id, student_id, school_id 
+    INTO v_old_room_id, v_old_dormitory_id, v_student_id, v_school_id
     FROM student_dormitory 
     WHERE id = p_assignment_id AND status = 'Active';
     
@@ -213,7 +286,7 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `update_student_dormitory` (IN `p_as
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'New room is already at full capacity!';
     END IF;
     
-    -- Update assignment (triggers will handle room occupancy changes)
+    -- Update assignment
     UPDATE student_dormitory 
     SET dormitory_id = p_new_dormitory_id,
         room_id = p_new_room_id,
@@ -221,6 +294,48 @@ CREATE DEFINER=`root`@`localhost` PROCEDURE `update_student_dormitory` (IN `p_as
         notes = CONCAT(COALESCE(notes, ''), ' | Changed: ', p_notes),
         updated_at = CURRENT_TIMESTAMP
     WHERE id = p_assignment_id;
+    
+    -- Update old room occupancy
+    UPDATE dormitory_rooms 
+    SET current_occupancy = GREATEST(current_occupancy - 1, 0),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = v_old_room_id;
+    
+    -- Update new room occupancy
+    UPDATE dormitory_rooms 
+    SET current_occupancy = current_occupancy + 1,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE id = p_new_room_id;
+    
+    -- Update old dormitory occupancy
+    UPDATE dormitories 
+    SET current_occupancy = (
+        SELECT COALESCE(SUM(current_occupancy), 0)
+        FROM dormitory_rooms
+        WHERE dormitory_id = v_old_dormitory_id
+    ),
+    status = CASE 
+        WHEN (SELECT COALESCE(SUM(current_occupancy), 0) FROM dormitory_rooms WHERE dormitory_id = v_old_dormitory_id) >= total_capacity 
+        THEN 'Full'
+        ELSE 'Active'
+    END,
+    updated_at = CURRENT_TIMESTAMP
+    WHERE id = v_old_dormitory_id;
+    
+    -- Update new dormitory occupancy
+    UPDATE dormitories 
+    SET current_occupancy = (
+        SELECT COALESCE(SUM(current_occupancy), 0)
+        FROM dormitory_rooms
+        WHERE dormitory_id = p_new_dormitory_id
+    ),
+    status = CASE 
+        WHEN (SELECT COALESCE(SUM(current_occupancy), 0) FROM dormitory_rooms WHERE dormitory_id = p_new_dormitory_id) >= total_capacity 
+        THEN 'Full'
+        ELSE 'Active'
+    END,
+    updated_at = CURRENT_TIMESTAMP
+    WHERE id = p_new_dormitory_id;
     
     COMMIT;
     
@@ -268,22 +383,23 @@ CREATE TABLE `admins` (
 --
 
 INSERT INTO `admins` (`id`, `first_name`, `middle_name`, `last_name`, `sex`, `email`, `check_number`, `phone_number`, `nida`, `password`, `reset_otp`, `reset_otp_expiry`, `last_password_change`, `profile_image`, `status`, `created_at`, `updated_at`, `last_notification_check`, `address`, `updated_by_admin`, `failed_login_attempts`, `locked_until`, `last_login_attempt`, `school_id`, `is_super_admin`) VALUES
-(12, 'muyovozi', '', 'muyovozi', 'Male', 'admin@muyovozi.ac.tz', '', '255714343162', NULL, '$2y$10$GHOZRQ9z/0/4qTXwt3TvT.tMDmYoTlHRXIJODTTfKE5lIt0cfDtR6', NULL, NULL, NULL, 'admin_12_1768193337.jpeg', 1, '2026-01-06 04:26:58', '2026-07-08 14:35:07', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-07-08 07:35:07', 1, 0),
+(12, 'muyovozi', '', 'muyovozi', 'Male', 'admin@muyovozi.ac.tz', '', '255714343177', NULL, '$2y$10$GHOZRQ9z/0/4qTXwt3TvT.tMDmYoTlHRXIJODTTfKE5lIt0cfDtR6', NULL, NULL, NULL, 'admin_12_1768193337.jpeg', 1, '2026-01-06 04:26:58', '2026-07-09 10:25:33', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-07-08 07:35:07', 1, 0),
 (13, 'ashura', 'tophic', 'mussa', 'Female', 'ashuu@gmail.com', '6578887654', '255790909090', '67543234569769767779', '$2y$10$4ECTtphQWimaAKTBC.akk.92NCZLARYoYMc.IiIEfokh9JK3FS3VG', NULL, NULL, NULL, 'admin_13_1773396332.jpg', 1, '2026-01-07 11:53:03', '2026-05-17 15:07:21', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-05-17 18:07:21', 1, 0),
 (14, 'samson', 'tophic', 'smith', 'Male', 'sam@gmail.com', '', '255790909087', '67549874567890987658', '$2y$10$sA7LcE/vF6AO4gB.mZ7kzu5ZB6Xlc8L9s9Qb0zItuhE9KO11UFpTq', NULL, NULL, NULL, '', 1, '2026-01-09 11:44:30', '2026-04-05 07:55:15', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-04-05 10:55:15', 1, 0),
-(15, 'aujenia', 'tophic', 'leo', 'Female', 'jen@gmail.com', '', '255714343162', NULL, '$2y$10$lPtgR8Q4VoNdTalk16tfs.5GsoOT4RJgEZFELQr3Uabf/ILdJAo1y', NULL, NULL, NULL, NULL, 1, '2026-01-21 15:05:50', '2026-04-04 16:36:04', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, NULL, 1, 0),
+(15, 'aujenia', 'tophic', 'leo', 'Female', 'jen@gmail.com', '', '255714343169', NULL, '$2y$10$lPtgR8Q4VoNdTalk16tfs.5GsoOT4RJgEZFELQr3Uabf/ILdJAo1y', NULL, NULL, NULL, NULL, 1, '2026-01-21 15:05:50', '2026-07-09 10:24:12', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, NULL, 1, 0),
 (17, 'muyovozi', '', 'muyovozi', 'Male', 'muyovozi@gmail.com', '', '255766666666', '', '$2y$10$dvjQN799SCRkRaw0oz9gnOqMFKRqlc.yUOzehQTh42goE7Si6pz9.', NULL, NULL, NULL, 'admin_17_1773497651.jpg', 1, '2026-02-06 16:16:46', '2026-04-04 16:36:04', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-03-14 16:46:08', 1, 0),
-(26, 'Nazakia', 'Japan', 'Martine', 'Male', 'nazakiamartine04@gmail.com', '', '255763243765', NULL, '$2y$10$9HNZgvLKij6pCxoxZPbUd.A3GtipTzy3dmwbGdtUqCantZZWFYUii', NULL, NULL, NULL, 'admin_26_1773393622.jpg', 1, '2026-03-08 05:37:43', '2026-06-23 07:44:19', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-06-23 10:04:15', 1, 0),
-(28, 'kafunsi', 'juma', 'kafunsi', 'Male', 'kafunsi@gmail.com', '', '255712837307', NULL, '$2y$10$BzYbZE67L4c8yHpZPEufjeyYTZ9WzCa06BXpeyBSBGn/56KgtyP56', NULL, NULL, NULL, NULL, 1, '2026-03-11 17:33:32', '2026-06-23 09:51:22', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, '2026-06-23 12:51:22', 1, 0),
+(26, 'Nazakia', 'Japan', 'Martine', 'Male', 'nazakiamartine04@gmail.com', '', '255763243765', NULL, '$2y$10$9HNZgvLKij6pCxoxZPbUd.A3GtipTzy3dmwbGdtUqCantZZWFYUii', NULL, NULL, NULL, 'admin_26_1773393622.jpg', 1, '2026-03-08 05:37:43', '2026-07-09 10:28:27', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-07-09 13:28:27', 1, 0),
+(28, 'kafunsi', 'juma', 'kafunsi', 'Male', 'kafunsi@gmail.com', '', '255712837307', NULL, '$2y$10$BzYbZE67L4c8yHpZPEufjeyYTZ9WzCa06BXpeyBSBGn/56KgtyP56', NULL, NULL, NULL, NULL, 1, '2026-03-11 17:33:32', '2026-07-09 10:22:39', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, '2026-06-23 12:51:22', 1, 0),
 (29, 'bamfu', 'leonard', 'bamfu', 'Male', 'bbamfu@gmail.com', '', '255823792374', NULL, '$2y$10$zT3feIqVAf8FGRX.20xzeub8wA.tcGwEcofwH9zPgBIqS1xN488su', NULL, NULL, NULL, NULL, 1, '2026-03-13 12:11:33', '2026-06-23 08:51:00', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, '2026-04-06 23:13:11', 1, 0),
-(32, 'TZONE', 'tz', 'TECH', 'Male', 'tzone@gmail.com', '', '255783626760', '', '$2y$10$hnSnka1aFOh3pWt2Ckp3WOvBfXD/Z/wcyHYav25uhaFu37XpJ.hjm', NULL, NULL, NULL, '', 1, '2026-03-13 13:10:00', '2026-07-07 21:12:35', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-07-07 14:12:35', 1, 0),
+(32, 'TZONE', 'tz', 'TECH', 'Male', 'tzone@gmail.com', '', '255783626760', '', '$2y$10$hnSnka1aFOh3pWt2Ckp3WOvBfXD/Z/wcyHYav25uhaFu37XpJ.hjm', NULL, NULL, NULL, '', 1, '2026-03-13 13:10:00', '2026-07-09 10:27:47', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-07-09 13:27:47', 1, 0),
 (34, 'Halima', 'leonard', 'peter', 'Female', 'fdiva5045@gmail.com', '', '255672389209', NULL, '$2y$10$4pa7e4B3hU1ofNKDsFg50OwZeXYVz0rbUbzzaoC1KwDMiSoPccOva', NULL, NULL, NULL, NULL, 1, '2026-03-14 15:26:23', '2026-04-04 16:36:04', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, NULL, 1, 0),
 (35, 'vivian', 'wiston', 'jacob', 'Female', 'vivian@gmail.com', '', '255755914218', NULL, '$2y$10$kghEh1Enfg3fyged8N/AReH65MrBhRXO3GLcsbXoiC2bt/kIu1O7a', NULL, NULL, NULL, 'admin_35_1774606773.jpg', 1, '2026-03-27 10:17:22', '2026-07-08 18:34:39', '2026-04-04 16:35:04', '', NULL, 0, NULL, '2026-07-08 11:34:39', 1, 0),
 (36, 'Mkurugenzi', 'tz', 'Rashid', 'Male', 'ee@gmail.com', '', '255694372484', NULL, '$2y$10$SUYyskxjnnZaB2kl8Syrreb0gNuWU9kM7ESZoRDH6JFeYkKIrVlN2', NULL, NULL, NULL, NULL, 1, '2026-04-02 10:36:08', '2026-04-05 06:47:41', '2026-04-04 16:35:04', NULL, NULL, 0, NULL, '2026-04-05 09:45:11', 1, 0),
 (37, 'tungilo', 'tungi', 'tungilo', 'Male', 'muyovozimuyovozi2@gmail.com', '', '255755082167', NULL, '$2y$10$JkbBLAZp8MKTMoXtRb21T.phJqy4MdCO3ppeXCwZGRnLQHayXO4LK', NULL, NULL, NULL, NULL, 1, '2026-04-08 14:32:38', '2026-04-11 07:45:33', NULL, NULL, NULL, 0, NULL, '2026-04-10 19:55:27', 1, 0),
 (39, 'Roberto', 'John', 'Lyando', 'Male', 'jacksonmwalongo370@gmail.com', '', '255712345678', NULL, '$2y$10$tWWmxJ43wny8hmDlphQKe.UWc7BWVzjOfI.jSXfRmUp9nNJfJZf06', NULL, NULL, NULL, NULL, 1, '2026-06-11 07:43:18', '2026-07-07 20:14:08', NULL, NULL, NULL, 0, NULL, '2026-07-07 13:14:08', 1, 0),
 (40, 'Jackson', '', 'Mwalongo', 'Male', 'jackson@gmail.com', '', '764275301', '', '$2y$10$ScSw/iBaK2nQuNNQ5k8hFuKGgB3jgfioz0rEtahG.vhkrBpO.L0Bq', NULL, NULL, NULL, 'admin_40_1781819578.jpeg', 1, '2026-06-18 21:49:51', '2026-06-23 06:48:25', NULL, '', NULL, 0, NULL, '2026-06-23 09:48:25', 1, 0),
-(41, 'JACKSON', '', 'MWALONGO', 'Male', 'tz@gmail.com', NULL, '25578654523', '', '$2y$10$7sUkFYOHZ5BVfdrIyTDAyOdY3rMBBND16yWoX9ff2NRItwa7aacy.', NULL, NULL, NULL, NULL, 1, '2026-06-22 17:57:29', '2026-06-23 09:08:23', NULL, '', NULL, 0, NULL, '2026-06-23 12:08:23', 2, 0);
+(41, 'JACKSON', '', 'MWALONGO', 'Male', 'tz@gmail.com', NULL, '25578654523', '', '$2y$10$7sUkFYOHZ5BVfdrIyTDAyOdY3rMBBND16yWoX9ff2NRItwa7aacy.', NULL, NULL, NULL, NULL, 1, '2026-06-22 17:57:29', '2026-06-23 09:08:23', NULL, '', NULL, 0, NULL, '2026-06-23 12:08:23', 2, 0),
+(42, 'Taze', 'Jumanne', 'Nyampha', 'Male', 'tzonetech8@gmail.com', '', '255714343162', NULL, '$2y$10$CikE/0seru77RspQxGAAV.ewTNK0sAqxb4/zMMeZ8Ls.//RzkWUIS', NULL, NULL, NULL, NULL, 1, '2026-07-09 10:23:52', '2026-07-09 10:28:47', NULL, NULL, NULL, 0, NULL, '2026-07-09 13:28:47', 1, 0);
 
 -- --------------------------------------------------------
 
@@ -1910,7 +2026,12 @@ INSERT INTO `admin_logs` (`id`, `admin_id`, `action`, `description`, `details`, 
 (0, 32, 'Assign Subject', NULL, 'Assigned geo to teacher ID 39 for Form Five (2026)', NULL, NULL, '2026-06-11 16:58:39', 1),
 (0, 32, 'register_teacher', 'Registered new teacher: Jackson Mwalongo (ID: 40)', NULL, '::1', NULL, '2026-06-18 21:49:52', 1),
 (0, 32, 'edit_teacher', 'Edited teacher: Nazakia Martine (ID: 26)', NULL, '::1', NULL, '2026-06-23 07:44:19', 1),
-(0, 32, 'edit_teacher', 'Edited teacher: bamfu bamfu (ID: 29)', NULL, '::1', NULL, '2026-06-23 08:51:00', 1);
+(0, 32, 'edit_teacher', 'Edited teacher: bamfu bamfu (ID: 29)', NULL, '::1', NULL, '2026-06-23 08:51:00', 1),
+(0, 32, 'edit_teacher', 'Edited teacher: kafunsi kafunsi (ID: 28)', NULL, '::1', NULL, '2026-07-09 10:22:39', 1),
+(0, 32, 'register_teacher', 'Registered new teacher: TAZE NYAMPHA (ID: 42)', NULL, '::1', NULL, '2026-07-09 10:23:52', 1),
+(0, 32, 'edit_teacher', 'Edited teacher: aujenia leo (ID: 15)', NULL, '::1', NULL, '2026-07-09 10:24:12', 1),
+(0, 32, 'edit_teacher', 'Edited teacher: muyovozi muyovozi (ID: 12)', NULL, '::1', NULL, '2026-07-09 10:25:33', 1),
+(0, 32, 'edit_teacher', 'Edited teacher: Taze Nyampha (ID: 42)', NULL, '::1', NULL, '2026-07-09 10:26:15', 1);
 
 -- --------------------------------------------------------
 
@@ -1969,20 +2090,16 @@ INSERT INTO `admin_role_assignments` (`id`, `admin_id`, `role_id`, `is_primary`,
 (14, 11, 11, 1, '2026-01-07 11:45:53'),
 (15, 13, 16, 1, '2026-01-07 11:53:03'),
 (20, 14, 5, 1, '2026-01-09 11:44:30'),
-(21, 15, 4, 1, '2026-01-21 15:05:50'),
 (0, 25, 16, 1, '2026-02-06 16:21:17'),
 (13, 11, 7, 0, '2026-01-07 11:45:53'),
 (14, 11, 11, 1, '2026-01-07 11:45:53'),
 (15, 13, 16, 1, '2026-01-07 11:53:03'),
 (20, 14, 5, 1, '2026-01-09 11:44:30'),
-(21, 15, 4, 1, '2026-01-21 15:05:50'),
 (0, 25, 16, 1, '2026-02-06 16:21:17'),
 (0, 0, 3, 0, '2026-03-08 05:33:05'),
 (0, 0, 3, 0, '2026-03-08 05:33:05'),
 (0, 0, 4, 1, '2026-03-08 05:33:05'),
 (0, 0, 4, 1, '2026-03-08 05:33:05'),
-(0, 12, 13, 0, '2026-03-13 12:42:26'),
-(0, 12, 8, 1, '2026-03-13 12:42:26'),
 (0, 32, 1, 1, '2026-03-14 14:12:23'),
 (0, 17, 2, 1, '2026-03-14 14:12:54'),
 (0, 34, 6, 1, '2026-03-14 15:26:23'),
@@ -1990,26 +2107,20 @@ INSERT INTO `admin_role_assignments` (`id`, `admin_id`, `role_id`, `is_primary`,
 (0, 36, 9, 1, '2026-04-05 06:47:41'),
 (0, 37, 3, 1, '2026-04-11 07:45:33'),
 (0, 35, 3, 1, '2026-05-21 11:15:05'),
-(0, 28, 7, 1, '2026-05-21 11:15:53'),
-(0, 28, 15, 0, '2026-05-21 11:15:53'),
 (13, 11, 7, 0, '2026-01-07 11:45:53'),
 (14, 11, 11, 1, '2026-01-07 11:45:53'),
 (15, 13, 16, 1, '2026-01-07 11:53:03'),
 (20, 14, 5, 1, '2026-01-09 11:44:30'),
-(21, 15, 4, 1, '2026-01-21 15:05:50'),
 (0, 25, 16, 1, '2026-02-06 16:21:17'),
 (13, 11, 7, 0, '2026-01-07 11:45:53'),
 (14, 11, 11, 1, '2026-01-07 11:45:53'),
 (15, 13, 16, 1, '2026-01-07 11:53:03'),
 (20, 14, 5, 1, '2026-01-09 11:44:30'),
-(21, 15, 4, 1, '2026-01-21 15:05:50'),
 (0, 25, 16, 1, '2026-02-06 16:21:17'),
 (0, 0, 3, 0, '2026-03-08 05:33:05'),
 (0, 0, 3, 0, '2026-03-08 05:33:05'),
 (0, 0, 4, 1, '2026-03-08 05:33:05'),
 (0, 0, 4, 1, '2026-03-08 05:33:05'),
-(0, 12, 13, 0, '2026-03-13 12:42:26'),
-(0, 12, 8, 1, '2026-03-13 12:42:26'),
 (0, 32, 1, 1, '2026-03-14 14:12:23'),
 (0, 17, 2, 1, '2026-03-14 14:12:54'),
 (0, 34, 6, 1, '2026-03-14 15:26:23'),
@@ -2017,8 +2128,6 @@ INSERT INTO `admin_role_assignments` (`id`, `admin_id`, `role_id`, `is_primary`,
 (0, 36, 9, 1, '2026-04-05 06:47:41'),
 (0, 37, 3, 1, '2026-04-11 07:45:33'),
 (0, 35, 3, 1, '2026-05-21 11:15:05'),
-(0, 28, 7, 1, '2026-05-21 11:15:53'),
-(0, 28, 15, 0, '2026-05-21 11:15:53'),
 (0, 39, 15, 1, '2026-06-11 07:43:18'),
 (0, 39, 15, 1, '2026-06-11 07:43:19'),
 (0, 40, 8, 1, '2026-06-18 21:49:52'),
@@ -2035,20 +2144,16 @@ INSERT INTO `admin_role_assignments` (`id`, `admin_id`, `role_id`, `is_primary`,
 (14, 11, 11, 1, '2026-01-07 11:45:53'),
 (15, 13, 16, 1, '2026-01-07 11:53:03'),
 (20, 14, 5, 1, '2026-01-09 11:44:30'),
-(21, 15, 4, 1, '2026-01-21 15:05:50'),
 (0, 25, 16, 1, '2026-02-06 16:21:17'),
 (13, 11, 7, 0, '2026-01-07 11:45:53'),
 (14, 11, 11, 1, '2026-01-07 11:45:53'),
 (15, 13, 16, 1, '2026-01-07 11:53:03'),
 (20, 14, 5, 1, '2026-01-09 11:44:30'),
-(21, 15, 4, 1, '2026-01-21 15:05:50'),
 (0, 25, 16, 1, '2026-02-06 16:21:17'),
 (0, 0, 3, 0, '2026-03-08 05:33:05'),
 (0, 0, 3, 0, '2026-03-08 05:33:05'),
 (0, 0, 4, 1, '2026-03-08 05:33:05'),
 (0, 0, 4, 1, '2026-03-08 05:33:05'),
-(0, 12, 13, 0, '2026-03-13 12:42:26'),
-(0, 12, 8, 1, '2026-03-13 12:42:26'),
 (0, 32, 1, 1, '2026-03-14 14:12:23'),
 (0, 17, 2, 1, '2026-03-14 14:12:54'),
 (0, 34, 6, 1, '2026-03-14 15:26:23'),
@@ -2056,26 +2161,20 @@ INSERT INTO `admin_role_assignments` (`id`, `admin_id`, `role_id`, `is_primary`,
 (0, 36, 9, 1, '2026-04-05 06:47:41'),
 (0, 37, 3, 1, '2026-04-11 07:45:33'),
 (0, 35, 3, 1, '2026-05-21 11:15:05'),
-(0, 28, 7, 1, '2026-05-21 11:15:53'),
-(0, 28, 15, 0, '2026-05-21 11:15:53'),
 (13, 11, 7, 0, '2026-01-07 11:45:53'),
 (14, 11, 11, 1, '2026-01-07 11:45:53'),
 (15, 13, 16, 1, '2026-01-07 11:53:03'),
 (20, 14, 5, 1, '2026-01-09 11:44:30'),
-(21, 15, 4, 1, '2026-01-21 15:05:50'),
 (0, 25, 16, 1, '2026-02-06 16:21:17'),
 (13, 11, 7, 0, '2026-01-07 11:45:53'),
 (14, 11, 11, 1, '2026-01-07 11:45:53'),
 (15, 13, 16, 1, '2026-01-07 11:53:03'),
 (20, 14, 5, 1, '2026-01-09 11:44:30'),
-(21, 15, 4, 1, '2026-01-21 15:05:50'),
 (0, 25, 16, 1, '2026-02-06 16:21:17'),
 (0, 0, 3, 0, '2026-03-08 05:33:05'),
 (0, 0, 3, 0, '2026-03-08 05:33:05'),
 (0, 0, 4, 1, '2026-03-08 05:33:05'),
 (0, 0, 4, 1, '2026-03-08 05:33:05'),
-(0, 12, 13, 0, '2026-03-13 12:42:26'),
-(0, 12, 8, 1, '2026-03-13 12:42:26'),
 (0, 32, 1, 1, '2026-03-14 14:12:23'),
 (0, 17, 2, 1, '2026-03-14 14:12:54'),
 (0, 34, 6, 1, '2026-03-14 15:26:23'),
@@ -2083,8 +2182,6 @@ INSERT INTO `admin_role_assignments` (`id`, `admin_id`, `role_id`, `is_primary`,
 (0, 36, 9, 1, '2026-04-05 06:47:41'),
 (0, 37, 3, 1, '2026-04-11 07:45:33'),
 (0, 35, 3, 1, '2026-05-21 11:15:05'),
-(0, 28, 7, 1, '2026-05-21 11:15:53'),
-(0, 28, 15, 0, '2026-05-21 11:15:53'),
 (0, 39, 15, 1, '2026-06-11 07:43:18'),
 (0, 39, 15, 1, '2026-06-11 07:43:19'),
 (0, 40, 8, 1, '2026-06-18 21:49:52'),
@@ -2096,7 +2193,13 @@ INSERT INTO `admin_role_assignments` (`id`, `admin_id`, `role_id`, `is_primary`,
 (0, 29, 5, 0, '2026-06-23 08:51:00'),
 (0, 29, 12, 1, '2026-06-23 08:51:00'),
 (0, 29, 12, 1, '2026-06-23 08:51:00'),
-(0, 29, 2, 0, '2026-06-23 08:51:00');
+(0, 29, 2, 0, '2026-06-23 08:51:00'),
+(0, 28, 7, 1, '2026-07-09 10:22:39'),
+(0, 15, 4, 1, '2026-07-09 10:24:12'),
+(0, 12, 8, 1, '2026-07-09 10:25:33'),
+(0, 42, 7, 0, '2026-07-09 10:26:15'),
+(0, 42, 4, 1, '2026-07-09 10:26:15'),
+(0, 42, 16, 0, '2026-07-09 10:26:15');
 
 -- --------------------------------------------------------
 
@@ -2267,14 +2370,16 @@ CREATE TABLE `discipline_records` (
 --
 
 INSERT INTO `discipline_records` (`id`, `student_id`, `list_type`, `record_type`, `short_note`, `file_path`, `file_type`, `file_name`, `file_size`, `recorded_by`, `is_visible_to_student`, `severity_level`, `follow_up_required`, `follow_up_due_date`, `follow_up_completed`, `follow_up_notes`, `status`, `created_at`, `updated_at`, `school_id`) VALUES
-(0, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
-(0, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1),
-(0, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
-(0, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1),
-(0, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
-(0, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1),
-(0, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
-(0, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1);
+(1, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
+(2, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1),
+(3, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
+(4, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1),
+(5, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
+(6, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1),
+(7, 39, 'white', 'appreciation', 'good', NULL, NULL, NULL, NULL, 12, 1, 'high', 0, NULL, 0, NULL, 'active', '2026-03-08 01:35:53', '2026-03-08 01:35:53', 1),
+(8, 221, 'black', 'reprimand', 'too bad', NULL, NULL, NULL, NULL, 12, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-03-08 01:36:27', '2026-03-08 01:36:27', 1),
+(9, 28, 'white', 'appreciation', 'She contribute well into her subjects', NULL, NULL, NULL, NULL, 42, 1, 'low', 0, NULL, 0, NULL, 'active', '2026-07-09 10:38:21', '2026-07-09 10:38:21', 1),
+(10, 214, 'black', 'suspension', 'Cought with phone', NULL, NULL, NULL, NULL, 42, 1, 'medium', 0, NULL, 0, NULL, 'active', '2026-07-09 10:39:05', '2026-07-09 10:39:05', 1);
 
 -- --------------------------------------------------------
 
@@ -2283,7 +2388,7 @@ INSERT INTO `discipline_records` (`id`, `student_id`, `list_type`, `record_type`
 --
 
 CREATE TABLE `discipline_statistics` (
-  `student_id` int(11) DEFAULT NULL,
+  `student_id` int(11) NOT NULL,
   `student_name` varchar(201) DEFAULT NULL,
   `index_number` varchar(50) DEFAULT NULL,
   `class` enum('Form Five','Form Six','Leavers','Graduated') DEFAULT NULL,
@@ -2309,32 +2414,31 @@ CREATE TABLE `dormitories` (
   `id` int(11) NOT NULL,
   `dorm_name` varchar(50) NOT NULL,
   `dorm_type` enum('Male','Female') NOT NULL,
-  `rooms_count` int(11) NOT NULL,
-  `capacity_per_room` int(11) NOT NULL,
-  `total_capacity` int(11) NOT NULL,
-  `current_occupancy` int(11) DEFAULT 0,
+  `rooms_count` int(11) NOT NULL DEFAULT 0,
+  `capacity_per_room` int(11) NOT NULL DEFAULT 0,
+  `total_capacity` int(11) NOT NULL DEFAULT 0,
+  `current_occupancy` int(11) NOT NULL DEFAULT 0,
   `description` text DEFAULT NULL,
   `status` enum('Active','Full','Maintenance','Closed') DEFAULT 'Active',
+  `school_id` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `school_id` int(11) NOT NULL DEFAULT 1
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `dormitories`
 --
 
-INSERT INTO `dormitories` (`id`, `dorm_name`, `dorm_type`, `rooms_count`, `capacity_per_room`, `total_capacity`, `current_occupancy`, `description`, `status`, `created_at`, `updated_at`, `school_id`) VALUES
-(1, 'Safina', 'Female', 16, 10, 160, 0, 'Safina Female Dormitory - Rooms A1 to B8, 10 students per room', 'Active', '2026-02-07 07:03:59', '2026-04-21 18:49:15', 1),
-(2, 'Samia', 'Female', 20, 6, 120, 0, 'Samia Female Dormitory - Rooms A1 to B10, 6 students per room', 'Active', '2026-02-07 07:03:59', '2026-02-08 18:34:16', 1),
-(3, 'Magufuli', 'Male', 20, 6, 120, 0, 'Magufuli Male Dormitory - Rooms A1 to B10, 6 students per room', 'Active', '2026-02-07 07:03:59', '2026-02-07 09:36:30', 1),
-(4, 'Sokoine', 'Male', 20, 6, 120, 0, 'Sokoine Male Dormitory - Rooms A1 to B10, 6 students per room', 'Active', '2026-02-07 07:03:59', '2026-02-07 09:03:34', 1),
-(5, 'Mwandu', 'Male', 20, 6, 120, 0, 'Mwandu Male Dormitory - Rooms A1 to B10, 6 students per room', 'Active', '2026-02-07 07:03:59', '2026-03-08 02:40:47', 1),
-(6, 'Nyerere', 'Male', 10, 12, 120, 0, 'Nyerere Male Dormitory - Rooms A1 to A10, 12 students per room', 'Active', '2026-02-07 07:03:59', '2026-02-07 09:03:57', 1),
-(7, 'Kisutu Juu', 'Male', 5, 6, 30, 0, 'Kisutu Juu Male Dormitory - Rooms A1 to A5, 6 students per room', 'Active', '2026-02-07 07:03:59', '2026-02-08 18:32:01', 1),
-(8, 'Kisutu Bombani', 'Male', 2, 12, 24, 1, 'Kisutu Bombani Male Dormitory - Rooms A1 to B1, 12 students per room', 'Active', '2026-02-07 07:03:59', '2026-05-21 11:56:34', 1),
-(9, 'Kisutu Chini', 'Male', 2, 6, 12, 0, 'Kisutu Chini Male Dormitory - Rooms A1 to B1, 6 students per room', 'Active', '2026-02-07 07:03:59', '2026-02-09 17:49:47', 1),
-(10, 'Kisutu Prison', 'Male', 7, 2, 14, 0, 'Kisutu Prison Male Dormitory - Rooms A1 to A7, 2 students per room', 'Active', '2026-02-07 07:03:59', '2026-02-09 17:49:53', 1);
+INSERT INTO `dormitories` (`id`, `dorm_name`, `dorm_type`, `rooms_count`, `capacity_per_room`, `total_capacity`, `current_occupancy`, `description`, `status`, `school_id`, `created_at`, `updated_at`) VALUES
+(1, 'Magufuli', 'Male', 20, 6, 120, 1, 'Magufuli Male Dormitory - Rooms A1 to B10', 'Active', 1, '2026-07-09 10:42:47', '2026-07-09 10:44:47'),
+(2, 'Sokoine', 'Male', 20, 6, 120, 0, 'Sokoine Male Dormitory - Rooms A1 to B10', 'Active', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(3, 'Mwandu', 'Male', 20, 6, 120, 0, 'Mwandu Male Dormitory - Rooms A1 to B10', 'Active', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(4, 'Nyerere', 'Male', 10, 12, 120, 0, 'Nyerere Male Dormitory - Rooms A1 to A10', 'Active', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(5, 'Kisutu Juu', 'Male', 5, 6, 30, 0, 'Kisutu Juu Male Dormitory - Rooms A1 to A5', 'Active', 1, '2026-07-09 10:42:47', '2026-07-09 10:46:44'),
+(8, 'Kisutu Prison', 'Male', 7, 2, 14, 0, 'Kisutu Prison Male Dormitory - Rooms A1 to A7', 'Active', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(9, 'Safina', 'Female', 16, 10, 160, 1, 'Safina Female Dormitory - Rooms A1 to B8', 'Active', 1, '2026-07-09 10:42:47', '2026-07-09 10:46:56'),
+(10, 'Samia', 'Female', 20, 6, 120, 0, 'Samia Female Dormitory - Rooms A1 to B10', 'Active', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(11, 'Tzone', 'Female', 2, 10, 20, 2, '', 'Active', 1, '2026-07-09 10:45:16', '2026-07-09 10:45:43');
 
 -- --------------------------------------------------------
 
@@ -2372,216 +2476,159 @@ CREATE TABLE `dormitory_rooms` (
   `dormitory_id` int(11) NOT NULL,
   `room_number` varchar(10) NOT NULL,
   `room_label` varchar(20) NOT NULL,
-  `capacity` int(11) NOT NULL,
-  `current_occupancy` int(11) DEFAULT 0,
+  `capacity` int(11) NOT NULL DEFAULT 0,
+  `current_occupancy` int(11) NOT NULL DEFAULT 0,
   `status` enum('Available','Full','Maintenance') DEFAULT 'Available',
+  `school_id` int(11) NOT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `school_id` int(11) NOT NULL DEFAULT 1
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `dormitory_rooms`
 --
 
-INSERT INTO `dormitory_rooms` (`id`, `dormitory_id`, `room_number`, `room_label`, `capacity`, `current_occupancy`, `status`, `created_at`, `updated_at`, `school_id`) VALUES
-(1, 1, 'A1', 'Safina A1', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-04-21 18:49:15', 1),
-(2, 1, 'A2', 'Safina A2', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(3, 1, 'A3', 'Safina A3', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(4, 1, 'A4', 'Safina A4', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(5, 1, 'A5', 'Safina A5', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(6, 1, 'A6', 'Safina A6', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(7, 1, 'A7', 'Safina A7', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(8, 1, 'A8', 'Safina A8', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(9, 1, 'B1', 'Safina B1', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(10, 1, 'B2', 'Safina B2', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-08 18:33:02', 1),
-(11, 1, 'B3', 'Safina B3', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(12, 1, 'B4', 'Safina B4', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(13, 1, 'B5', 'Safina B5', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(14, 1, 'B6', 'Safina B6', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(15, 1, 'B7', 'Safina B7', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(16, 1, 'B8', 'Safina B8', 10, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(17, 2, 'A1', 'Samia A1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-08 18:34:08', 1),
-(18, 2, 'A2', 'Samia A2', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(19, 2, 'A3', 'Samia A3', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(20, 2, 'A4', 'Samia A4', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(21, 2, 'A5', 'Samia A5', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(22, 2, 'A6', 'Samia A6', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(23, 2, 'A7', 'Samia A7', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(24, 2, 'A8', 'Samia A8', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(25, 2, 'A9', 'Samia A9', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(26, 2, 'A10', 'Samia A10', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(27, 2, 'B1', 'Samia B1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(28, 2, 'B2', 'Samia B2', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(29, 2, 'B3', 'Samia B3', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(30, 2, 'B4', 'Samia B4', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(31, 2, 'B5', 'Samia B5', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-08 18:34:16', 1),
-(32, 2, 'B6', 'Samia B6', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(33, 2, 'B7', 'Samia B7', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(34, 2, 'B8', 'Samia B8', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(35, 2, 'B9', 'Samia B9', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(36, 2, 'B10', 'Samia B10', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(37, 3, 'A1', 'Magufuli A1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 09:36:30', 1),
-(38, 3, 'A2', 'Magufuli A2', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(39, 3, 'A3', 'Magufuli A3', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(40, 3, 'A4', 'Magufuli A4', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(41, 3, 'A5', 'Magufuli A5', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(42, 3, 'A6', 'Magufuli A6', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(43, 3, 'A7', 'Magufuli A7', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(44, 3, 'A8', 'Magufuli A8', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(45, 3, 'A9', 'Magufuli A9', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(46, 3, 'A10', 'Magufuli A10', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(47, 3, 'B1', 'Magufuli B1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(48, 3, 'B2', 'Magufuli B2', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(49, 3, 'B3', 'Magufuli B3', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(50, 3, 'B4', 'Magufuli B4', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(51, 3, 'B5', 'Magufuli B5', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(52, 3, 'B6', 'Magufuli B6', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(53, 3, 'B7', 'Magufuli B7', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(54, 3, 'B8', 'Magufuli B8', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(55, 3, 'B9', 'Magufuli B9', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(56, 3, 'B10', 'Magufuli B10', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(57, 4, 'A1', 'Sokoine A1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:49:45', 1),
-(58, 4, 'A2', 'Sokoine A2', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(59, 4, 'A3', 'Sokoine A3', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(60, 4, 'A4', 'Sokoine A4', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(61, 4, 'A5', 'Sokoine A5', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(62, 4, 'A6', 'Sokoine A6', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(63, 4, 'A7', 'Sokoine A7', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(64, 4, 'A8', 'Sokoine A8', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(65, 4, 'A9', 'Sokoine A9', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(66, 4, 'A10', 'Sokoine A10', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(67, 4, 'B1', 'Sokoine B1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(68, 4, 'B2', 'Sokoine B2', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(69, 4, 'B3', 'Sokoine B3', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(70, 4, 'B4', 'Sokoine B4', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(71, 4, 'B5', 'Sokoine B5', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(72, 4, 'B6', 'Sokoine B6', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(73, 4, 'B7', 'Sokoine B7', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(74, 4, 'B8', 'Sokoine B8', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(75, 4, 'B9', 'Sokoine B9', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(76, 4, 'B10', 'Sokoine B10', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(77, 5, 'A1', 'Mwandu A1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-08 18:32:23', 1),
-(78, 5, 'A2', 'Mwandu A2', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(79, 5, 'A3', 'Mwandu A3', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(80, 5, 'A4', 'Mwandu A4', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(81, 5, 'A5', 'Mwandu A5', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(82, 5, 'A6', 'Mwandu A6', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(83, 5, 'A7', 'Mwandu A7', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(84, 5, 'A8', 'Mwandu A8', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(85, 5, 'A9', 'Mwandu A9', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(86, 5, 'A10', 'Mwandu A10', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(87, 5, 'B1', 'Mwandu B1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-03-08 02:40:47', 1),
-(88, 5, 'B2', 'Mwandu B2', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(89, 5, 'B3', 'Mwandu B3', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(90, 5, 'B4', 'Mwandu B4', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(91, 5, 'B5', 'Mwandu B5', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(92, 5, 'B6', 'Mwandu B6', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(93, 5, 'B7', 'Mwandu B7', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(94, 5, 'B8', 'Mwandu B8', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(95, 5, 'B9', 'Mwandu B9', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(96, 5, 'B10', 'Mwandu B10', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(97, 6, 'A1', 'Nyerere A1', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:52:18', 1),
-(98, 6, 'A2', 'Nyerere A2', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(99, 6, 'A3', 'Nyerere A3', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(100, 6, 'A4', 'Nyerere A4', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(101, 6, 'A5', 'Nyerere A5', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(102, 6, 'A6', 'Nyerere A6', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(103, 6, 'A7', 'Nyerere A7', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(104, 6, 'A8', 'Nyerere A8', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(105, 6, 'A9', 'Nyerere A9', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(106, 6, 'A10', 'Nyerere A10', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(107, 7, 'A1', 'Kisutu Juu A1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-08 18:32:01', 1),
-(108, 7, 'A2', 'Kisutu Juu A2', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(109, 7, 'A3', 'Kisutu Juu A3', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(110, 7, 'A4', 'Kisutu Juu A4', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(111, 7, 'A5', 'Kisutu Juu A5', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(112, 8, 'A1', 'Kisutu Bombani A1', 12, 1, 'Available', '2026-02-07 07:03:59', '2026-05-21 11:56:34', 1),
-(113, 8, 'B1', 'Kisutu Bombani B1', 12, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(114, 9, 'A1', 'Kisutu Chini A1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-09 17:49:47', 1),
-(115, 9, 'B1', 'Kisutu Chini B1', 6, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(116, 10, 'A1', 'Kisutu Prison A1', 2, 0, 'Available', '2026-02-07 07:03:59', '2026-02-09 17:49:53', 1),
-(117, 10, 'A2', 'Kisutu Prison A2', 2, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(118, 10, 'A3', 'Kisutu Prison A3', 2, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(119, 10, 'A4', 'Kisutu Prison A4', 2, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(120, 10, 'A5', 'Kisutu Prison A5', 2, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(121, 10, 'A6', 'Kisutu Prison A6', 2, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1),
-(122, 10, 'A7', 'Kisutu Prison A7', 2, 0, 'Available', '2026-02-07 07:03:59', '2026-02-07 07:03:59', 1);
+INSERT INTO `dormitory_rooms` (`id`, `dormitory_id`, `room_number`, `room_label`, `capacity`, `current_occupancy`, `status`, `school_id`, `created_at`, `updated_at`) VALUES
+(1, 1, 'A1', 'A1', 6, 1, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:44:47'),
+(2, 1, 'A2', 'A2', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(3, 1, 'A3', 'A3', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(4, 1, 'A4', 'A4', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(5, 1, 'A5', 'A5', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(6, 1, 'A6', 'A6', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(7, 1, 'A7', 'A7', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(8, 1, 'A8', 'A8', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(9, 1, 'A9', 'A9', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(10, 1, 'A10', 'A10', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(11, 1, 'B1', 'B1', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(12, 1, 'B2', 'B2', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(13, 1, 'B3', 'B3', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(14, 1, 'B4', 'B4', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(15, 1, 'B5', 'B5', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(16, 1, 'B6', 'B6', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(17, 1, 'B7', 'B7', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(18, 1, 'B8', 'B8', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(19, 1, 'B9', 'B9', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(20, 1, 'B10', 'B10', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(21, 2, 'A1', 'A1', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(22, 2, 'A2', 'A2', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(23, 2, 'A3', 'A3', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(24, 2, 'A4', 'A4', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(25, 2, 'A5', 'A5', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(26, 2, 'A6', 'A6', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(27, 2, 'A7', 'A7', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(28, 2, 'A8', 'A8', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(29, 2, 'A9', 'A9', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(30, 2, 'A10', 'A10', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(31, 2, 'B1', 'B1', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(32, 2, 'B2', 'B2', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(33, 2, 'B3', 'B3', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(34, 2, 'B4', 'B4', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(35, 2, 'B5', 'B5', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(36, 2, 'B6', 'B6', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(37, 2, 'B7', 'B7', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(38, 2, 'B8', 'B8', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(39, 2, 'B9', 'B9', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(40, 2, 'B10', 'B10', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(41, 3, 'A1', 'A1', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(42, 3, 'A2', 'A2', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(43, 3, 'A3', 'A3', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(44, 3, 'A4', 'A4', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(45, 3, 'A5', 'A5', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(46, 3, 'A6', 'A6', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(47, 3, 'A7', 'A7', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(48, 3, 'A8', 'A8', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(49, 3, 'A9', 'A9', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(50, 3, 'A10', 'A10', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(51, 3, 'B1', 'B1', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(52, 3, 'B2', 'B2', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(53, 3, 'B3', 'B3', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(54, 3, 'B4', 'B4', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(55, 3, 'B5', 'B5', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(56, 3, 'B6', 'B6', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(57, 3, 'B7', 'B7', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(58, 3, 'B8', 'B8', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(59, 3, 'B9', 'B9', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(60, 3, 'B10', 'B10', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(61, 4, 'A1', 'A1', 12, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(62, 4, 'A2', 'A2', 12, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(63, 4, 'A3', 'A3', 12, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(64, 4, 'A4', 'A4', 12, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(65, 4, 'A5', 'A5', 12, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(66, 4, 'A6', 'A6', 12, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(67, 4, 'A7', 'A7', 12, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(68, 4, 'A8', 'A8', 12, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(69, 4, 'A9', 'A9', 12, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(70, 4, 'A10', 'A10', 12, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(71, 5, 'A1', 'A1', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:46:44'),
+(72, 5, 'A2', 'A2', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(73, 5, 'A3', 'A3', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(74, 5, 'A4', 'A4', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(75, 5, 'A5', 'A5', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(80, 8, 'A1', 'A1', 2, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(81, 8, 'A2', 'A2', 2, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(82, 8, 'A3', 'A3', 2, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(83, 8, 'A4', 'A4', 2, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(84, 8, 'A5', 'A5', 2, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(85, 8, 'A6', 'A6', 2, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(86, 8, 'A7', 'A7', 2, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(87, 9, 'A1', 'A1', 10, 1, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:46:56'),
+(88, 9, 'A2', 'A2', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(89, 9, 'A3', 'A3', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(90, 9, 'A4', 'A4', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(91, 9, 'A5', 'A5', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(92, 9, 'A6', 'A6', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(93, 9, 'A7', 'A7', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(94, 9, 'A8', 'A8', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(95, 9, 'A9', 'A9', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(96, 9, 'A10', 'A10', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(97, 9, 'B1', 'B1', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(98, 9, 'B2', 'B2', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(99, 9, 'B3', 'B3', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(100, 9, 'B4', 'B4', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(101, 9, 'B5', 'B5', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(102, 9, 'B6', 'B6', 10, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(103, 10, 'A1', 'A1', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(104, 10, 'A2', 'A2', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(105, 10, 'A3', 'A3', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(106, 10, 'A4', 'A4', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(107, 10, 'A5', 'A5', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(108, 10, 'A6', 'A6', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(109, 10, 'A7', 'A7', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(110, 10, 'A8', 'A8', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(111, 10, 'A9', 'A9', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(112, 10, 'A10', 'A10', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(113, 10, 'B1', 'B1', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(114, 10, 'B2', 'B2', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(115, 10, 'B3', 'B3', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(116, 10, 'B4', 'B4', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(117, 10, 'B5', 'B5', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(118, 10, 'B6', 'B6', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(119, 10, 'B7', 'B7', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(120, 10, 'B8', 'B8', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(121, 10, 'B9', 'B9', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(122, 10, 'B10', 'B10', 6, 0, 'Available', 1, '2026-07-09 10:42:47', '2026-07-09 10:42:47'),
+(123, 11, 'A1', 'A1', 10, 2, 'Available', 1, '2026-07-09 10:45:16', '2026-07-09 10:45:43'),
+(124, 11, 'A2', 'A2', 10, 0, 'Available', 1, '2026-07-09 10:45:16', '2026-07-09 10:45:16');
 
 --
 -- Triggers `dormitory_rooms`
 --
 DELIMITER $$
-CREATE TRIGGER `log_room_status_change` AFTER UPDATE ON `dormitory_rooms` FOR EACH ROW BEGIN
-    -- Log only when status actually changes (not NULL)
-    IF OLD.status != NEW.status AND OLD.status IS NOT NULL AND NEW.status IS NOT NULL THEN
-        INSERT INTO room_status_logs (room_id, old_status, new_status, notes)
-        VALUES (NEW.id, OLD.status, NEW.status, 'Status changed manually');
-    END IF;
-END
-$$
-DELIMITER ;
-DELIMITER $$
 CREATE TRIGGER `update_dormitory_occupancy` AFTER UPDATE ON `dormitory_rooms` FOR EACH ROW BEGIN
-    DECLARE v_total_occupancy INT DEFAULT 0;
-    DECLARE v_total_capacity INT DEFAULT 0;
-    
-    -- Only run if occupancy changed
     IF OLD.current_occupancy != NEW.current_occupancy THEN
-        -- Calculate total occupancy for the dormitory (prevent negatives)
-        SELECT COALESCE(SUM(GREATEST(current_occupancy, 0)), 0) INTO v_total_occupancy
-        FROM dormitory_rooms
-        WHERE dormitory_id = NEW.dormitory_id;
-        
-        -- Get total capacity
-        SELECT total_capacity INTO v_total_capacity
-        FROM dormitories
-        WHERE id = NEW.dormitory_id;
-        
-        -- Update dormitory occupancy (ensure it doesn't exceed capacity)
         UPDATE dormitories 
-        SET current_occupancy = LEAST(v_total_occupancy, v_total_capacity),
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = NEW.dormitory_id;
-        
-
-        -- Update dormitory status
-        UPDATE dormitories 
-        SET status = CASE 
-            WHEN v_total_occupancy >= v_total_capacity THEN 'Full'
+        SET current_occupancy = (
+            SELECT COALESCE(SUM(current_occupancy), 0)
+            FROM dormitory_rooms
+            WHERE dormitory_id = NEW.dormitory_id
+        ),
+        status = CASE 
+            WHEN (SELECT COALESCE(SUM(current_occupancy), 0) FROM dormitory_rooms WHERE dormitory_id = NEW.dormitory_id) >= total_capacity 
+            THEN 'Full'
             ELSE 'Active'
-        END
+        END,
+        updated_at = CURRENT_TIMESTAMP
         WHERE id = NEW.dormitory_id;
-    END IF;
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `update_room_status_auto` AFTER UPDATE ON `dormitory_rooms` FOR EACH ROW BEGIN
-    -- Only run if occupancy changed
-    IF OLD.current_occupancy != NEW.current_occupancy THEN
-        -- Update room status based on occupancy (with bounds checking)
-        IF NEW.current_occupancy >= NEW.capacity THEN
-            UPDATE dormitory_rooms 
-            SET status = 'Full',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = NEW.id
-            AND status != 'Maintenance';
-            
-            -- Log status change
-            INSERT INTO room_status_logs (room_id, old_status, new_status, notes)
-            VALUES (NEW.id, OLD.status, 'Full', CONCAT('Auto-changed: Room reached capacity (', NEW.current_occupancy, '/', NEW.capacity, ')'));
-            
-        ELSEIF NEW.current_occupancy < NEW.capacity AND NEW.status = 'Full' THEN
-            UPDATE dormitory_rooms 
-            SET status = 'Available',
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = NEW.id;
-            
-            -- Log status change
-            INSERT INTO room_status_logs (room_id, old_status, new_status, notes)
-            VALUES (NEW.id, 'Full', 'Available', CONCAT('Auto-changed: Room has space (', NEW.current_occupancy, '/', NEW.capacity, ')'));
-        END IF;
     END IF;
 END
 $$
@@ -3177,8 +3224,12 @@ INSERT INTO `maintenance_assignments` (`id`, `student_id`, `item_id`, `assignmen
 (12, 246, 2, 'chair', 12, '2026-03-08', '2027-05-10', 'returned', '2026-03-08', 'good', '', '', '2026-03-08 02:38:15', '2026-03-08 02:38:43', 0, 1),
 (13, 409, 1, 'table', 32, '2026-04-21', '2026-05-21', 'returned', '2026-04-21', 'good', 'Auto-returned: Student deactivated', '', '2026-04-21 18:26:58', '2026-04-21 18:30:59', 0, 1),
 (14, 409, 2, 'chair', 32, '2026-04-21', '2026-05-21', 'returned', '2026-04-21', 'good', 'Auto-returned: Student deactivated', '', '2026-04-21 18:26:58', '2026-04-21 18:30:59', 0, 1),
-(15, 18, 1, 'table', 13, '2026-05-17', '2026-06-16', 'active', NULL, NULL, NULL, '', '2026-05-17 15:08:36', '2026-05-17 15:08:36', 0, 1),
-(16, 18, 2, 'chair', 13, '2026-05-17', '2026-06-16', 'active', NULL, NULL, NULL, '', '2026-05-17 15:08:36', '2026-05-17 15:08:36', 0, 1);
+(15, 18, 1, 'table', 13, '2026-05-17', '2026-06-16', 'returned', '2026-07-09', 'good', '', '', '2026-05-17 15:08:36', '2026-07-09 10:29:22', 0, 1),
+(16, 18, 2, 'chair', 13, '2026-05-17', '2026-06-16', 'returned', '2026-07-09', 'good', '', '', '2026-05-17 15:08:36', '2026-07-09 10:31:46', 0, 1),
+(17, 28, 1, 'table', 42, '2026-07-09', '2026-08-08', 'active', NULL, NULL, NULL, '', '2026-07-09 10:34:17', '2026-07-09 10:34:17', 0, 1),
+(18, 28, 2, 'chair', 42, '2026-07-09', '2026-08-08', 'active', NULL, NULL, NULL, '', '2026-07-09 10:34:17', '2026-07-09 10:34:17', 0, 1),
+(19, 251, 3, 'table', 42, '2026-07-09', '2026-08-08', 'active', NULL, NULL, NULL, '', '2026-07-09 10:34:33', '2026-07-09 10:34:33', 0, 1),
+(20, 251, 6, 'chair', 42, '2026-07-09', '2026-08-08', 'active', NULL, NULL, NULL, '', '2026-07-09 10:34:33', '2026-07-09 10:34:33', 0, 1);
 
 -- --------------------------------------------------------
 
@@ -3206,12 +3257,19 @@ CREATE TABLE `maintenance_items` (
 --
 
 INSERT INTO `maintenance_items` (`id`, `item_code`, `item_type`, `description`, `location`, `status`, `signed_at`, `last_maintenance`, `notes`, `created_at`, `updated_at`, `school_id`) VALUES
-(1, 't556', 'table', '', 'dar es salaam', 'assigned', '2026-02-07', NULL, '', '2026-02-07 13:15:13', '2026-05-17 15:08:36', 1),
-(2, 'c44', 'chair', '', '', 'assigned', '2026-02-07', NULL, '', '2026-02-07 13:15:39', '2026-05-17 15:08:36', 1),
-(3, 't559', 'table', '', '', 'available', '2026-02-07', NULL, '', '2026-02-07 13:15:55', '2026-02-07 13:15:55', 1),
+(1, 't556', 'table', '', 'dar es salaam', 'assigned', '2026-02-07', NULL, '', '2026-02-07 13:15:13', '2026-07-09 10:34:17', 1),
+(2, 'c44', 'chair', '', '', 'assigned', '2026-02-07', NULL, '', '2026-02-07 13:15:39', '2026-07-09 10:34:17', 1),
+(3, 't559', 'table', '', '', 'assigned', '2026-02-07', NULL, '', '2026-02-07 13:15:55', '2026-07-09 10:34:33', 1),
 (4, 'c45', 'chair', '', '', 'assigned', '2026-02-07', NULL, '', '2026-02-07 13:16:09', '2026-06-23 10:04:42', 1),
 (5, 't557', 'table', '', '', 'assigned', '2026-02-07', NULL, '', '2026-02-07 13:16:23', '2026-06-23 10:04:42', 1),
-(6, 'c48', 'chair', '', '', 'available', '2026-02-07', NULL, '', '2026-02-07 13:16:44', '2026-02-07 13:16:44', 1);
+(6, 'c48', 'chair', '', '', 'assigned', '2026-02-07', NULL, '', '2026-02-07 13:16:44', '2026-07-09 10:34:33', 1),
+(7, 'CH3', 'chair', '', '', 'available', '2026-07-09', NULL, '', '2026-07-09 10:32:16', '2026-07-09 10:32:16', 1),
+(8, 'CH4', 'chair', '', '', 'available', '2026-07-09', NULL, '', '2026-07-09 10:32:29', '2026-07-09 10:32:29', 1),
+(9, 'TB3', 'table', '', '', 'available', '2026-07-09', NULL, '', '2026-07-09 10:32:48', '2026-07-09 10:32:48', 1),
+(10, 'TB1', 'table', '', '', 'available', '2026-07-09', NULL, '', '2026-07-09 10:33:03', '2026-07-09 10:33:03', 1),
+(11, 'CH5', 'chair', '', '', 'available', '2026-07-09', NULL, '', '2026-07-09 10:33:13', '2026-07-09 10:33:13', 1),
+(12, 'CH2', 'chair', '', '', 'available', '2026-07-09', NULL, '', '2026-07-09 10:33:28', '2026-07-09 10:33:28', 1),
+(13, 'CH1', 'chair', '', '', 'available', '2026-07-09', NULL, '', '2026-07-09 10:33:41', '2026-07-09 10:33:41', 1);
 
 -- --------------------------------------------------------
 
@@ -3237,6 +3295,7 @@ CREATE TABLE `maintenance_logs` (
 --
 
 INSERT INTO `maintenance_logs` (`id`, `item_id`, `log_type`, `user_type`, `user_id`, `admin_id`, `description`, `created_at`, `school_id`, `ip_address`) VALUES
+(1, 1, 'return', 'student', 18, 42, 'Returned t556 from student: JANETH WECH. Condition: good', '2026-07-09 10:29:22', 1, NULL),
 (23, 1, 'assignment', 'student', 18, 12, 'Assigned t556 (table) to student: JANETH WECH', '2026-02-09 07:28:36', 1, NULL),
 (24, 2, 'assignment', 'student', 18, 12, 'Assigned c44 (chair) to student: JANETH WECH', '2026-02-09 07:28:36', 1, NULL),
 (25, 5, 'assignment', 'staff', 15, 12, 'Assigned t557 (table) to staff: aujenia leo', '2026-02-09 17:54:02', 1, NULL),
@@ -3258,7 +3317,12 @@ INSERT INTO `maintenance_logs` (`id`, `item_id`, `log_type`, `user_type`, `user_
 (41, 1, 'assignment', 'student', 18, 13, 'Assigned t556 (table) to student: JANETH WECH', '2026-05-17 15:08:36', 1, NULL),
 (42, 2, 'assignment', 'student', 18, 13, 'Assigned c44 (chair) to student: JANETH WECH', '2026-05-17 15:08:36', 1, NULL),
 (43, 5, 'assignment', 'staff', 41, 32, 'Assigned t557 (table) to staff: JACKSON MWALONGO', '2026-06-23 10:04:42', 1, NULL),
-(44, 4, 'assignment', 'staff', 41, 32, 'Assigned c45 (chair) to staff: JACKSON MWALONGO', '2026-06-23 10:04:42', 1, NULL);
+(44, 4, 'assignment', 'staff', 41, 32, 'Assigned c45 (chair) to staff: JACKSON MWALONGO', '2026-06-23 10:04:42', 1, NULL),
+(45, 2, 'return', 'student', 18, 42, 'Returned c44 from student: JANETH WECH. Condition: good', '2026-07-09 10:31:46', 1, NULL),
+(46, 1, 'assignment', 'student', 28, 42, 'Assigned t556 (table) to student: Catherine Kibona', '2026-07-09 10:34:17', 1, NULL),
+(47, 2, 'assignment', 'student', 28, 42, 'Assigned c44 (chair) to student: Catherine Kibona', '2026-07-09 10:34:17', 1, NULL),
+(48, 3, 'assignment', 'student', 251, 42, 'Assigned t559 (table) to student: tazan  thazan', '2026-07-09 10:34:33', 1, NULL),
+(49, 6, 'assignment', 'student', 251, 42, 'Assigned c48 (chair) to student: tazan  thazan', '2026-07-09 10:34:33', 1, NULL);
 
 -- --------------------------------------------------------
 
@@ -3461,13 +3525,13 @@ CREATE TABLE `notifications` (
 --
 
 INSERT INTO `notifications` (`id`, `admin_id`, `title`, `description`, `file_path`, `file_type`, `file_name`, `file_size`, `visibility`, `priority`, `status`, `is_starred`, `views_count`, `created_at`, `updated_at`, `school_id`) VALUES
-(1, 12, 'welcome all in my views', 'nice meetings', '../uploads/notifications/695ec31b65467_muyovozi.png', 'image', '695ec31b65467_muyovozi.png', 517797, 'public', 'starred', 'active', 1, 33, '2026-01-07 14:33:31', '2026-06-20 19:41:39', 1),
+(1, 12, 'welcome all in my views', 'nice meetings', '../uploads/notifications/695ec31b65467_muyovozi.png', 'image', '695ec31b65467_muyovozi.png', 517797, 'public', 'starred', 'active', 1, 34, '2026-01-07 14:33:31', '2026-07-09 10:39:42', 1),
 (3, 11, 'hello', '', '../uploads/notifications/695ec94967511_Muyovozi_High_School_-_Google_Chrome_1_7_2026_1_05_52_PM.png', 'image', '695ec94967511_Muyovozi_High_School_-_Google_Chrome_1_7_2026_1_05_52_PM.png', 205346, 'private', 'normal', 'active', 0, 2, '2026-01-07 14:59:53', '2026-01-07 15:17:40', 1),
-(8, 12, 'walimu wote tukutaane', '', '', '', '', 0, 'public', 'important', 'active', 1, 6, '2026-01-23 14:29:24', '2026-06-20 19:41:40', 1),
-(1, 12, 'welcome all in my views', 'nice meetings', '../uploads/notifications/695ec31b65467_muyovozi.png', 'image', '695ec31b65467_muyovozi.png', 517797, 'public', 'starred', 'active', 1, 33, '2026-01-07 14:33:31', '2026-06-20 19:41:39', 1),
+(8, 12, 'walimu wote tukutaane', '', '', '', '', 0, 'public', 'important', 'active', 1, 7, '2026-01-23 14:29:24', '2026-07-09 10:39:42', 1),
+(1, 12, 'welcome all in my views', 'nice meetings', '../uploads/notifications/695ec31b65467_muyovozi.png', 'image', '695ec31b65467_muyovozi.png', 517797, 'public', 'starred', 'active', 1, 34, '2026-01-07 14:33:31', '2026-07-09 10:39:42', 1),
 (3, 11, 'hello', '', '../uploads/notifications/695ec94967511_Muyovozi_High_School_-_Google_Chrome_1_7_2026_1_05_52_PM.png', 'image', '695ec94967511_Muyovozi_High_School_-_Google_Chrome_1_7_2026_1_05_52_PM.png', 205346, 'private', 'normal', 'active', 0, 2, '2026-01-07 14:59:53', '2026-01-07 15:17:40', 1),
-(8, 12, 'walimu wote tukutaane', '', '', '', '', 0, 'public', 'important', 'active', 1, 6, '2026-01-23 14:29:24', '2026-06-20 19:41:40', 1),
-(0, 32, 'hello', 'welcome all student\r\n', '', '', '', 0, 'public', 'normal', 'active', 0, 4, '2026-04-04 16:36:04', '2026-06-20 19:41:40', 1);
+(8, 12, 'walimu wote tukutaane', '', '', '', '', 0, 'public', 'important', 'active', 1, 7, '2026-01-23 14:29:24', '2026-07-09 10:39:42', 1),
+(0, 32, 'hello', 'welcome all student\r\n', '', '', '', 0, 'public', 'normal', 'active', 0, 5, '2026-04-04 16:36:04', '2026-07-09 10:39:42', 1);
 
 -- --------------------------------------------------------
 
@@ -3495,45 +3559,48 @@ INSERT INTO `notification_views` (`id`, `notification_id`, `viewer_id`, `viewer_
 (5, 3, 11, 'admin', '2026-01-07 15:17:40', 1),
 (12, 1, 14, 'admin', '2026-01-09 11:57:23', 1),
 (14, 8, 12, 'admin', '2026-01-26 10:00:54', 1),
-(0, 1, 221, '', '2026-03-08 01:51:28', 1),
-(0, 1, 221, '', '2026-03-08 01:51:28', 1),
-(0, 8, 221, '', '2026-03-08 01:51:32', 1),
-(0, 1, 246, '', '2026-03-08 02:04:01', 1),
-(0, 1, 246, '', '2026-03-08 02:04:01', 1),
-(0, 1, 246, '', '2026-03-08 02:30:38', 1),
-(0, 1, 246, '', '2026-03-08 02:30:38', 1),
-(0, 1, 53, '', '2026-03-08 05:39:25', 1),
-(0, 1, 53, '', '2026-03-08 05:39:26', 1),
-(0, 1, 53, '', '2026-03-08 05:39:33', 1),
-(0, 1, 53, '', '2026-03-08 05:39:34', 1),
-(0, 1, 53, '', '2026-03-08 05:39:54', 1),
-(0, 1, 53, '', '2026-03-08 05:39:54', 1),
-(0, 1, 251, '', '2026-03-10 13:32:11', 1),
-(0, 1, 251, '', '2026-03-10 13:32:11', 1),
-(0, 1, 251, '', '2026-03-10 13:32:17', 1),
-(0, 1, 251, '', '2026-03-10 13:32:17', 1),
-(0, 1, 251, '', '2026-03-10 13:33:12', 1),
-(0, 1, 251, '', '2026-03-10 13:33:12', 1),
-(0, 1, 408, '', '2026-03-10 15:46:17', 1),
-(0, 1, 408, '', '2026-03-10 15:46:17', 1),
-(0, 1, 408, '', '2026-03-10 15:47:42', 1),
-(0, 1, 408, '', '2026-03-10 15:47:42', 1),
-(0, 1, 251, '', '2026-03-11 08:57:10', 1),
-(0, 1, 251, '', '2026-03-11 08:57:10', 1),
-(0, 1, 251, '', '2026-03-11 17:42:04', 1),
-(0, 1, 251, '', '2026-03-11 17:42:04', 1),
-(0, 8, 29, 'admin', '2026-03-13 14:01:21', 1),
-(0, 8, 14, 'admin', '2026-03-14 08:31:26', 1),
-(0, 8, 32, 'admin', '2026-03-28 08:32:35', 1),
-(0, 1, 408, '', '2026-04-03 21:00:27', 1),
-(0, 1, 408, '', '2026-04-03 21:00:27', 1),
-(0, 1, 32, 'admin', '2026-04-04 16:35:36', 1),
-(0, 0, 32, 'admin', '2026-04-04 22:05:56', 1),
-(0, 0, 14, 'admin', '2026-04-05 06:52:42', 1),
-(0, 0, 12, 'admin', '2026-06-18 21:46:18', 1),
-(0, 1, 39, 'admin', '2026-06-20 19:41:39', 1),
-(0, 0, 39, 'admin', '2026-06-20 19:41:40', 1),
-(0, 8, 39, 'admin', '2026-06-20 19:41:40', 1);
+(15, 1, 221, '', '2026-03-08 01:51:28', 1),
+(16, 1, 221, '', '2026-03-08 01:51:28', 1),
+(17, 8, 221, '', '2026-03-08 01:51:32', 1),
+(18, 1, 246, '', '2026-03-08 02:04:01', 1),
+(19, 1, 246, '', '2026-03-08 02:04:01', 1),
+(20, 1, 246, '', '2026-03-08 02:30:38', 1),
+(21, 1, 246, '', '2026-03-08 02:30:38', 1),
+(22, 1, 53, '', '2026-03-08 05:39:25', 1),
+(23, 1, 53, '', '2026-03-08 05:39:26', 1),
+(24, 1, 53, '', '2026-03-08 05:39:33', 1),
+(25, 1, 53, '', '2026-03-08 05:39:34', 1),
+(26, 1, 53, '', '2026-03-08 05:39:54', 1),
+(27, 1, 53, '', '2026-03-08 05:39:54', 1),
+(28, 1, 251, '', '2026-03-10 13:32:11', 1),
+(29, 1, 251, '', '2026-03-10 13:32:11', 1),
+(30, 1, 251, '', '2026-03-10 13:32:17', 1),
+(31, 1, 251, '', '2026-03-10 13:32:17', 1),
+(32, 1, 251, '', '2026-03-10 13:33:12', 1),
+(33, 1, 251, '', '2026-03-10 13:33:12', 1),
+(34, 1, 408, '', '2026-03-10 15:46:17', 1),
+(35, 1, 408, '', '2026-03-10 15:46:17', 1),
+(36, 1, 408, '', '2026-03-10 15:47:42', 1),
+(37, 1, 408, '', '2026-03-10 15:47:42', 1),
+(38, 1, 251, '', '2026-03-11 08:57:10', 1),
+(39, 1, 251, '', '2026-03-11 08:57:10', 1),
+(40, 1, 251, '', '2026-03-11 17:42:04', 1),
+(41, 1, 251, '', '2026-03-11 17:42:04', 1),
+(42, 8, 29, 'admin', '2026-03-13 14:01:21', 1),
+(43, 8, 14, 'admin', '2026-03-14 08:31:26', 1),
+(44, 8, 32, 'admin', '2026-03-28 08:32:35', 1),
+(45, 1, 408, '', '2026-04-03 21:00:27', 1),
+(46, 1, 408, '', '2026-04-03 21:00:27', 1),
+(47, 1, 32, 'admin', '2026-04-04 16:35:36', 1),
+(48, 0, 32, 'admin', '2026-04-04 22:05:56', 1),
+(49, 0, 14, 'admin', '2026-04-05 06:52:42', 1),
+(50, 0, 12, 'admin', '2026-06-18 21:46:18', 1),
+(51, 1, 39, 'admin', '2026-06-20 19:41:39', 1),
+(52, 0, 39, 'admin', '2026-06-20 19:41:40', 1),
+(53, 8, 39, 'admin', '2026-06-20 19:41:40', 1),
+(54, 8, 42, 'admin', '2026-07-09 10:39:42', 1),
+(55, 0, 42, 'admin', '2026-07-09 10:39:42', 1),
+(56, 1, 42, 'admin', '2026-07-09 10:39:42', 1);
 
 -- --------------------------------------------------------
 
@@ -4328,141 +4395,45 @@ CREATE TABLE `student_dormitory` (
   `dormitory_id` int(11) NOT NULL,
   `room_id` int(11) NOT NULL,
   `bed_number` varchar(10) DEFAULT NULL,
-  `assigned_by` int(11) DEFAULT NULL COMMENT 'Admin ID who assigned',
+  `assigned_by` int(11) DEFAULT NULL,
   `assigned_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
-  `status` enum('Active','Changed','Left','Graduated') DEFAULT 'Active',
+  `status` enum('Active','Left','Graduated') DEFAULT 'Active',
   `notes` text DEFAULT NULL,
-  `removed_date` timestamp NULL DEFAULT NULL,
-  `removal_reason` text DEFAULT NULL,
-  `is_leaver` tinyint(1) DEFAULT 0,
-  `school_id` int(11) NOT NULL DEFAULT 1
+  `school_id` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
 -- Dumping data for table `student_dormitory`
 --
 
-INSERT INTO `student_dormitory` (`id`, `student_id`, `dormitory_id`, `room_id`, `bed_number`, `assigned_by`, `assigned_at`, `updated_at`, `status`, `notes`, `removed_date`, `removal_reason`, `is_leaver`, `school_id`) VALUES
-(35, 38, 8, 112, '', 12, '2026-02-07 13:12:18', '2026-02-07 13:13:06', 'Left', 'Assigned via male.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(36, 61, 1, 1, '', 14, '2026-02-07 14:45:22', '2026-02-07 14:45:58', '', 'Assigned via dormitory.php', '2026-02-07 14:45:58', 'Auto-removed: Student deleted/marked as leaver', 0, 1),
-(37, 0, 8, 112, '', 12, '2026-02-08 18:14:27', '2026-02-08 18:28:23', 'Left', 'Assigned via male.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(38, 38, 9, 114, '', 12, '2026-02-08 18:14:38', '2026-02-08 18:31:52', 'Left', 'Assigned via male.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(39, 221, 1, 1, '', 12, '2026-02-08 18:14:50', '2026-02-08 18:33:19', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(40, 28, 2, 17, '', 12, '2026-02-08 18:15:01', '2026-02-08 18:34:08', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(41, 222, 1, 1, '', 12, '2026-02-08 18:15:12', '2026-02-08 18:33:38', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(42, 182, 1, 1, '', 12, '2026-02-08 18:15:26', '2026-02-08 18:33:14', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(43, 31, 5, 77, '', 12, '2026-02-08 18:15:54', '2026-02-08 18:32:23', 'Left', 'Assigned via male.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(44, 208, 10, 116, '', 12, '2026-02-08 18:16:03', '2026-02-08 18:32:09', 'Left', 'Assigned via male.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(45, 87, 7, 107, '', 12, '2026-02-08 18:16:13', '2026-02-08 18:32:01', 'Left', 'Assigned via male.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(46, 27, 1, 1, '', 12, '2026-02-08 18:18:29', '2026-02-08 18:33:51', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(47, 20, 1, 1, '', 12, '2026-02-08 18:18:38', '2026-02-08 18:34:02', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(48, 183, 1, 1, '', 12, '2026-02-08 18:18:46', '2026-02-08 18:33:57', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(49, 63, 1, 1, '', 12, '2026-02-08 18:18:56', '2026-02-08 18:33:25', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(50, 199, 1, 1, '', 12, '2026-02-08 18:19:08', '2026-02-08 18:33:31', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(51, 79, 1, 1, '', 12, '2026-02-08 18:22:00', '2026-02-08 18:33:44', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(52, 21, 2, 17, '', 12, '2026-02-08 18:22:10', '2026-02-08 18:33:09', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(53, 62, 1, 10, '', 12, '2026-02-08 18:22:53', '2026-02-08 18:33:02', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(54, 240, 2, 31, '', 12, '2026-02-08 18:23:09', '2026-02-08 18:34:16', 'Left', 'Assigned via female.php | Removed: Removed by admin via female.php', NULL, NULL, 0, 1),
-(55, 0, 9, 114, '', 12, '2026-02-09 17:47:40', '2026-02-09 17:49:47', 'Left', 'Assigned via male.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(56, 206, 10, 116, '', 12, '2026-02-09 17:47:47', '2026-02-09 17:49:53', 'Left', 'Assigned via male.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(57, 246, 5, 87, 's1230', 12, '2026-03-08 02:39:36', '2026-03-08 02:40:47', 'Left', 'Assigned via male.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(58, 251, 8, 112, '', 31, '2026-03-13 22:33:30', '2026-03-13 22:37:02', 'Left', 'Assigned via male.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(59, 38, 8, 112, '', 31, '2026-03-13 22:34:24', '2026-03-13 22:36:55', 'Left', 'Assigned via dormitory.php | Removed: Removed by admin via male.php', NULL, NULL, 0, 1),
-(60, 251, 8, 112, '', 35, '2026-04-01 22:06:42', '2026-04-03 15:58:27', 'Left', 'Assigned via male.php | Removed: Removed by admin via dormitory.php', NULL, NULL, 0, 1),
-(61, 27, 1, 1, '', 32, '2026-04-21 18:46:03', '2026-04-21 18:49:15', '', 'Assigned via female.php', '2026-04-21 18:49:15', 'Auto-removed: Student marked as leaver/deactivated', 0, 1),
-(62, 237, 8, 112, '', 28, '2026-05-21 11:56:34', '2026-05-21 11:56:34', 'Active', 'Assigned via male.php', NULL, NULL, 0, 1);
+INSERT INTO `student_dormitory` (`id`, `student_id`, `dormitory_id`, `room_id`, `bed_number`, `assigned_by`, `assigned_at`, `updated_at`, `status`, `notes`, `school_id`) VALUES
+(1, 237, 5, 71, '', 42, '2026-07-09 10:44:37', '2026-07-09 10:46:44', 'Left', 'Assigned via male.php | Removed by admin via male.php', 1),
+(2, 54, 1, 1, '', 42, '2026-07-09 10:44:47', '2026-07-09 10:44:47', 'Active', 'Assigned via male.php', 1),
+(3, 82, 11, 123, '', 42, '2026-07-09 10:45:43', '2026-07-09 10:45:43', 'Active', 'Assigned via dormitory.php', 1),
+(4, 18, 9, 87, '', 42, '2026-07-09 10:46:56', '2026-07-09 10:46:56', 'Active', 'Assigned via female.php', 1);
 
 --
 -- Triggers `student_dormitory`
 --
 DELIMITER $$
-CREATE TRIGGER `prevent_duplicate_active_assignment` BEFORE INSERT ON `student_dormitory` FOR EACH ROW BEGIN
-    DECLARE v_active_count INT;
-    
-    -- If trying to insert an Active assignment
-    IF NEW.status = 'Active' THEN
-        -- Check if student already has an Active assignment
-        SELECT COUNT(*) INTO v_active_count
-        FROM student_dormitory 
-        WHERE student_id = NEW.student_id 
-        AND status = 'Active';
-        
-        IF v_active_count > 0 THEN
-            SIGNAL SQLSTATE '45000' 
-            SET MESSAGE_TEXT = 'Student already has an active dormitory assignment!';
-        END IF;
-    END IF;
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `prevent_update_to_active_duplicate` BEFORE UPDATE ON `student_dormitory` FOR EACH ROW BEGIN
-    DECLARE v_active_count INT;
-    
-    -- If trying to update to Active status
-    IF NEW.status = 'Active' AND OLD.status != 'Active' THEN
-        -- Check if student already has an Active assignment (other than this one)
-        SELECT COUNT(*) INTO v_active_count
-        FROM student_dormitory 
-        WHERE student_id = NEW.student_id 
-        AND status = 'Active'
-        AND id != NEW.id;
-        
-        IF v_active_count > 0 THEN
-            SIGNAL SQLSTATE '45000' 
-            SET MESSAGE_TEXT = 'Student already has an active dormitory assignment! Cannot have multiple active assignments.';
-        END IF;
-    END IF;
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `update_room_on_assignment` AFTER INSERT ON `student_dormitory` FOR EACH ROW BEGIN
-    -- Only update if status is Active
-    IF NEW.status = 'Active' THEN
-        UPDATE dormitory_rooms 
-        SET current_occupancy = current_occupancy + 1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = NEW.room_id
-        AND current_occupancy < capacity;
-    END IF;
-END
-$$
-DELIMITER ;
-DELIMITER $$
-CREATE TRIGGER `update_room_on_assignment_change` AFTER UPDATE ON `student_dormitory` FOR EACH ROW BEGIN
-    -- If status changed from Active to something else
+CREATE TRIGGER `update_room_occupancy_delete` AFTER UPDATE ON `student_dormitory` FOR EACH ROW BEGIN
     IF OLD.status = 'Active' AND NEW.status != 'Active' THEN
         UPDATE dormitory_rooms 
         SET current_occupancy = GREATEST(current_occupancy - 1, 0),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = OLD.room_id;
     END IF;
-    
-    -- If status changed to Active from something else
-    IF OLD.status != 'Active' AND NEW.status = 'Active' THEN
+END
+$$
+DELIMITER ;
+DELIMITER $$
+CREATE TRIGGER `update_room_occupancy_insert` AFTER INSERT ON `student_dormitory` FOR EACH ROW BEGIN
+    IF NEW.status = 'Active' THEN
         UPDATE dormitory_rooms 
         SET current_occupancy = current_occupancy + 1,
             updated_at = CURRENT_TIMESTAMP
-        WHERE id = NEW.room_id
-        AND current_occupancy < capacity;
-    END IF;
-    
-    -- If room changed
-    IF OLD.room_id != NEW.room_id AND OLD.status = 'Active' THEN
-        -- Decrease old room
-        UPDATE dormitory_rooms 
-        SET current_occupancy = GREATEST(current_occupancy - 1, 0),
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = OLD.room_id;
-        
-        -- Increase new room
-        UPDATE dormitory_rooms 
-        SET current_occupancy = current_occupancy + 1,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = NEW.room_id
-        AND current_occupancy < capacity;
+        WHERE id = NEW.room_id;
     END IF;
 END
 $$
@@ -6135,32 +6106,33 @@ ALTER TABLE `contact_messages`
 -- Indexes for table `discipline_records`
 --
 ALTER TABLE `discipline_records`
+  ADD PRIMARY KEY (`id`),
   ADD KEY `idx_school_id` (`school_id`);
+
+--
+-- Indexes for table `discipline_statistics`
+--
+ALTER TABLE `discipline_statistics`
+  ADD PRIMARY KEY (`student_id`);
 
 --
 -- Indexes for table `dormitories`
 --
 ALTER TABLE `dormitories`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `dorm_name` (`dorm_name`),
+  ADD UNIQUE KEY `unique_school_dorm` (`school_id`,`dorm_name`),
+  ADD KEY `idx_school_id` (`school_id`),
   ADD KEY `idx_dorm_type` (`dorm_type`),
-  ADD KEY `idx_status` (`status`),
-  ADD KEY `idx_dormitories_type_status` (`dorm_type`,`status`),
-  ADD KEY `idx_dormitories_occupancy` (`current_occupancy`),
-  ADD KEY `idx_school_id` (`school_id`);
+  ADD KEY `idx_status` (`status`);
 
 --
 -- Indexes for table `dormitory_rooms`
 --
 ALTER TABLE `dormitory_rooms`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `dorm_room_unique` (`dormitory_id`,`room_number`),
-  ADD KEY `dormitory_id` (`dormitory_id`),
-  ADD KEY `idx_room_status` (`status`),
-  ADD KEY `idx_room_number` (`room_number`),
-  ADD KEY `idx_dormitory_rooms_dormitory_status` (`dormitory_id`,`status`),
-  ADD KEY `idx_dormitory_rooms_occupancy` (`current_occupancy`,`capacity`),
-  ADD KEY `idx_dormitory_rooms_number_status` (`room_number`,`status`),
+  ADD UNIQUE KEY `unique_dorm_room` (`dormitory_id`,`room_number`),
+  ADD KEY `idx_dormitory_id` (`dormitory_id`),
+  ADD KEY `idx_status` (`status`),
   ADD KEY `idx_school_id` (`school_id`);
 
 --
@@ -6389,6 +6361,7 @@ ALTER TABLE `notifications`
 -- Indexes for table `notification_views`
 --
 ALTER TABLE `notification_views`
+  ADD PRIMARY KEY (`id`),
   ADD KEY `idx_school_id` (`school_id`);
 
 --
@@ -6598,16 +6571,11 @@ ALTER TABLE `students`
 --
 ALTER TABLE `student_dormitory`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `dormitory_id` (`dormitory_id`),
-  ADD KEY `room_id` (`room_id`),
-  ADD KEY `assigned_by` (`assigned_by`),
-  ADD KEY `idx_assignment_status` (`status`),
-  ADD KEY `idx_student_dormitory_student_status` (`student_id`,`status`),
-  ADD KEY `idx_student_dormitory_dormitory_status` (`dormitory_id`,`status`),
-  ADD KEY `idx_student_dormitory_room_status` (`room_id`,`status`),
-  ADD KEY `idx_student_dormitory_assigned_at` (`assigned_at`),
-  ADD KEY `idx_student_dormitory_bed_number` (`bed_number`),
-  ADD KEY `idx_student_status` (`student_id`,`status`),
+  ADD UNIQUE KEY `unique_active_assignment` (`student_id`,`status`),
+  ADD KEY `idx_student_id` (`student_id`),
+  ADD KEY `idx_dormitory_id` (`dormitory_id`),
+  ADD KEY `idx_room_id` (`room_id`),
+  ADD KEY `idx_status` (`status`),
   ADD KEY `idx_school_id` (`school_id`);
 
 --
@@ -6781,7 +6749,7 @@ ALTER TABLE `user_preferences`
 -- AUTO_INCREMENT for table `admins`
 --
 ALTER TABLE `admins`
-  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=42;
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=43;
 
 --
 -- AUTO_INCREMENT for table `admin_login_attempts`
@@ -6808,10 +6776,70 @@ ALTER TABLE `contact_messages`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
+-- AUTO_INCREMENT for table `discipline_records`
+--
+ALTER TABLE `discipline_records`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+
+--
+-- AUTO_INCREMENT for table `discipline_statistics`
+--
+ALTER TABLE `discipline_statistics`
+  MODIFY `student_id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
 -- AUTO_INCREMENT for table `dormitories`
 --
 ALTER TABLE `dormitories`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=12;
+
+--
+-- AUTO_INCREMENT for table `dormitory_rooms`
+--
+ALTER TABLE `dormitory_rooms`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=125;
+
+--
+-- AUTO_INCREMENT for table `maintenance_assignments`
+--
+ALTER TABLE `maintenance_assignments`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=21;
+
+--
+-- AUTO_INCREMENT for table `maintenance_items`
+--
+ALTER TABLE `maintenance_items`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=14;
+
+--
+-- AUTO_INCREMENT for table `maintenance_logs`
+--
+ALTER TABLE `maintenance_logs`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=50;
+
+--
+-- AUTO_INCREMENT for table `maintenance_staff_assignments`
+--
+ALTER TABLE `maintenance_staff_assignments`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=11;
+
+--
+-- AUTO_INCREMENT for table `notification_views`
+--
+ALTER TABLE `notification_views`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=63;
+
+--
+-- AUTO_INCREMENT for table `password_resets`
+--
+ALTER TABLE `password_resets`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=64;
+
+--
+-- AUTO_INCREMENT for table `student_dormitory`
+--
+ALTER TABLE `student_dormitory`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=5;
 
 --
 -- AUTO_INCREMENT for table `student_payments`
@@ -6824,6 +6852,30 @@ ALTER TABLE `student_payments`
 --
 ALTER TABLE `subject_teacher_assignments`
   MODIFY `id` int(11) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=23;
+
+--
+-- AUTO_INCREMENT for table `user_preferences`
+--
+ALTER TABLE `user_preferences`
+  MODIFY `id` int(11) NOT NULL AUTO_INCREMENT;
+
+--
+-- Constraints for dumped tables
+--
+
+--
+-- Constraints for table `dormitory_rooms`
+--
+ALTER TABLE `dormitory_rooms`
+  ADD CONSTRAINT `dormitory_rooms_ibfk_1` FOREIGN KEY (`dormitory_id`) REFERENCES `dormitories` (`id`) ON DELETE CASCADE;
+
+--
+-- Constraints for table `student_dormitory`
+--
+ALTER TABLE `student_dormitory`
+  ADD CONSTRAINT `student_dormitory_ibfk_1` FOREIGN KEY (`student_id`) REFERENCES `students` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `student_dormitory_ibfk_2` FOREIGN KEY (`dormitory_id`) REFERENCES `dormitories` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `student_dormitory_ibfk_3` FOREIGN KEY (`room_id`) REFERENCES `dormitory_rooms` (`id`) ON DELETE CASCADE;
 COMMIT;
 
 /*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
