@@ -40,6 +40,7 @@ $user_role_ids = [];
 while ($row = $user_roles_result->fetch_assoc()) {
     $user_role_ids[] = $row['role_id'];
 }
+$stmt->close();
 
 // Check if user has Head Master (1), Second Master (2), or Dormitory Teacher (7) role
 $has_permission = false;
@@ -66,10 +67,14 @@ if ($roles_result && mysqli_num_rows($roles_result) > 0) {
     }
 }
 
-// Function to update room occupancy
+// ==================== FUNCTIONS ====================
+
+/**
+ * Update room occupancy
+ */
 function updateRoomOccupancy($conn, $room_id) {
     global $current_school_id;
-    $school_cond = ($current_school_id !== null) ? " AND school_id = $current_school_id" : "";
+    $school_cond = ($current_school_id !== null) ? " AND school_id = " . intval($current_school_id) : "";
     $update_sql = "UPDATE dormitory_rooms 
                    SET current_occupancy = (
                        SELECT COUNT(*) FROM student_dormitory 
@@ -79,10 +84,12 @@ function updateRoomOccupancy($conn, $room_id) {
     return mysqli_query($conn, $update_sql);
 }
 
-// Function to update dormitory occupancy
+/**
+ * Update dormitory occupancy
+ */
 function updateDormitoryOccupancy($conn, $dormitory_id) {
     global $current_school_id;
-    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
+    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = " . intval($current_school_id) : "";
     $update_sql = "UPDATE dormitories 
                    SET current_occupancy = (
                        SELECT COUNT(DISTINCT sd.id) 
@@ -94,13 +101,18 @@ function updateDormitoryOccupancy($conn, $dormitory_id) {
     return mysqli_query($conn, $update_sql);
 }
 
-// Function to remove leavers/graduated students from dormitories
+/**
+ * Remove leavers/graduated students from dormitories
+ */
 function removeLeaversFromDormitories($conn) {
     $removed_count = 0;
     global $current_school_id;
+    
+    $school_cond = "";
+    if ($current_school_id !== null) {
+        $school_cond = " AND sd.school_id = " . intval($current_school_id);
+    }
 
-    // Find students who are leavers or graduated but still have active assignments
-    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
     $leavers_sql = "SELECT sd.id as assignment_id, sd.room_id, sd.dormitory_id, 
                            s.first_name, s.last_name, s.index_number,
                            CONCAT(s.first_name, ' ', s.last_name) as student_name
@@ -117,20 +129,18 @@ function removeLeaversFromDormitories($conn) {
     if ($leavers_result && mysqli_num_rows($leavers_result) > 0) {
         while ($row = mysqli_fetch_assoc($leavers_result)) {
             $assignment_id = $row['assignment_id'];
-            $student_name = $row['student_name'];
             $room_id = $row['room_id'];
             $dormitory_id = $row['dormitory_id'];
             
-            // Use the stored procedure to properly remove the assignment
-            $remove_sql = "CALL remove_dormitory_assignment($assignment_id, 'Auto-removed: Student is leaver/graduated')";
-            if (mysqli_multi_query($conn, $remove_sql)) {
-                // Consume all results
-                while (mysqli_more_results($conn) && mysqli_next_result($conn));
-                
-                // Update occupancies
+            $update_sql = "UPDATE student_dormitory 
+                           SET status = 'Left', 
+                               notes = CONCAT(COALESCE(notes, ''), ' | Auto-removed: Student is leaver/graduated'),
+                               updated_at = CURRENT_TIMESTAMP
+                           WHERE id = $assignment_id";
+            
+            if (mysqli_query($conn, $update_sql)) {
                 updateRoomOccupancy($conn, $room_id);
                 updateDormitoryOccupancy($conn, $dormitory_id);
-                
                 $removed_count++;
             }
         }
@@ -143,11 +153,16 @@ function removeLeaversFromDormitories($conn) {
     return $removed_count;
 }
 
-// Run automatic removal check at the beginning
+// Run automatic removal check
 removeLeaversFromDormitories($conn);
 
+// Build school filter
+$school_filter = "";
+if ($current_school_id !== null) {
+    $school_filter = " AND s.school_id = " . intval($current_school_id);
+}
+
 // Get all active students (Form Five and Six, not leavers/graduated)
-$school_filter = ($current_school_id !== null) ? " AND s.school_id = $current_school_id" : "";
 $students_sql = "SELECT s.* FROM students s 
                 WHERE s.is_leaver = FALSE 
                 AND s.status = 1
@@ -171,15 +186,17 @@ if ($students_result && mysqli_num_rows($students_result) > 0) {
 }
 
 // Get all dormitory assignments for active students
-$sd_school_filter = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
+$sd_school_filter = "";
+if ($current_school_id !== null) {
+    $sd_school_filter = " AND sd.school_id = " . intval($current_school_id);
+}
+
 $assignments_sql = "SELECT sd.*, s.first_name, s.last_name, s.index_number, s.class, s.combination, s.sex,
                    s.is_leaver, s.graduation_status,
                    d.dorm_name, d.dorm_type, dr.room_number, dr.room_label, 
                    dr.capacity as room_capacity,
                    dr.current_occupancy as room_occupancy,
-                   dr.status as room_status,
-                   (SELECT COUNT(*) FROM student_dormitory sd2 
-                    WHERE sd2.room_id = dr.id AND sd2.status = 'Active') as active_in_room
+                   dr.status as room_status
                    FROM student_dormitory sd
                    JOIN students s ON sd.student_id = s.id
                    JOIN dormitories d ON sd.dormitory_id = d.id
@@ -207,7 +224,10 @@ if ($assignments_result && mysqli_num_rows($assignments_result) > 0) {
 }
 
 // Get all dormitories
-$dorm_school_filter = ($current_school_id !== null) ? " AND school_id = $current_school_id" : "";
+$dorm_school_filter = "";
+if ($current_school_id !== null) {
+    $dorm_school_filter = " AND school_id = " . intval($current_school_id);
+}
 $dormitories_sql = "SELECT * FROM dormitories WHERE status IN ('Active', 'Full') $dorm_school_filter ORDER BY dorm_type, dorm_name";
 $dormitories_result = mysqli_query($conn, $dormitories_sql);
 $dormitories = [];
@@ -225,18 +245,18 @@ if ($dormitories_result && mysqli_num_rows($dormitories_result) > 0) {
 }
 
 // Get ALL dormitories for management (including inactive)
-$all_dorms_sql = "SELECT * FROM dormitories WHERE school_id = ? ORDER BY dorm_type, dorm_name";
-$all_dorms_stmt = $conn->prepare($all_dorms_sql);
-$all_dorms_stmt->bind_param("i", $current_school_id);
-$all_dorms_stmt->execute();
-$all_dorms_result = $all_dorms_stmt->get_result();
+$all_dorms_sql = "SELECT * FROM dormitories";
+if ($current_school_id !== null) {
+    $all_dorms_sql .= " WHERE school_id = " . intval($current_school_id);
+}
+$all_dorms_sql .= " ORDER BY dorm_type, dorm_name";
+$all_dorms_result = mysqli_query($conn, $all_dorms_sql);
 $all_dormitories = [];
 while ($row = mysqli_fetch_assoc($all_dorms_result)) {
     $all_dormitories[] = $row;
 }
-$all_dorms_stmt->close();
 
-// Handle dormitory assignment using stored procedure
+// ==================== HANDLE ASSIGN STUDENT ====================
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_student'])) {
     $student_id = mysqli_real_escape_string($conn, $_POST['student_id']);
     $dormitory_id = mysqli_real_escape_string($conn, $_POST['dormitory_id']);
@@ -245,25 +265,38 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_student'])) {
     $assigned_by = $_SESSION['admin_id'];
     
     // Get student details
-    $student_school_cond = ($current_school_id !== null) ? " AND school_id = $current_school_id" : "";
-    $student_sql = "SELECT CONCAT(first_name, ' ', last_name) as student_name, sex 
+    $student_school_cond = "";
+    if ($current_school_id !== null) {
+        $student_school_cond = " AND school_id = " . intval($current_school_id);
+    }
+    $student_sql = "SELECT CONCAT(first_name, ' ', last_name) as student_name, sex, school_id 
                    FROM students WHERE id = $student_id $student_school_cond";
     $student_result = mysqli_query($conn, $student_sql);
     $student_data = mysqli_fetch_assoc($student_result);
     $student_name = $student_data['student_name'] ?? 'Unknown';
     $student_sex = $student_data['sex'] ?? '';
+    $student_school_id = $student_data['school_id'] ?? $current_school_id;
     
     try {
         // Check if student already has active assignment
         $check_sql = "SELECT id FROM student_dormitory 
-                 WHERE student_id = $student_id AND status = 'Active' $sd_school_filter";
+                     WHERE student_id = $student_id AND status = 'Active'";
         $check_result = mysqli_query($conn, $check_sql);
         
         if (mysqli_num_rows($check_result) > 0) {
             throw new Exception("Student already has an active dormitory assignment!");
         }
         
-        // Use the stored procedure for assignment
+        // Check if room has capacity
+        $room_check_sql = "SELECT capacity, current_occupancy FROM dormitory_rooms WHERE id = $room_id";
+        $room_check_result = mysqli_query($conn, $room_check_sql);
+        $room_data = mysqli_fetch_assoc($room_check_result);
+        
+        if ($room_data && $room_data['current_occupancy'] >= $room_data['capacity']) {
+            throw new Exception("Room is already at full capacity!");
+        }
+        
+        // Try using stored procedure first
         $procedure_sql = "CALL assign_student_to_dormitory(
             $student_id, 
             $dormitory_id, 
@@ -273,29 +306,41 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_student'])) {
             'Assigned via dormitory.php'
         )";
         
+        $procedure_worked = false;
         if (mysqli_multi_query($conn, $procedure_sql)) {
-            // Get the result
+            $proc_result = null;
             if ($result = mysqli_store_result($conn)) {
                 $proc_result = mysqli_fetch_assoc($result);
                 mysqli_free_result($result);
             }
-            
-            // Consume all results
             while (mysqli_more_results($conn) && mysqli_next_result($conn));
             
             if (isset($proc_result['status']) && $proc_result['status'] == 'SUCCESS') {
+                $procedure_worked = true;
+                $_SESSION['success'] = $proc_result['message'];
+            }
+        }
+        
+        // If procedure failed, use direct insert
+        if (!$procedure_worked) {
+            // Insert assignment directly
+            $insert_sql = "INSERT INTO student_dormitory (student_id, dormitory_id, room_id, bed_number, assigned_by, status, notes, school_id) 
+                           VALUES (?, ?, ?, ?, ?, 'Active', 'Assigned via dormitory.php', ?)";
+            $insert_stmt = $conn->prepare($insert_sql);
+            $insert_stmt->bind_param("iiisii", $student_id, $dormitory_id, $room_id, $bed_number, $assigned_by, $student_school_id);
+            
+            if ($insert_stmt->execute()) {
                 // Update occupancies
                 updateRoomOccupancy($conn, $room_id);
                 updateDormitoryOccupancy($conn, $dormitory_id);
-                
-                $_SESSION['success'] = $proc_result['message'];
+                $_SESSION['success'] = "Student $student_name assigned to dormitory successfully!";
             } else {
-                throw new Exception("Failed to assign dormitory.");
+                throw new Exception("Failed to assign: " . $insert_stmt->error);
             }
-        } else {
-            throw new Exception("Error calling assignment procedure: " . mysqli_error($conn));
+            $insert_stmt->close();
         }
         
+        // Refresh data
         header("Location: dormitory.php");
         exit();
         
@@ -306,7 +351,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_student'])) {
     }
 }
 
-// Handle update dormitory assignment using stored procedure
+// ==================== HANDLE UPDATE ASSIGNMENT ====================
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_assignment'])) {
     $assignment_id = mysqli_real_escape_string($conn, $_POST['assignment_id']);
     $new_dormitory_id = mysqli_real_escape_string($conn, $_POST['dormitory_id']);
@@ -314,15 +359,25 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_assignment'])) 
     $new_bed_number = mysqli_real_escape_string($conn, $_POST['bed_number']);
     $updated_by = $_SESSION['admin_id'];
     
-    // Get old room and dormitory info for occupancy updates
-    $old_info_sql = "SELECT room_id, dormitory_id FROM student_dormitory WHERE id = $assignment_id" . ($current_school_id !== null ? " AND school_id = $current_school_id" : "");
+    // Get old room and dormitory info
+    $old_info_sql = "SELECT room_id, dormitory_id, student_id FROM student_dormitory WHERE id = $assignment_id";
     $old_info_result = mysqli_query($conn, $old_info_sql);
     $old_info = mysqli_fetch_assoc($old_info_result);
     $old_room_id = $old_info['room_id'];
     $old_dormitory_id = $old_info['dormitory_id'];
+    $student_id = $old_info['student_id'];
     
     try {
-        // Use the stored procedure for update
+        // Check if new room has capacity
+        $room_check_sql = "SELECT capacity, current_occupancy FROM dormitory_rooms WHERE id = $new_room_id";
+        $room_check_result = mysqli_query($conn, $room_check_sql);
+        $room_data = mysqli_fetch_assoc($room_check_result);
+        
+        if ($room_data && $room_data['current_occupancy'] >= $room_data['capacity']) {
+            throw new Exception("New room is already at full capacity!");
+        }
+        
+        // Try using stored procedure first
         $procedure_sql = "CALL update_student_dormitory(
             $assignment_id,
             $new_dormitory_id,
@@ -332,31 +387,44 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_assignment'])) 
             'Updated via dormitory.php'
         )";
         
+        $procedure_worked = false;
         if (mysqli_multi_query($conn, $procedure_sql)) {
-            // Get the result
+            $proc_result = null;
             if ($result = mysqli_store_result($conn)) {
                 $proc_result = mysqli_fetch_assoc($result);
                 mysqli_free_result($result);
             }
-            
-            // Consume all results
             while (mysqli_more_results($conn) && mysqli_next_result($conn));
             
             if (isset($proc_result['status']) && $proc_result['status'] == 'SUCCESS') {
-                // Update occupancies for old room/dormitory
+                $procedure_worked = true;
+                $_SESSION['success'] = $proc_result['message'];
+            }
+        }
+        
+        // If procedure failed, use direct update
+        if (!$procedure_worked) {
+            // Update assignment
+            $update_sql = "UPDATE student_dormitory 
+                           SET dormitory_id = ?, room_id = ?, bed_number = ?, 
+                               notes = CONCAT(COALESCE(notes, ''), ' | Updated via dormitory.php'), 
+                               updated_at = CURRENT_TIMESTAMP
+                           WHERE id = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            $update_stmt->bind_param("iisi", $new_dormitory_id, $new_room_id, $new_bed_number, $assignment_id);
+            
+            if ($update_stmt->execute()) {
+                // Update occupancies
                 updateRoomOccupancy($conn, $old_room_id);
                 updateDormitoryOccupancy($conn, $old_dormitory_id);
-                
-                // Update occupancies for new room/dormitory
                 updateRoomOccupancy($conn, $new_room_id);
                 updateDormitoryOccupancy($conn, $new_dormitory_id);
                 
-                $_SESSION['success'] = $proc_result['message'];
+                $_SESSION['success'] = "Assignment updated successfully!";
             } else {
-                throw new Exception("Failed to update assignment.");
+                throw new Exception("Failed to update: " . $update_stmt->error);
             }
-        } else {
-            throw new Exception("Error calling update procedure: " . mysqli_error($conn));
+            $update_stmt->close();
         }
         
         header("Location: dormitory.php");
@@ -369,16 +437,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_assignment'])) 
     }
 }
 
-// Handle remove assignment using stored procedure
+// ==================== HANDLE REMOVE ASSIGNMENT ====================
 if (isset($_GET['remove_assignment'])) {
     $assignment_id = mysqli_real_escape_string($conn, $_GET['remove_assignment']);
     
     try {
-        // Get assignment details first
-        $get_sql = "SELECT sd.*, s.first_name, s.last_name, s.sex 
-                       FROM student_dormitory sd
-                       JOIN students s ON sd.student_id = s.id
-                       WHERE sd.id = $assignment_id" . ($current_school_id !== null ? " AND sd.school_id = $current_school_id" : "");
+        // Get assignment details
+        $get_sql = "SELECT room_id, dormitory_id FROM student_dormitory WHERE id = $assignment_id";
         $get_result = mysqli_query($conn, $get_sql);
         $assignment_data = mysqli_fetch_assoc($get_result);
         
@@ -386,35 +451,42 @@ if (isset($_GET['remove_assignment'])) {
             throw new Exception("Assignment not found.");
         }
         
-        $student_name = $assignment_data['first_name'] . ' ' . $assignment_data['last_name'];
         $room_id = $assignment_data['room_id'];
         $dormitory_id = $assignment_data['dormitory_id'];
-        $student_sex = $assignment_data['sex'];
         
-        // Use the stored procedure for removal
+        // Try using stored procedure first
         $procedure_sql = "CALL remove_dormitory_assignment($assignment_id, 'Removed by admin via dormitory.php')";
         
+        $procedure_worked = false;
         if (mysqli_multi_query($conn, $procedure_sql)) {
-            // Get the result
+            $proc_result = null;
             if ($result = mysqli_store_result($conn)) {
                 $proc_result = mysqli_fetch_assoc($result);
                 mysqli_free_result($result);
             }
-            
-            // Consume all results
             while (mysqli_more_results($conn) && mysqli_next_result($conn));
             
             if (isset($proc_result['status']) && $proc_result['status'] == 'SUCCESS') {
-                // Update occupancies
+                $procedure_worked = true;
+                $_SESSION['success'] = $proc_result['message'];
+            }
+        }
+        
+        // If procedure failed, use direct update
+        if (!$procedure_worked) {
+            $update_sql = "UPDATE student_dormitory 
+                           SET status = 'Left', 
+                               notes = CONCAT(COALESCE(notes, ''), ' | Removed by admin via dormitory.php'),
+                               updated_at = CURRENT_TIMESTAMP
+                           WHERE id = $assignment_id";
+            
+            if (mysqli_query($conn, $update_sql)) {
                 updateRoomOccupancy($conn, $room_id);
                 updateDormitoryOccupancy($conn, $dormitory_id);
-                
-                $_SESSION['success'] = $proc_result['message'];
+                $_SESSION['success'] = "Assignment removed successfully!";
             } else {
-                throw new Exception("Failed to remove assignment.");
+                throw new Exception("Failed to remove: " . mysqli_error($conn));
             }
-        } else {
-            throw new Exception("Error calling removal procedure: " . mysqli_error($conn));
         }
         
         header("Location: dormitory.php");
@@ -427,45 +499,33 @@ if (isset($_GET['remove_assignment'])) {
     }
 }
 
-// Handle remove student from dormitory (when student is deleted/marked as leaver from other pages)
+// ==================== HANDLE REMOVE STUDENT DORMITORY ====================
 if (isset($_GET['remove_student_dormitory'])) {
     $student_id = mysqli_real_escape_string($conn, $_GET['remove_student_dormitory']);
     
     try {
-        // Get all assignments for this student
         $get_assignments_sql = "SELECT id, room_id, dormitory_id FROM student_dormitory 
-                       WHERE student_id = $student_id AND status = 'Active'" . ($current_school_id !== null ? " AND school_id = $current_school_id" : "");
+                               WHERE student_id = $student_id AND status = 'Active'";
         $assignments_result = mysqli_query($conn, $get_assignments_sql);
         
         $removed_count = 0;
-        $rooms_to_update = [];
-        $dormitories_to_update = [];
         
         while ($assignment = mysqli_fetch_assoc($assignments_result)) {
             $assignment_id = $assignment['id'];
             $room_id = $assignment['room_id'];
             $dormitory_id = $assignment['dormitory_id'];
             
-            // Use stored procedure
-            $procedure_sql = "CALL remove_dormitory_assignment($assignment_id, 'Auto-removed: Student deleted/marked as leaver')";
+            $update_sql = "UPDATE student_dormitory 
+                           SET status = 'Left', 
+                               notes = CONCAT(COALESCE(notes, ''), ' | Auto-removed: Student deleted/marked as leaver'),
+                               updated_at = CURRENT_TIMESTAMP
+                           WHERE id = $assignment_id";
             
-            if (mysqli_multi_query($conn, $procedure_sql)) {
-                // Consume all results
-                while (mysqli_more_results($conn) && mysqli_next_result($conn));
-                
-                $rooms_to_update[] = $room_id;
-                $dormitories_to_update[] = $dormitory_id;
+            if (mysqli_query($conn, $update_sql)) {
+                updateRoomOccupancy($conn, $room_id);
+                updateDormitoryOccupancy($conn, $dormitory_id);
                 $removed_count++;
             }
-        }
-        
-        // Update occupancies
-        foreach (array_unique($rooms_to_update) as $room_id) {
-            updateRoomOccupancy($conn, $room_id);
-        }
-        
-        foreach (array_unique($dormitories_to_update) as $dormitory_id) {
-            updateDormitoryOccupancy($conn, $dormitory_id);
         }
         
         if ($removed_count > 0) {
@@ -482,6 +542,166 @@ if (isset($_GET['remove_student_dormitory'])) {
         header("Location: dormitory.php");
         exit();
     }
+}
+
+// ==================== HANDLE ADD DORMITORY (via modal) ====================
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['add_dormitory_modal'])) {
+    $dorm_name = mysqli_real_escape_string($conn, trim($_POST['dorm_name']));
+    $dorm_type = mysqli_real_escape_string($conn, $_POST['dorm_type']);
+    $rooms_count = intval($_POST['rooms_count']);
+    $capacity_per_room = intval($_POST['capacity_per_room']);
+    $description = mysqli_real_escape_string($conn, trim($_POST['description'] ?? ''));
+    $school_id = $current_school_id;
+    
+    if (empty($dorm_name) || empty($dorm_type) || $rooms_count < 1 || $capacity_per_room < 1) {
+        $_SESSION['error'] = "All fields are required.";
+    } else {
+        $check_sql = "SELECT id FROM dormitories WHERE dorm_name = ? AND school_id = ?";
+        $check_stmt = $conn->prepare($check_sql);
+        $check_stmt->bind_param("si", $dorm_name, $school_id);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+        
+        if ($check_result->num_rows > 0) {
+            $_SESSION['error'] = "Dormitory '$dorm_name' already exists.";
+        } else {
+            $total_capacity = $rooms_count * $capacity_per_room;
+            
+            $insert_sql = "INSERT INTO dormitories (dorm_name, dorm_type, rooms_count, capacity_per_room, total_capacity, description, status, school_id) 
+                           VALUES (?, ?, ?, ?, ?, ?, 'Active', ?)";
+            $insert_stmt = $conn->prepare($insert_sql);
+            $insert_stmt->bind_param("ssiiisi", $dorm_name, $dorm_type, $rooms_count, $capacity_per_room, $total_capacity, $description, $school_id);
+            
+            if ($insert_stmt->execute()) {
+                $dormitory_id = $insert_stmt->insert_id;
+                $rooms_created = 0;
+                
+                for ($i = 1; $i <= $rooms_count; $i++) {
+                    $letter = ($i <= 10) ? 'A' : chr(ord('A') + floor(($i - 1) / 10));
+                    $number = ($i <= 10) ? $i : (($i - 1) % 10) + 1;
+                    $room_label = $letter . $number;
+                    
+                    $room_sql = "INSERT INTO dormitory_rooms (dormitory_id, room_number, room_label, capacity, school_id) 
+                                 VALUES (?, ?, ?, ?, ?)";
+                    $room_stmt = $conn->prepare($room_sql);
+                    $room_stmt->bind_param("issii", $dormitory_id, $room_label, $room_label, $capacity_per_room, $school_id);
+                    
+                    if ($room_stmt->execute()) {
+                        $rooms_created++;
+                    }
+                    $room_stmt->close();
+                }
+                
+                $_SESSION['success'] = "Dormitory '$dorm_name' added successfully with $rooms_created rooms.";
+            } else {
+                $_SESSION['error'] = "Failed to add dormitory: " . $conn->error;
+            }
+            $insert_stmt->close();
+        }
+        $check_stmt->close();
+    }
+    
+    header("Location: dormitory.php");
+    exit();
+}
+
+// ==================== HANDLE EDIT DORMITORY (via modal) ====================
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['edit_dormitory_modal'])) {
+    $dormitory_id = intval($_POST['dormitory_id']);
+    $dorm_name = mysqli_real_escape_string($conn, trim($_POST['dorm_name']));
+    $rooms_count = intval($_POST['rooms_count']);
+    $capacity_per_room = intval($_POST['capacity_per_room']);
+    $description = mysqli_real_escape_string($conn, trim($_POST['description'] ?? ''));
+    $status = mysqli_real_escape_string($conn, $_POST['status'] ?? 'Active');
+    $school_id = $current_school_id;
+    
+    if (empty($dorm_name) || $rooms_count < 1 || $capacity_per_room < 1) {
+        $_SESSION['error'] = "All fields are required.";
+    } else {
+        $check_sql = "SELECT id FROM dormitories WHERE dorm_name = ? AND school_id = ? AND id != ?";
+        $check_stmt = $conn->prepare($check_sql);
+        $check_stmt->bind_param("sii", $dorm_name, $school_id, $dormitory_id);
+        $check_stmt->execute();
+        $check_result = $check_stmt->get_result();
+        
+        if ($check_result->num_rows > 0) {
+            $_SESSION['error'] = "Dormitory '$dorm_name' already exists.";
+        } else {
+            $total_capacity = $rooms_count * $capacity_per_room;
+            
+            $update_sql = "UPDATE dormitories 
+                           SET dorm_name = ?, rooms_count = ?, capacity_per_room = ?,
+                               total_capacity = ?, description = ?, status = ?,
+                               updated_at = NOW()
+                           WHERE id = ? AND school_id = ?";
+            $update_stmt = $conn->prepare($update_sql);
+            $update_stmt->bind_param("siiissii", 
+                $dorm_name, $rooms_count, $capacity_per_room,
+                $total_capacity, $description, $status,
+                $dormitory_id, $school_id
+            );
+            
+            if ($update_stmt->execute()) {
+                // Update room capacities
+                $update_rooms_sql = "UPDATE dormitory_rooms 
+                                     SET capacity = ?, updated_at = NOW() 
+                                     WHERE dormitory_id = ? AND school_id = ?";
+                $update_rooms_stmt = $conn->prepare($update_rooms_sql);
+                $update_rooms_stmt->bind_param("iii", $capacity_per_room, $dormitory_id, $school_id);
+                $update_rooms_stmt->execute();
+                $update_rooms_stmt->close();
+                
+                $_SESSION['success'] = "Dormitory '$dorm_name' updated successfully.";
+            } else {
+                $_SESSION['error'] = "Failed to update dormitory: " . $conn->error;
+            }
+            $update_stmt->close();
+        }
+        $check_stmt->close();
+    }
+    
+    header("Location: dormitory.php");
+    exit();
+}
+
+// ==================== HANDLE DELETE DORMITORY ====================
+if (isset($_GET['delete_dormitory'])) {
+    $dormitory_id = intval($_GET['delete_dormitory']);
+    
+    $check_sql = "SELECT COUNT(*) as count FROM student_dormitory 
+                  WHERE dormitory_id = ? AND status = 'Active'";
+    $check_stmt = $conn->prepare($check_sql);
+    $check_stmt->bind_param("i", $dormitory_id);
+    $check_stmt->execute();
+    $check_result = $check_stmt->get_result();
+    $check_row = $check_result->fetch_assoc();
+    $check_stmt->close();
+    
+    if ($check_row['count'] > 0) {
+        $_SESSION['error'] = "Cannot delete dormitory. It has " . $check_row['count'] . " active students assigned.";
+    } else {
+        // Delete rooms first
+        $del_rooms_sql = "DELETE FROM dormitory_rooms WHERE dormitory_id = ?";
+        $del_rooms_stmt = $conn->prepare($del_rooms_sql);
+        $del_rooms_stmt->bind_param("i", $dormitory_id);
+        $del_rooms_stmt->execute();
+        $del_rooms_stmt->close();
+        
+        // Delete dormitory
+        $del_sql = "DELETE FROM dormitories WHERE id = ? AND school_id = ?";
+        $del_stmt = $conn->prepare($del_sql);
+        $del_stmt->bind_param("ii", $dormitory_id, $current_school_id);
+        
+        if ($del_stmt->execute()) {
+            $_SESSION['success'] = "Dormitory deleted successfully.";
+        } else {
+            $_SESSION['error'] = "Failed to delete dormitory.";
+        }
+        $del_stmt->close();
+    }
+    
+    header("Location: dormitory.php");
+    exit();
 }
 
 // Calculate statistics
@@ -512,25 +732,6 @@ $female_available_beds = max(0, $female_total_beds - $female_occupied_beds);
 $total_beds = $male_total_beds + $female_total_beds;
 $total_occupied_beds = $male_occupied_beds + $female_occupied_beds;
 $total_available_beds = $male_available_beds + $female_available_beds;
-
-// Function to get available rooms (for JavaScript)
-function getAvailableRooms($conn, $dormitory_id) {
-    $rooms_sql = "SELECT dr.*, (dr.capacity - dr.current_occupancy) as available_beds
-                 FROM dormitory_rooms dr
-                 WHERE dr.dormitory_id = $dormitory_id
-                 AND dr.status = 'Available'
-                 AND dr.current_occupancy < dr.capacity
-                 ORDER BY dr.room_number";
-    
-    $result = mysqli_query($conn, $rooms_sql);
-    $rooms = [];
-    if ($result && mysqli_num_rows($result) > 0) {
-        while ($row = mysqli_fetch_assoc($result)) {
-            $rooms[] = $row;
-        }
-    }
-    return $rooms;
-}
 ?>
 
 <?php include '../controller/header.php'; ?>
@@ -541,9 +742,14 @@ function getAvailableRooms($conn, $dormitory_id) {
         <!-- Page Title -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2 class="page-title">Dormitory Management System</h2>
-            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#assignDormitoryModal">
-                <i class="fas fa-bed me-2"></i>Assign Dormitory
-            </button>
+            <div>
+                <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#assignDormitoryModal">
+                    <i class="fas fa-bed me-2"></i>Assign Dormitory
+                </button>
+                <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addDormitoryModal">
+                    <i class="fas fa-plus-circle me-2"></i>Add Dormitory
+                </button>
+            </div>
         </div>
 
         <!-- SweetAlert2 Messages -->
@@ -599,7 +805,6 @@ function getAvailableRooms($conn, $dormitory_id) {
 
         <!-- Gender Statistics -->
         <div class="row mb-4">
-            <!-- Male Statistics -->
             <div class="col-md-6 mb-3">
                 <div class="card">
                     <div class="card-header" style="background-color: #007bff; color: white;">
@@ -636,7 +841,6 @@ function getAvailableRooms($conn, $dormitory_id) {
                 </div>
             </div>
 
-            <!-- Female Statistics -->
             <div class="col-md-6 mb-3">
                 <div class="card">
                     <div class="card-header" style="background-color: #e83e8c; color: white;">
@@ -674,199 +878,65 @@ function getAvailableRooms($conn, $dormitory_id) {
             </div>
         </div>
 
-        <!-- Manage Dormitories Section -->
+        <!-- Dormitory Overview -->
         <div class="row mb-4">
-            <div class="col-md-12">
-                <div class="card">
-                    <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
-                        <h5 class="mb-0">
-                            <i class="fas fa-building me-2"></i>Manage Dormitories
-                        </h5>
+            <?php if (empty($dormitories)): ?>
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No active dormitories found. Please add a dormitory first.
                     </div>
-                    <div class="card-body">
-                        <ul class="nav nav-tabs mb-3" id="dormitoryManageTabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="add-dorm-tab" data-bs-toggle="tab" data-bs-target="#add-dorm" type="button" role="tab">
-                                    <i class="fas fa-plus-circle me-2"></i>Add Dormitory
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="list-dorm-tab" data-bs-toggle="tab" data-bs-target="#list-dorm" type="button" role="tab">
-                                    <i class="fas fa-list me-2"></i>All Dormitories
-                                </button>
-                            </li>
-                        </ul>
-                        
-                        <div class="tab-content">
-                            <!-- Add Dormitory Tab -->
-                            <div class="tab-pane fade show active" id="add-dorm" role="tabpanel">
-                                <form method="POST" action="dormitory_actions.php" class="row g-3">
-                                    <input type="hidden" name="school_id" value="<?php echo $current_school_id; ?>">
-                                    
-                                    <div class="col-md-4">
-                                        <label class="form-label">Dormitory Name *</label>
-                                        <input type="text" class="form-control" name="dorm_name" required placeholder="e.g., Magufuli, Safina">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <label class="form-label">Dormitory Type *</label>
-                                        <select class="form-select" name="dorm_type" required>
-                                            <option value="">Select Type...</option>
-                                            <option value="Male">Male</option>
-                                            <option value="Female">Female</option>
-                                        </select>
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Rooms Count *</label>
-                                        <input type="number" class="form-control" name="rooms_count" min="1" required placeholder="e.g., 10">
-                                    </div>
-                                    <div class="col-md-2">
-                                        <label class="form-label">Capacity/Room *</label>
-                                        <input type="number" class="form-control" name="capacity_per_room" min="1" required placeholder="e.g., 6">
-                                    </div>
-                                    <div class="col-md-12">
-                                        <label class="form-label">Description</label>
-                                        <input type="text" class="form-control" name="description" placeholder="Optional description e.g., Magufuli Male Dormitory - Rooms A1 to B10">
-                                    </div>
-                                    <div class="col-md-12">
-                                        <button type="submit" name="add_dormitory" class="btn btn-primary">
-                                            <i class="fas fa-save me-2"></i>Add Dormitory
-                                        </button>
-                                    </div>
-                                </form>
+                </div>
+            <?php else: ?>
+                <?php foreach ($dormitories as $dorm): 
+                    $available = max(0, $dorm['total_capacity'] - $dorm['current_occupancy']);
+                    $occupancy_rate = $dorm['total_capacity'] > 0 ? 
+                        round(($dorm['current_occupancy'] / $dorm['total_capacity']) * 100, 1) : 0;
+                    $dorm_color = $dorm['dorm_type'] == 'Male' ? '#007bff' : '#e83e8c';
+                ?>
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header" style="background-color: <?php echo $dorm_color; ?>; color: white;">
+                            <h5 class="mb-0">
+                                <i class="fas fa-<?php echo $dorm['dorm_type'] == 'Male' ? 'male' : 'female'; ?> me-2"></i>
+                                <?php echo htmlspecialchars($dorm['dorm_name']); ?> Dormitory
+                                <span class="badge bg-light text-dark float-end">
+                                    <?php echo $dorm['current_occupancy'] . '/' . $dorm['total_capacity']; ?> Beds
+                                </span>
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Type:</strong> <?php echo $dorm['dorm_type']; ?></p>
+                                    <p><strong>Rooms:</strong> <?php echo $dorm['rooms_count']; ?></p>
+                                    <p><strong>Capacity per Room:</strong> <?php echo $dorm['capacity_per_room']; ?></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Total Capacity:</strong> <?php echo $dorm['total_capacity']; ?></p>
+                                    <p><strong>Current Occupancy:</strong> <?php echo $dorm['current_occupancy']; ?></p>
+                                    <p><strong>Available:</strong> 
+                                        <span class="badge bg-<?php echo ($available > 0) ? 'success' : 'danger'; ?>">
+                                            <?php echo $available; ?> beds
+                                        </span>
+                                    </p>
+                                </div>
                             </div>
-                            
-                            <!-- List Dormitories Tab -->
-                            <div class="tab-pane fade" id="list-dorm" role="tabpanel">
-                                <div class="table-responsive">
-                                    <table class="table table-hover">
-                                        <thead>
-                                            <tr>
-                                                <th>#</th>
-                                                <th>Dormitory Name</th>
-                                                <th>Type</th>
-                                                <th>Rooms</th>
-                                                <th>Capacity/Room</th>
-                                                <th>Total Capacity</th>
-                                                <th>Occupancy</th>
-                                                <th>Status</th>
-                                                <th>Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <?php 
-                                            $dorm_index = 1;
-                                            foreach ($all_dormitories as $dorm): 
-                                            ?>
-                                            <tr>
-                                                <td><?php echo $dorm_index++; ?></td>
-                                                <td><strong><?php echo htmlspecialchars($dorm['dorm_name']); ?></strong></td>
-                                                <td>
-                                                    <span class="badge <?php echo $dorm['dorm_type'] == 'Male' ? 'bg-primary' : 'bg-pink'; ?>">
-                                                        <?php echo $dorm['dorm_type']; ?>
-                                                    </span>
-                                                </td>
-                                                <td><?php echo $dorm['rooms_count']; ?></td>
-                                                <td><?php echo $dorm['capacity_per_room']; ?></td>
-                                                <td><?php echo $dorm['total_capacity']; ?></td>
-                                                <td>
-                                                    <?php echo $dorm['current_occupancy']; ?>
-                                                    <?php if ($dorm['total_capacity'] > 0): ?>
-                                                        (<?php echo round(($dorm['current_occupancy'] / $dorm['total_capacity']) * 100); ?>%)
-                                                    <?php endif; ?>
-                                                </td>
-                                                <td>
-                                                    <span class="badge <?php echo $dorm['status'] == 'Active' ? 'bg-success' : ($dorm['status'] == 'Full' ? 'bg-warning' : 'bg-danger'); ?>">
-                                                        <?php echo $dorm['status']; ?>
-                                                    </span>
-                                                </td>
-                                                <td>
-                                                    <div class="btn-group btn-group-sm">
-                                                        <button class="btn btn-outline-info edit-dorm-btn" 
-                                                                data-bs-toggle="modal" 
-                                                                data-bs-target="#editDormitoryModal"
-                                                                data-id="<?php echo $dorm['id']; ?>"
-                                                                data-name="<?php echo htmlspecialchars($dorm['dorm_name']); ?>"
-                                                                data-type="<?php echo $dorm['dorm_type']; ?>"
-                                                                data-rooms="<?php echo $dorm['rooms_count']; ?>"
-                                                                data-capacity="<?php echo $dorm['capacity_per_room']; ?>"
-                                                                data-description="<?php echo htmlspecialchars($dorm['description'] ?? ''); ?>"
-                                                                data-status="<?php echo $dorm['status']; ?>">
-                                                            <i class="fas fa-edit"></i>
-                                                        </button>
-                                                        <a href="dormitory_actions.php?delete_dormitory=<?php echo $dorm['id']; ?>&school_id=<?php echo $current_school_id; ?>" 
-                                                           class="btn btn-outline-danger delete-dorm-btn"
-                                                           onclick="return confirm('Are you sure you want to delete this dormitory? This will also delete all rooms.')">
-                                                            <i class="fas fa-trash"></i>
-                                                        </a>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                            <?php endforeach; ?>
-                                            <?php if (empty($all_dormitories)): ?>
-                                            <tr>
-                                                <td colspan="9" class="text-center">No dormitories found. Click "Add Dormitory" to create one.</td>
-                                            </tr>
-                                            <?php endif; ?>
-                                        </tbody>
-                                    </table>
+                            <div class="progress mt-2">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: <?php echo min($occupancy_rate, 100); ?>%; 
+                                            background-color: <?php echo $dorm_color; ?>;" 
+                                     aria-valuenow="<?php echo $dorm['current_occupancy']; ?>" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="<?php echo $dorm['total_capacity']; ?>">
+                                    <?php echo $occupancy_rate; ?>%
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Dormitory Overview -->
-        <div class="row mb-4">
-            <?php foreach ($dormitories as $dorm): 
-                $available = max(0, $dorm['total_capacity'] - $dorm['current_occupancy']);
-                $occupancy_rate = $dorm['total_capacity'] > 0 ? 
-                    round(($dorm['current_occupancy'] / $dorm['total_capacity']) * 100, 1) : 0;
-                $dorm_color = $dorm['dorm_type'] == 'Male' ? '#007bff' : '#e83e8c';
-            ?>
-            <div class="col-md-6 mb-3">
-                <div class="card">
-                    <div class="card-header" style="background-color: <?php echo $dorm_color; ?>; color: white;">
-                        <h5 class="mb-0">
-                            <i class="fas fa-<?php echo $dorm['dorm_type'] == 'Male' ? 'male' : 'female'; ?> me-2"></i>
-                            <?php echo htmlspecialchars($dorm['dorm_name']); ?> Dormitory
-                            <span class="badge bg-light text-dark float-end">
-                                <?php echo $dorm['current_occupancy'] . '/' . $dorm['total_capacity']; ?> Beds
-                            </span>
-                        </h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p><strong>Type:</strong> <?php echo $dorm['dorm_type']; ?></p>
-                                <p><strong>Rooms:</strong> <?php echo $dorm['rooms_count']; ?></p>
-                                <p><strong>Capacity per Room:</strong> <?php echo $dorm['capacity_per_room']; ?></p>
-                            </div>
-                            <div class="col-md-6">
-                                <p><strong>Total Capacity:</strong> <?php echo $dorm['total_capacity']; ?></p>
-                                <p><strong>Current Occupancy:</strong> <?php echo $dorm['current_occupancy']; ?></p>
-                                <p><strong>Available:</strong> 
-                                    <span class="badge bg-<?php echo ($available > 0) ? 'success' : 'danger'; ?>">
-                                        <?php echo $available; ?> beds
-                                    </span>
-                                </p>
-                            </div>
-                        </div>
-                        <div class="progress mt-2">
-                            <div class="progress-bar" role="progressbar" 
-                                 style="width: <?php echo min($occupancy_rate, 100); ?>%; 
-                                        background-color: <?php echo $dorm_color; ?>;" 
-                                 aria-valuenow="<?php echo $dorm['current_occupancy']; ?>" 
-                                 aria-valuemin="0" 
-                                 aria-valuemax="<?php echo $dorm['total_capacity']; ?>">
-                                <?php echo $occupancy_rate; ?>%
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <?php endforeach; ?>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
 
         <!-- Search and Filter Section -->
@@ -962,7 +1032,10 @@ function getAvailableRooms($conn, $dormitory_id) {
                                 <tbody>
                                     <?php if (empty($all_assignments)): ?>
                                         <tr>
-                                            <td colspan="10" class="text-center">No dormitory assignments found.</td>
+                                            <td colspan="10" class="text-center py-4">
+                                                <i class="fas fa-bed fa-2x text-muted d-block mb-2"></i>
+                                                <p class="text-muted">No dormitory assignments found.</p>
+                                            </td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($all_assignments as $index => $assignment): 
@@ -1094,7 +1167,10 @@ function getAvailableRooms($conn, $dormitory_id) {
                                 <tbody>
                                     <?php if (empty($male_assignments)): ?>
                                         <tr>
-                                            <td colspan="9" class="text-center">No male dormitory assignments found.</td>
+                                            <td colspan="9" class="text-center py-4">
+                                                <i class="fas fa-bed fa-2x text-muted d-block mb-2"></i>
+                                                <p class="text-muted">No male dormitory assignments found.</p>
+                                            </td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($male_assignments as $index => $assignment): 
@@ -1218,7 +1294,10 @@ function getAvailableRooms($conn, $dormitory_id) {
                                 <tbody>
                                     <?php if (empty($female_assignments)): ?>
                                         <tr>
-                                            <td colspan="9" class="text-center">No female dormitory assignments found.</td>
+                                            <td colspan="9" class="text-center py-4">
+                                                <i class="fas fa-bed fa-2x text-muted d-block mb-2"></i>
+                                                <p class="text-muted">No female dormitory assignments found.</p>
+                                            </td>
                                         </tr>
                                     <?php else: ?>
                                         <?php foreach ($female_assignments as $index => $assignment): 
@@ -1317,15 +1396,123 @@ function getAvailableRooms($conn, $dormitory_id) {
     </div>
 </div>
 
+<!-- ============================================= -->
+<!-- MODALS -->
+<!-- ============================================= -->
+
+<!-- Add Dormitory Modal -->
+<div class="modal fade" id="addDormitoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
+                <h5 class="modal-title"><i class="fas fa-plus-circle me-2"></i>Add New Dormitory</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="">
+                <div class="modal-body">
+                    <input type="hidden" name="add_dormitory_modal" value="1">
+                    <input type="hidden" name="school_id" value="<?php echo $current_school_id ?: 0; ?>">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Dormitory Name *</label>
+                        <input type="text" class="form-control" name="dorm_name" placeholder="e.g., Magufuli, Safina" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Type *</label>
+                        <select class="form-select" name="dorm_type" required>
+                            <option value="">Select Type...</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Rooms Count *</label>
+                            <input type="number" class="form-control" name="rooms_count" min="1" placeholder="e.g., 10" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Capacity/Room *</label>
+                            <input type="number" class="form-control" name="capacity_per_room" min="1" placeholder="e.g., 6" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control" name="description" placeholder="Optional description">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Add Dormitory
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Dormitory Modal -->
+<div class="modal fade" id="editDormitoryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
+                <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Dormitory</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="">
+                <div class="modal-body">
+                    <input type="hidden" name="edit_dormitory_modal" value="1">
+                    <input type="hidden" name="dormitory_id" id="editDormId">
+                    <input type="hidden" name="school_id" value="<?php echo $current_school_id ?: 0; ?>">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Dormitory Name *</label>
+                        <input type="text" class="form-control" name="dorm_name" id="editDormName" required>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Rooms Count *</label>
+                            <input type="number" class="form-control" name="rooms_count" id="editDormRooms" min="1" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Capacity per Room *</label>
+                            <input type="number" class="form-control" name="capacity_per_room" id="editDormCapacity" min="1" required>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <input type="text" class="form-control" name="description" id="editDormDescription" placeholder="Optional description">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" name="status" id="editDormStatus">
+                            <option value="Active">Active</option>
+                            <option value="Full">Full</option>
+                            <option value="Maintenance">Maintenance</option>
+                            <option value="Closed">Closed</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-2"></i>Update Dormitory
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Assign Dormitory Modal -->
-<div class="modal fade" id="assignDormitoryModal" tabindex="-1" aria-labelledby="assignDormitoryModalLabel" aria-hidden="true">
+<div class="modal fade" id="assignDormitoryModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header" style="background-color: #3B9DB3; color: white;">
                 <h5 class="modal-title" id="assignDormitoryModalLabel">
                     <i class="fas fa-bed me-2"></i>Assign Student to Dormitory
                 </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="">
                 <div class="modal-body">
@@ -1335,7 +1522,6 @@ function getAvailableRooms($conn, $dormitory_id) {
                             <select class="form-select" id="studentSelect" name="student_id" required>
                                 <option value="">Choose student...</option>
                                 <?php foreach ($all_students as $student): 
-                                    // Check if student already has assignment
                                     $has_assignment = false;
                                     foreach ($all_assignments as $assignment) {
                                         if ($assignment['student_id'] == $student['id']) {
@@ -1357,7 +1543,6 @@ function getAvailableRooms($conn, $dormitory_id) {
                             <label for="dormitorySelect" class="form-label">Select Dormitory *</label>
                             <select class="form-select" id="dormitorySelect" name="dormitory_id" required onchange="loadRooms(this.value)">
                                 <option value="">Choose dormitory...</option>
-                                <!-- Dormitories will be filtered by gender -->
                             </select>
                         </div>
                     </div>
@@ -1372,43 +1557,15 @@ function getAvailableRooms($conn, $dormitory_id) {
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="bedNumber" class="form-label">Bed Number (Optional)</label>
-                            <input type="text" class="form-control" id="bedNumber" name="bed_number" 
-                                   placeholder="e.g., Bed 1, Bunk A, etc.">
+                            <input type="text" class="form-control" id="bedNumber" name="bed_number" placeholder="e.g., Bed 1, Bunk A">
                             <div class="form-text">Leave empty for automatic bed assignment</div>
-                        </div>
-                    </div>
-                    
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        <strong>Dormitory Capacities:</strong>
-                        <div class="row mt-2">
-                            <div class="col-md-6">
-                                <h6>Male Dormitories:</h6>
-                                <ul class="mb-2">
-                                    <li><strong>Magufuli:</strong> 20 rooms (A1-B10), 6 students per room</li>
-                                    <li><strong>Sokoine:</strong> 20 rooms (A1-B10), 6 students per room</li>
-                                    <li><strong>Mwandu:</strong> 20 rooms (A1-B10), 6 students per room</li>
-                                    <li><strong>Nyerere:</strong> 10 rooms (A1-A10), 12 students per room</li>
-                                    <li><strong>Kisutu Juu:</strong> 5 rooms (A1-A5), 6 students per room</li>
-                                    <li><strong>Kisutu Bombani:</strong> 2 rooms (A1, B1), 12 students per room</li>
-                                    <li><strong>Kisutu Chini:</strong> 2 rooms (A1, B1), 6 students per room</li>
-                                    <li><strong>Kisutu Prison:</strong> 7 rooms (A1-A7), 2 students per room</li>
-                                </ul>
-                            </div>
-                            <div class="col-md-6">
-                                <h6>Female Dormitories:</h6>
-                                <ul class="mb-2">
-                                    <li><strong>Safina:</strong> 16 rooms (A1-B8), 10 students per room</li>
-                                    <li><strong>Samia:</strong> 20 rooms (A1-B10), 6 students per room</li>
-                                </ul>
-                            </div>
                         </div>
                     </div>
                     
                     <div class="alert alert-warning">
                         <i class="fas fa-exclamation-triangle me-2"></i>
                         <strong>Note:</strong> Only active Form Five and Form Six students can be assigned to dormitories.
-                        Leavers and graduated students will be automatically removed from dormitories.
+                        Leavers and graduated students will be automatically removed.
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -1423,21 +1580,19 @@ function getAvailableRooms($conn, $dormitory_id) {
 </div>
 
 <!-- Edit Assignment Modal -->
-<div class="modal fade" id="editAssignmentModal" tabindex="-1" aria-labelledby="editAssignmentModalLabel" aria-hidden="true">
+<div class="modal fade" id="editAssignmentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header" style="background-color: #3B9DB3; color: white;">
-                <h5 class="modal-title" id="editAssignmentModalLabel">
-                    <i class="fas fa-edit me-2"></i>Edit Dormitory Assignment
-                </h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Dormitory Assignment</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="">
                 <div class="modal-body">
                     <input type="hidden" id="editAssignmentId" name="assignment_id">
                     <div class="alert alert-warning mb-3">
                         <i class="fas fa-exclamation-triangle me-2"></i>
-                        You are editing assignment for: <strong id="editStudentName"></strong>
+                        Editing assignment for: <strong id="editStudentName"></strong>
                     </div>
                     
                     <div class="row">
@@ -1445,7 +1600,6 @@ function getAvailableRooms($conn, $dormitory_id) {
                             <label for="editDormitorySelect" class="form-label">Select Dormitory *</label>
                             <select class="form-select" id="editDormitorySelect" name="dormitory_id" required onchange="loadEditRooms(this.value)">
                                 <option value="">Choose dormitory...</option>
-                                <!-- Dormitories will be filtered by gender -->
                             </select>
                         </div>
                         <div class="col-md-6 mb-3">
@@ -1457,13 +1611,10 @@ function getAvailableRooms($conn, $dormitory_id) {
                         </div>
                     </div>
                     
-                    <div class="row">
-                        <div class="col-md-12 mb-3">
-                            <label for="editBedNumber" class="form-label">Bed Number (Optional)</label>
-                            <input type="text" class="form-control" id="editBedNumber" name="bed_number" 
-                                   placeholder="e.g., Bed 1, Bunk A, etc.">
-                            <div class="form-text">Leave empty to remove bed assignment</div>
-                        </div>
+                    <div class="mb-3">
+                        <label for="editBedNumber" class="form-label">Bed Number (Optional)</label>
+                        <input type="text" class="form-control" id="editBedNumber" name="bed_number" placeholder="e.g., Bed 1, Bunk A">
+                        <div class="form-text">Leave empty to remove bed assignment</div>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -1477,71 +1628,20 @@ function getAvailableRooms($conn, $dormitory_id) {
     </div>
 </div>
 
-<!-- Edit Dormitory Modal -->
-<div class="modal fade" id="editDormitoryModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
-                <h5 class="modal-title"><i class="fas fa-edit me-2"></i>Edit Dormitory</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <form method="POST" action="dormitory_actions.php">
-                <div class="modal-body">
-                    <input type="hidden" name="dormitory_id" id="editDormId">
-                    <input type="hidden" name="school_id" value="<?php echo $current_school_id; ?>">
-                    
-                    <div class="mb-3">
-                        <label class="form-label">Dormitory Name *</label>
-                        <input type="text" class="form-control" name="dorm_name" id="editDormName" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Rooms Count *</label>
-                        <input type="number" class="form-control" name="rooms_count" id="editDormRooms" min="1" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Capacity per Room *</label>
-                        <input type="number" class="form-control" name="capacity_per_room" id="editDormCapacity" min="1" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Description</label>
-                        <input type="text" class="form-control" name="description" id="editDormDescription" placeholder="Optional description">
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label">Status</label>
-                        <select class="form-select" name="status" id="editDormStatus">
-                            <option value="Active">Active</option>
-                            <option value="Full">Full</option>
-                            <option value="Maintenance">Maintenance</option>
-                            <option value="Closed">Closed</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" name="edit_dormitory" class="btn btn-primary">
-                        <i class="fas fa-save me-2"></i>Update Dormitory
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
 <!-- Remove Assignment Confirmation Modal -->
 <div class="modal fade" id="removeAssignmentModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header bg-danger text-white">
                 <h5 class="modal-title"><i class="fas fa-trash me-2"></i>Remove Assignment</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body text-center">
                 <i class="fas fa-user-times fa-3x text-danger mb-3"></i>
                 <h5 class="mb-3">Remove dormitory assignment?</h5>
                 <p class="mb-2">Student: <strong id="removeStudentName"></strong></p>
                 <p class="text-danger">
-                    <small>This will free up the bed space for other students.<br>
-                    The bed will become available immediately.</small>
+                    <small>This will free up the bed space for other students.</small>
                 </p>
             </div>
             <div class="modal-footer justify-content-center">
@@ -1559,7 +1659,9 @@ function getAvailableRooms($conn, $dormitory_id) {
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.all.min.js"></script>
 
 <script>
-// Show SweetAlert2 notifications
+// =============================================
+// NOTIFICATIONS
+// =============================================
 document.addEventListener('DOMContentLoaded', function() {
     const successMessage = document.getElementById('successMessage');
     const errorMessage = document.getElementById('errorMessage');
@@ -1601,23 +1703,18 @@ document.addEventListener('DOMContentLoaded', function() {
             timerProgressBar: true,
         });
     }
-    
-    // Auto-refresh page every 5 minutes to update statistics
-    setTimeout(() => {
-        location.reload();
-    }, 300000); // 5 minutes
 });
 
-// Filter dormitories by gender when student is selected
+// =============================================
+// FILTER DORMITORIES BY GENDER
+// =============================================
 document.getElementById('studentSelect').addEventListener('change', function() {
     const selectedOption = this.options[this.selectedIndex];
     const studentGender = selectedOption.getAttribute('data-gender');
     const dormitorySelect = document.getElementById('dormitorySelect');
     
-    // Clear existing options
     dormitorySelect.innerHTML = '<option value="">Choose dormitory...</option>';
     
-    // Add dormitories matching the student's gender
     <?php foreach ($dormitories as $dorm): 
         $available = max(0, $dorm['total_capacity'] - $dorm['current_occupancy']);
     ?>
@@ -1629,13 +1726,14 @@ document.getElementById('studentSelect').addEventListener('change', function() {
         }
     <?php endforeach; ?>
     
-    // Reset room selection
     document.getElementById('roomSelect').innerHTML = '<option value="">Select dormitory first</option>';
     document.getElementById('roomSelect').disabled = true;
     document.getElementById('roomInfo').innerHTML = '';
 });
 
-// Load available rooms for dormitory
+// =============================================
+// LOAD ROOMS FOR DORMITORY
+// =============================================
 function loadRooms(dormitoryId) {
     if (!dormitoryId) {
         document.getElementById('roomSelect').innerHTML = '<option value="">Select dormitory first</option>';
@@ -1644,7 +1742,6 @@ function loadRooms(dormitoryId) {
         return;
     }
     
-    // Show loading
     document.getElementById('roomInfo').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading rooms...';
     
     fetch(`get_rooms.php?dormitory_id=${dormitoryId}`)
@@ -1664,7 +1761,6 @@ function loadRooms(dormitoryId) {
                 });
                 roomSelect.disabled = false;
                 
-                // Update dormitory info
                 document.getElementById('roomInfo').innerHTML = 
                     `<strong>${data.dormitory.dorm_name}:</strong> ${data.statistics.active_students}/${data.statistics.total_capacity} beds occupied, ${data.statistics.real_available_beds} beds available`;
                 
@@ -1684,7 +1780,6 @@ function loadRooms(dormitoryId) {
         });
 }
 
-// Load available rooms for edit modal
 function loadEditRooms(dormitoryId) {
     if (!dormitoryId) {
         document.getElementById('editRoomSelect').innerHTML = '<option value="">Select dormitory first</option>';
@@ -1693,7 +1788,6 @@ function loadEditRooms(dormitoryId) {
         return;
     }
     
-    // Show loading
     document.getElementById('editRoomInfo').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading rooms...';
     
     fetch(`get_rooms.php?dormitory_id=${dormitoryId}`)
@@ -1713,7 +1807,6 @@ function loadEditRooms(dormitoryId) {
                 });
                 roomSelect.disabled = false;
                 
-                // Update dormitory info
                 document.getElementById('editRoomInfo').innerHTML = 
                     `<strong>${data.dormitory.dorm_name}:</strong> ${data.statistics.active_students}/${data.statistics.total_capacity} beds occupied, ${data.statistics.real_available_beds} beds available`;
                 
@@ -1733,7 +1826,9 @@ function loadEditRooms(dormitoryId) {
         });
 }
 
-// Edit assignment button click
+// =============================================
+// EDIT ASSIGNMENT BUTTON
+// =============================================
 document.addEventListener('DOMContentLoaded', function() {
     const editButtons = document.querySelectorAll('.edit-assignment');
     editButtons.forEach(button => {
@@ -1749,7 +1844,6 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('editStudentName').textContent = studentName;
             document.getElementById('editBedNumber').value = bedNumber || '';
             
-            // Filter dormitories by student gender
             const editDormitorySelect = document.getElementById('editDormitorySelect');
             editDormitorySelect.innerHTML = '<option value="">Choose dormitory...</option>';
             
@@ -1767,11 +1861,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             <?php endforeach; ?>
             
-            // Load rooms for the current dormitory
             if (dormitoryId) {
                 loadEditRooms(dormitoryId);
-                
-                // Set the current room as selected after rooms are loaded
                 setTimeout(() => {
                     const editRoomSelect = document.getElementById('editRoomSelect');
                     if (editRoomSelect && roomId) {
@@ -1783,7 +1874,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Edit Dormitory button click
+// =============================================
+// EDIT DORMITORY BUTTON
+// =============================================
 document.addEventListener('DOMContentLoaded', function() {
     const editDormButtons = document.querySelectorAll('.edit-dorm-btn');
     editDormButtons.forEach(button => {
@@ -1798,7 +1891,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Remove assignment button click
+// =============================================
+// REMOVE ASSIGNMENT BUTTON
+// =============================================
 document.addEventListener('DOMContentLoaded', function() {
     const removeButtons = document.querySelectorAll('.remove-assignment');
     removeButtons.forEach(button => {
@@ -1815,7 +1910,9 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// Search functionality
+// =============================================
+// SEARCH AND FILTER
+// =============================================
 document.getElementById('searchInput').addEventListener('keyup', function() {
     const searchValue = this.value.toLowerCase();
     const activeTab = document.querySelector('.tab-pane.active');
@@ -1823,7 +1920,6 @@ document.getElementById('searchInput').addEventListener('keyup', function() {
     
     if (table) {
         const rows = table.querySelectorAll('tbody tr');
-        
         rows.forEach(row => {
             const text = row.textContent.toLowerCase();
             row.style.display = text.includes(searchValue) ? '' : 'none';
@@ -1831,7 +1927,6 @@ document.getElementById('searchInput').addEventListener('keyup', function() {
     }
 });
 
-// Filter functionality
 document.getElementById('genderFilter').addEventListener('change', filterTable);
 document.getElementById('classFilter').addEventListener('change', filterTable);
 document.getElementById('dormitoryFilter').addEventListener('change', filterTable);
@@ -1843,33 +1938,25 @@ function filterTable() {
     const dormitoryFilter = document.getElementById('dormitoryFilter').value;
     const statusFilter = document.getElementById('statusFilter').value;
     
-    // Get the active tab's table
     const activeTab = document.querySelector('.tab-pane.active');
     const table = activeTab ? activeTab.querySelector('table') : null;
-    
     if (!table) return;
     
     const rows = table.querySelectorAll('tbody tr');
-    
     rows.forEach(row => {
-        if (row.cells.length < 8) return; // Skip empty rows
+        if (row.cells.length < 8) return;
         
         const rowGender = row.cells[2] ? row.cells[2].textContent.trim() : '';
         const rowClass = row.cells[3] ? row.cells[3].querySelectorAll('.badge')[0]?.textContent.trim() || '' : '';
         const rowDormitory = row.cells[4] ? row.cells[4].textContent.trim() : '';
-        const rowStatus = row.cells[8] ? row.cells[8].textContent.trim() : '';
         
         const showGender = !genderFilter || rowGender === genderFilter;
         const showClass = !classFilter || rowClass === classFilter;
         const showDormitory = !dormitoryFilter || rowDormitory === dormitoryFilter;
         
-        // For status filter
         let showStatus = true;
         if (statusFilter === 'assigned') {
             showStatus = row.style.display !== 'none';
-        } else if (statusFilter === 'unassigned') {
-            // This would need additional logic for unassigned students table
-            showStatus = true;
         }
         
         row.style.display = (showGender && showClass && showDormitory && showStatus) ? '' : 'none';
@@ -1879,14 +1966,12 @@ function filterTable() {
 // Reset filters on tab change
 document.querySelectorAll('#dormitoryTabs button').forEach(tab => {
     tab.addEventListener('click', function() {
-        // Clear filters
         document.getElementById('genderFilter').value = '';
         document.getElementById('classFilter').value = '';
         document.getElementById('dormitoryFilter').value = '';
         document.getElementById('statusFilter').value = 'all';
         document.getElementById('searchInput').value = '';
         
-        // Show all rows in the new tab
         setTimeout(() => {
             const activeTab = document.querySelector('.tab-pane.active');
             const table = activeTab ? activeTab.querySelector('table') : null;
@@ -1902,7 +1987,7 @@ document.querySelectorAll('#dormitoryTabs button').forEach(tab => {
 </script>
 
 <style>
-/* DORMITORY MANAGEMENT PAGE SPECIFIC STYLES */
+/* DORMITORY MANAGEMENT PAGE STYLES */
 .avatar-circle {
     width: 40px;
     height: 40px;
@@ -1993,6 +2078,56 @@ document.querySelectorAll('#dormitoryTabs button').forEach(tab => {
     color: white !important;
 }
 
+.stats-card.simple-card {
+    border: none;
+    border-radius: 15px;
+    padding: 20px;
+    text-align: center;
+    background: white;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+}
+
+.stats-card.simple-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: #3B9DB3;
+}
+
+.stats-card.simple-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.stats-card.simple-card .stats-icon {
+    margin-bottom: 10px;
+}
+
+.stats-card.simple-card .stats-icon i {
+    font-size: 2.2rem;
+}
+
+.stats-card.simple-card h3 {
+    font-size: 1.8rem;
+    font-weight: bold;
+    color: #333;
+    margin: 10px 0;
+}
+
+.stats-card.simple-card p {
+    color: #666;
+    font-size: 0.9rem;
+    margin: 0;
+    font-weight: 500;
+}
+
 @media (max-width: 768px) {
     .avatar-circle {
         width: 35px;
@@ -2024,6 +2159,15 @@ document.querySelectorAll('#dormitoryTabs button').forEach(tab => {
     
     .table-responsive {
         font-size: 0.9rem;
+    }
+    
+    .stats-card.simple-card {
+        padding: 15px;
+        margin-bottom: 15px;
+    }
+    
+    .stats-card.simple-card h3 {
+        font-size: 1.5rem;
     }
 }
 </style>

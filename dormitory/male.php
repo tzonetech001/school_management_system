@@ -1,5 +1,4 @@
 <?php
-
 require_once '../controller/db_connect.php';
 
 $error = '';
@@ -8,7 +7,7 @@ $success = '';
 // current_school_id provided by db_connect.php
 $current_school_id = isset($current_school_id) ? $current_school_id : null;
 
-// Check if user has permission (Head Master or Second Master only)
+// Check if user has permission
 $admin_id = $_SESSION['admin_id'] ?? 0;
 
 // Get current user's roles
@@ -21,24 +20,27 @@ $user_role_ids = [];
 while ($row = $user_roles_result->fetch_assoc()) {
     $user_role_ids[] = $row['role_id'];
 }
+$stmt->close();
 
-// Check if user has Head Master (1) or Second Master (2) role
+// Check if user has Head Master (1), Second Master (2), or Dormitory Teacher (7) role
 $has_permission = false;
 foreach ($user_role_ids as $role_id) {
-    if ($role_id == 1 || $role_id == 2 || $role_id == 7) { // Head Master or Second Master
+    if ($role_id == 1 || $role_id == 2 || $role_id == 7) {
         $has_permission = true;
         break;
     }
 }
 
-if (!$has_permission) {
+// Also check if user is super admin
+$is_super_admin = isset($_SESSION['super_admin_id']);
+
+if (!$has_permission && !$is_super_admin) {
     $_SESSION['error'] = "You don't have permission to view staff members.";
-    header("Location:  ../404.php");
+    header("Location: ../404.php");
     exit();
 }
 
-
-// Get all roles from database (excluding Super Admin if it exists)
+// Get all roles from database
 $roles = [];
 $roles_sql = "SELECT * FROM admin_roles WHERE role_name != 'Super Admin' ORDER BY role_name";
 $roles_result = mysqli_query($conn, $roles_sql);
@@ -48,10 +50,14 @@ if ($roles_result && mysqli_num_rows($roles_result) > 0) {
     }
 }
 
-// Function to update room occupancy
+// ==================== FUNCTIONS ====================
+
+/**
+ * Update room occupancy
+ */
 function updateRoomOccupancy($conn, $room_id) {
     global $current_school_id;
-    $school_cond = ($current_school_id !== null) ? " AND school_id = $current_school_id" : "";
+    $school_cond = ($current_school_id !== null) ? " AND school_id = " . intval($current_school_id) : "";
     $update_sql = "UPDATE dormitory_rooms 
                    SET current_occupancy = (
                        SELECT COUNT(*) FROM student_dormitory 
@@ -61,10 +67,12 @@ function updateRoomOccupancy($conn, $room_id) {
     return mysqli_query($conn, $update_sql);
 }
 
-// Function to update dormitory occupancy
+/**
+ * Update dormitory occupancy
+ */
 function updateDormitoryOccupancy($conn, $dormitory_id) {
     global $current_school_id;
-    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
+    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = " . intval($current_school_id) : "";
     $update_sql = "UPDATE dormitories 
                    SET current_occupancy = (
                        SELECT COUNT(DISTINCT sd.id) 
@@ -76,11 +84,13 @@ function updateDormitoryOccupancy($conn, $dormitory_id) {
     return mysqli_query($conn, $update_sql);
 }
 
-// Function to remove leavers/graduated students from dormitories - UPDATED
+/**
+ * Remove leavers/graduated students from dormitories
+ */
 function removeLeaversFromDormitories($conn) {
     $removed_count = 0;
     global $current_school_id;
-    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
+    $school_cond = ($current_school_id !== null) ? " AND sd.school_id = " . intval($current_school_id) : "";
 
     // Find male students who are leavers or graduated but still have active assignments
     $leavers_sql = "SELECT sd.id as assignment_id, sd.room_id, sd.dormitory_id, 
@@ -101,20 +111,20 @@ function removeLeaversFromDormitories($conn) {
     if ($leavers_result && mysqli_num_rows($leavers_result) > 0) {
         while ($row = mysqli_fetch_assoc($leavers_result)) {
             $assignment_id = $row['assignment_id'];
-            $student_name = $row['student_name'];
             $room_id = $row['room_id'];
             $dormitory_id = $row['dormitory_id'];
             
-            // Use the stored procedure to properly remove the assignment
-            $remove_sql = "CALL remove_dormitory_assignment($assignment_id, 'Auto-removed: Student is leaver/graduated')";
-            if (mysqli_multi_query($conn, $remove_sql)) {
-                // Consume all results
-                while (mysqli_more_results($conn) && mysqli_next_result($conn));
-                
+            // Update assignment status directly
+            $update_sql = "UPDATE student_dormitory 
+                           SET status = 'Left', 
+                               notes = CONCAT(COALESCE(notes, ''), ' | Auto-removed: Student is leaver/graduated'),
+                               updated_at = CURRENT_TIMESTAMP
+                           WHERE id = $assignment_id";
+            
+            if (mysqli_query($conn, $update_sql)) {
                 // Update occupancies
                 updateRoomOccupancy($conn, $room_id);
                 updateDormitoryOccupancy($conn, $dormitory_id);
-                
                 $removed_count++;
             }
         }
@@ -127,58 +137,16 @@ function removeLeaversFromDormitories($conn) {
     return $removed_count;
 }
 
-// Function to clean up dormitory assignments for deleted student
-function cleanupStudentDormitoryAssignments($conn, $student_id) {
-    $cleaned_count = 0;
-    
-    // Get all active assignments for this student
-    $assignments_sql = "SELECT id, room_id, dormitory_id FROM student_dormitory 
-                       WHERE student_id = $student_id AND status = 'Active'" . ($current_school_id !== null ? " AND school_id = $current_school_id" : "");
-    $assignments_result = mysqli_query($conn, $assignments_sql);
-    
-    if ($assignments_result && mysqli_num_rows($assignments_result) > 0) {
-        while ($row = mysqli_fetch_assoc($assignments_result)) {
-            $assignment_id = $row['id'];
-            $room_id = $row['room_id'];
-            $dormitory_id = $row['dormitory_id'];
-            
-            // Use stored procedure to remove assignment
-            $procedure_sql = "CALL remove_dormitory_assignment($assignment_id, 'Auto-removed: Student deleted from system')";
-            
-            if (mysqli_multi_query($conn, $procedure_sql)) {
-                // Consume all results
-                while (mysqli_more_results($conn) && mysqli_next_result($conn));
-                
-                // Update occupancies
-                updateRoomOccupancy($conn, $room_id);
-                updateDormitoryOccupancy($conn, $dormitory_id);
-                
-                $cleaned_count++;
-            }
-        }
-    }
-    
-    return $cleaned_count;
-}
-
-// Run automatic removal check at the beginning
+// Run automatic removal check
 removeLeaversFromDormitories($conn);
 
-// Handle cleanup for deleted student
-if (isset($_GET['cleanup_student'])) {
-    $student_id = mysqli_real_escape_string($conn, $_GET['cleanup_student']);
-    $cleaned_count = cleanupStudentDormitoryAssignments($conn, $student_id);
-    
-    if ($cleaned_count > 0) {
-        $_SESSION['info'] = "Cleaned up $cleaned_count dormitory assignments for deleted student.";
-    }
-    
-    header("Location: male.php");
-    exit();
+// Build school filter
+$school_filter = "";
+if ($current_school_id !== null) {
+    $school_filter = " AND s.school_id = " . intval($current_school_id);
 }
 
-    // Get all active male students (Form Five and Six, not leavers/graduated)
-$school_filter = ($current_school_id !== null) ? " AND s.school_id = $current_school_id" : "";
+// Get all active male students (Form Five and Six, not leavers/graduated)
 $male_students_sql = "SELECT s.* FROM students s 
                      WHERE s.sex = 'Male' 
                      AND s.is_leaver = FALSE 
@@ -196,15 +164,17 @@ if ($male_result && mysqli_num_rows($male_result) > 0) {
 }
 
 // Get all dormitory assignments for active male students
-$sd_school_filter = ($current_school_id !== null) ? " AND sd.school_id = $current_school_id" : "";
+$sd_school_filter = "";
+if ($current_school_id !== null) {
+    $sd_school_filter = " AND sd.school_id = " . intval($current_school_id);
+}
+
 $assignments_sql = "SELECT sd.*, s.first_name, s.last_name, s.index_number, s.class, s.combination,
                    s.is_leaver, s.graduation_status,
                    d.dorm_name, d.dorm_type, dr.room_number, dr.room_label, 
                    dr.capacity as room_capacity,
                    dr.current_occupancy as room_occupancy,
-                   dr.status as room_status,
-                   (SELECT COUNT(*) FROM student_dormitory sd2 
-                    WHERE sd2.room_id = dr.id AND sd2.status = 'Active') as active_in_room
+                   dr.status as room_status
                    FROM student_dormitory sd
                    JOIN students s ON sd.student_id = s.id
                    JOIN dormitories d ON sd.dormitory_id = d.id
@@ -226,7 +196,10 @@ if ($assignments_result && mysqli_num_rows($assignments_result) > 0) {
 }
 
 // Get male dormitories for dropdown
-$dorm_school_filter = ($current_school_id !== null) ? " AND school_id = $current_school_id" : "";
+$dorm_school_filter = "";
+if ($current_school_id !== null) {
+    $dorm_school_filter = " AND school_id = " . intval($current_school_id);
+}
 $dormitories_sql = "SELECT * FROM dormitories 
                    WHERE dorm_type = 'Male' 
                    AND status IN ('Active', 'Full') $dorm_school_filter
@@ -254,7 +227,7 @@ foreach ($dormitories as $dorm) {
 }
 $available_beds = max(0, $total_beds - $occupied_beds);
 
-// Handle dormitory assignment using stored procedure
+// ==================== HANDLE ASSIGN STUDENT ====================
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_student'])) {
     $student_id = mysqli_real_escape_string($conn, $_POST['student_id']);
     $dormitory_id = mysqli_real_escape_string($conn, $_POST['dormitory_id']);
@@ -279,38 +252,31 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_student'])) {
             throw new Exception("Student already has an active dormitory assignment!");
         }
         
-        // Use the stored procedure for assignment
-        $procedure_sql = "CALL assign_student_to_dormitory(
-            $student_id, 
-            $dormitory_id, 
-            $room_id, 
-            '$bed_number', 
-            $assigned_by, 
-            'Assigned via male.php'
-        )";
+        // Check if room has capacity
+        $room_check_sql = "SELECT capacity, current_occupancy FROM dormitory_rooms WHERE id = $room_id";
+        $room_check_result = mysqli_query($conn, $room_check_sql);
+        $room_data = mysqli_fetch_assoc($room_check_result);
         
-        if (mysqli_multi_query($conn, $procedure_sql)) {
-            // Get the result
-            if ($result = mysqli_store_result($conn)) {
-                $proc_result = mysqli_fetch_assoc($result);
-                mysqli_free_result($result);
-            }
-            
-            // Consume all results
-            while (mysqli_more_results($conn) && mysqli_next_result($conn));
-            
-            if (isset($proc_result['status']) && $proc_result['status'] == 'SUCCESS') {
-                // Update occupancies
-                updateRoomOccupancy($conn, $room_id);
-                updateDormitoryOccupancy($conn, $dormitory_id);
-                
-                $_SESSION['success'] = $proc_result['message'];
-            } else {
-                throw new Exception("Failed to assign dormitory.");
-            }
-        } else {
-            throw new Exception("Error calling assignment procedure: " . mysqli_error($conn));
+        if ($room_data && $room_data['current_occupancy'] >= $room_data['capacity']) {
+            throw new Exception("Room is already at full capacity!");
         }
+        
+        // Insert assignment directly
+        $insert_sql = "INSERT INTO student_dormitory (student_id, dormitory_id, room_id, bed_number, assigned_by, status, notes, school_id) 
+                       VALUES (?, ?, ?, ?, ?, 'Active', 'Assigned via male.php', ?)";
+        $insert_stmt = $conn->prepare($insert_sql);
+        $insert_stmt->bind_param("iiisii", $student_id, $dormitory_id, $room_id, $bed_number, $assigned_by, $current_school_id);
+        
+        if ($insert_stmt->execute()) {
+            // Update occupancies
+            updateRoomOccupancy($conn, $room_id);
+            updateDormitoryOccupancy($conn, $dormitory_id);
+            
+            $_SESSION['success'] = "Student $student_name assigned to dormitory successfully!";
+        } else {
+            throw new Exception("Failed to assign: " . $insert_stmt->error);
+        }
+        $insert_stmt->close();
         
         header("Location: male.php");
         exit();
@@ -322,15 +288,14 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['assign_student'])) {
     }
 }
 
-// Handle update dormitory assignment using stored procedure
+// ==================== HANDLE UPDATE ASSIGNMENT ====================
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_assignment'])) {
     $assignment_id = mysqli_real_escape_string($conn, $_POST['assignment_id']);
     $new_dormitory_id = mysqli_real_escape_string($conn, $_POST['dormitory_id']);
     $new_room_id = mysqli_real_escape_string($conn, $_POST['room_id']);
     $new_bed_number = mysqli_real_escape_string($conn, $_POST['bed_number']);
-    $updated_by = $_SESSION['admin_id'];
     
-    // Get old room and dormitory info for occupancy updates
+    // Get old room and dormitory info
     $old_info_sql = "SELECT room_id, dormitory_id FROM student_dormitory WHERE id = $assignment_id";
     $old_info_result = mysqli_query($conn, $old_info_sql);
     $old_info = mysqli_fetch_assoc($old_info_result);
@@ -338,42 +303,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_assignment'])) 
     $old_dormitory_id = $old_info['dormitory_id'];
     
     try {
-        // Use the stored procedure for update
-        $procedure_sql = "CALL update_student_dormitory(
-            $assignment_id,
-            $new_dormitory_id,
-            $new_room_id,
-            '$new_bed_number',
-            $updated_by,
-            'Updated via male.php'
-        )";
+        // Check if new room has capacity
+        $room_check_sql = "SELECT capacity, current_occupancy FROM dormitory_rooms WHERE id = $new_room_id";
+        $room_check_result = mysqli_query($conn, $room_check_sql);
+        $room_data = mysqli_fetch_assoc($room_check_result);
         
-        if (mysqli_multi_query($conn, $procedure_sql)) {
-            // Get the result
-            if ($result = mysqli_store_result($conn)) {
-                $proc_result = mysqli_fetch_assoc($result);
-                mysqli_free_result($result);
-            }
-            
-            // Consume all results
-            while (mysqli_more_results($conn) && mysqli_next_result($conn));
-            
-            if (isset($proc_result['status']) && $proc_result['status'] == 'SUCCESS') {
-                // Update occupancies for old room/dormitory
-                updateRoomOccupancy($conn, $old_room_id);
-                updateDormitoryOccupancy($conn, $old_dormitory_id);
-                
-                // Update occupancies for new room/dormitory
-                updateRoomOccupancy($conn, $new_room_id);
-                updateDormitoryOccupancy($conn, $new_dormitory_id);
-                
-                $_SESSION['success'] = $proc_result['message'];
-            } else {
-                throw new Exception("Failed to update assignment.");
-            }
-        } else {
-            throw new Exception("Error calling update procedure: " . mysqli_error($conn));
+        if ($room_data && $room_data['current_occupancy'] >= $room_data['capacity']) {
+            throw new Exception("New room is already at full capacity!");
         }
+        
+        // Update assignment
+        $update_sql = "UPDATE student_dormitory 
+                       SET dormitory_id = ?, room_id = ?, bed_number = ?, notes = CONCAT(COALESCE(notes, ''), ' | Updated via male.php'), updated_at = CURRENT_TIMESTAMP
+                       WHERE id = ?";
+        $update_stmt = $conn->prepare($update_sql);
+        $update_stmt->bind_param("iisi", $new_dormitory_id, $new_room_id, $new_bed_number, $assignment_id);
+        
+        if ($update_stmt->execute()) {
+            // Update occupancies
+            updateRoomOccupancy($conn, $old_room_id);
+            updateDormitoryOccupancy($conn, $old_dormitory_id);
+            updateRoomOccupancy($conn, $new_room_id);
+            updateDormitoryOccupancy($conn, $new_dormitory_id);
+            
+            $_SESSION['success'] = "Assignment updated successfully!";
+        } else {
+            throw new Exception("Failed to update: " . $update_stmt->error);
+        }
+        $update_stmt->close();
         
         header("Location: male.php");
         exit();
@@ -385,16 +342,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_assignment'])) 
     }
 }
 
-// Handle remove assignment using stored procedure - UPDATED
+// ==================== HANDLE REMOVE ASSIGNMENT ====================
 if (isset($_GET['remove_assignment'])) {
     $assignment_id = mysqli_real_escape_string($conn, $_GET['remove_assignment']);
     
     try {
-        // Get assignment details first
-        $get_sql = "SELECT sd.*, s.first_name, s.last_name 
-                   FROM student_dormitory sd
-                   JOIN students s ON sd.student_id = s.id
-                   WHERE sd.id = $assignment_id";
+        // Get assignment details
+        $get_sql = "SELECT room_id, dormitory_id FROM student_dormitory WHERE id = $assignment_id";
         $get_result = mysqli_query($conn, $get_sql);
         $assignment_data = mysqli_fetch_assoc($get_result);
         
@@ -402,34 +356,24 @@ if (isset($_GET['remove_assignment'])) {
             throw new Exception("Assignment not found.");
         }
         
-        $student_name = $assignment_data['first_name'] . ' ' . $assignment_data['last_name'];
         $room_id = $assignment_data['room_id'];
         $dormitory_id = $assignment_data['dormitory_id'];
         
-        // Use the stored procedure for removal
-        $procedure_sql = "CALL remove_dormitory_assignment($assignment_id, 'Removed by admin via male.php')";
+        // Update assignment status
+        $update_sql = "UPDATE student_dormitory 
+                       SET status = 'Left', 
+                           notes = CONCAT(COALESCE(notes, ''), ' | Removed by admin via male.php'),
+                           updated_at = CURRENT_TIMESTAMP
+                       WHERE id = $assignment_id";
         
-        if (mysqli_multi_query($conn, $procedure_sql)) {
-            // Get the result
-            if ($result = mysqli_store_result($conn)) {
-                $proc_result = mysqli_fetch_assoc($result);
-                mysqli_free_result($result);
-            }
+        if (mysqli_query($conn, $update_sql)) {
+            // Update occupancies
+            updateRoomOccupancy($conn, $room_id);
+            updateDormitoryOccupancy($conn, $dormitory_id);
             
-            // Consume all results
-            while (mysqli_more_results($conn) && mysqli_next_result($conn));
-            
-            if (isset($proc_result['status']) && $proc_result['status'] == 'SUCCESS') {
-                // Update occupancies
-                updateRoomOccupancy($conn, $room_id);
-                updateDormitoryOccupancy($conn, $dormitory_id);
-                
-                $_SESSION['success'] = $proc_result['message'];
-            } else {
-                throw new Exception("Failed to remove assignment.");
-            }
+            $_SESSION['success'] = "Assignment removed successfully!";
         } else {
-            throw new Exception("Error calling removal procedure: " . mysqli_error($conn));
+            throw new Exception("Failed to remove: " . mysqli_error($conn));
         }
         
         header("Location: male.php");
@@ -442,45 +386,34 @@ if (isset($_GET['remove_assignment'])) {
     }
 }
 
-// Handle remove student from dormitory (when student is deleted/marked as leaver from other pages)
+// ==================== HANDLE REMOVE STUDENT DORMITORY ====================
 if (isset($_GET['remove_student_dormitory'])) {
     $student_id = mysqli_real_escape_string($conn, $_GET['remove_student_dormitory']);
     
     try {
-        // Get all assignments for this student
+        // Get all active assignments for this student
         $get_assignments_sql = "SELECT id, room_id, dormitory_id FROM student_dormitory 
                                WHERE student_id = $student_id AND status = 'Active'";
         $assignments_result = mysqli_query($conn, $get_assignments_sql);
         
         $removed_count = 0;
-        $rooms_to_update = [];
-        $dormitories_to_update = [];
         
         while ($assignment = mysqli_fetch_assoc($assignments_result)) {
             $assignment_id = $assignment['id'];
             $room_id = $assignment['room_id'];
             $dormitory_id = $assignment['dormitory_id'];
             
-            // Use stored procedure
-            $procedure_sql = "CALL remove_dormitory_assignment($assignment_id, 'Auto-removed: Student deleted/marked as leaver')";
+            $update_sql = "UPDATE student_dormitory 
+                           SET status = 'Left', 
+                               notes = CONCAT(COALESCE(notes, ''), ' | Auto-removed: Student deleted/marked as leaver'),
+                               updated_at = CURRENT_TIMESTAMP
+                           WHERE id = $assignment_id";
             
-            if (mysqli_multi_query($conn, $procedure_sql)) {
-                // Consume all results
-                while (mysqli_more_results($conn) && mysqli_next_result($conn));
-                
-                $rooms_to_update[] = $room_id;
-                $dormitories_to_update[] = $dormitory_id;
+            if (mysqli_query($conn, $update_sql)) {
+                updateRoomOccupancy($conn, $room_id);
+                updateDormitoryOccupancy($conn, $dormitory_id);
                 $removed_count++;
             }
-        }
-        
-        // Update occupancies
-        foreach (array_unique($rooms_to_update) as $room_id) {
-            updateRoomOccupancy($conn, $room_id);
-        }
-        
-        foreach (array_unique($dormitories_to_update) as $dormitory_id) {
-            updateDormitoryOccupancy($conn, $dormitory_id);
         }
         
         if ($removed_count > 0) {
@@ -499,7 +432,7 @@ if (isset($_GET['remove_student_dormitory'])) {
     }
 }
 
-// Function to get available rooms (for JavaScript)
+// ==================== FUNCTION: Get available rooms ====================
 function getAvailableRooms($conn, $dormitory_id) {
     $rooms_sql = "SELECT dr.*, (dr.capacity - dr.current_occupancy) as available_beds
                  FROM dormitory_rooms dr
@@ -518,7 +451,7 @@ function getAvailableRooms($conn, $dormitory_id) {
     return $rooms;
 }
 
-// Function to get student dormitory info
+// ==================== FUNCTION: Get student dormitory info ====================
 function getStudentDormitoryInfo($conn, $student_id) {
     $sql = "SELECT sd.*, d.dorm_name, dr.room_number 
             FROM student_dormitory sd
@@ -533,6 +466,7 @@ function getStudentDormitoryInfo($conn, $student_id) {
     return null;
 }
 ?>
+
 <?php include '../controller/header.php'; ?>
 <?php include '../controller/sidebar.php'; ?>
 
@@ -615,52 +549,61 @@ function getStudentDormitoryInfo($conn, $student_id) {
 
         <!-- Dormitory Overview -->
         <div class="row mb-4">
-            <?php foreach ($dormitories as $dorm): 
-                $available = max(0, $dorm['total_capacity'] - $dorm['current_occupancy']);
-                $occupancy_rate = $dorm['total_capacity'] > 0 ? 
-                    round(($dorm['current_occupancy'] / $dorm['total_capacity']) * 100, 1) : 0;
-            ?>
-            <div class="col-md-6 mb-3">
-                <div class="card">
-                    <div class="card-header" style="background-color: #007bff; color: white;">
-                        <h5 class="mb-0">
-                            <i class="fas fa-building me-2"></i>
-                            <?php echo htmlspecialchars($dorm['dorm_name']); ?> Dormitory
-                            <span class="badge bg-light text-dark float-end">
-                                <?php echo $dorm['current_occupancy'] . '/' . $dorm['total_capacity']; ?> Beds
-                            </span>
-                        </h5>
+            <?php if (empty($dormitories)): ?>
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i>
+                        No male dormitories found. Please add a dormitory first.
                     </div>
-                    <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <p><strong>Type:</strong> <?php echo $dorm['dorm_type']; ?></p>
-                                <p><strong>Rooms:</strong> <?php echo $dorm['rooms_count']; ?></p>
-                                <p><strong>Capacity per Room:</strong> <?php echo $dorm['capacity_per_room']; ?></p>
-                            </div>
-                            <div class="col-md-6">
-                                <p><strong>Total Capacity:</strong> <?php echo $dorm['total_capacity']; ?></p>
-                                <p><strong>Current Occupancy:</strong> <?php echo $dorm['current_occupancy']; ?></p>
-                                <p><strong>Available:</strong> 
-                                    <span class="badge bg-<?php echo ($available > 0) ? 'success' : 'danger'; ?>">
-                                        <?php echo $available; ?> beds
-                                    </span>
-                                </p>
-                            </div>
+                </div>
+            <?php else: ?>
+                <?php foreach ($dormitories as $dorm): 
+                    $available = max(0, $dorm['total_capacity'] - $dorm['current_occupancy']);
+                    $occupancy_rate = $dorm['total_capacity'] > 0 ? 
+                        round(($dorm['current_occupancy'] / $dorm['total_capacity']) * 100, 1) : 0;
+                ?>
+                <div class="col-md-6 mb-3">
+                    <div class="card">
+                        <div class="card-header" style="background-color: #007bff; color: white;">
+                            <h5 class="mb-0">
+                                <i class="fas fa-building me-2"></i>
+                                <?php echo htmlspecialchars($dorm['dorm_name']); ?> Dormitory
+                                <span class="badge bg-light text-dark float-end">
+                                    <?php echo $dorm['current_occupancy'] . '/' . $dorm['total_capacity']; ?> Beds
+                                </span>
+                            </h5>
                         </div>
-                        <div class="progress mt-2">
-                            <div class="progress-bar" role="progressbar" 
-                                 style="width: <?php echo min($occupancy_rate, 100); ?>%; background-color: #007bff;" 
-                                 aria-valuenow="<?php echo $dorm['current_occupancy']; ?>" 
-                                 aria-valuemin="0" 
-                                 aria-valuemax="<?php echo $dorm['total_capacity']; ?>">
-                                <?php echo $occupancy_rate; ?>%
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <p><strong>Type:</strong> <?php echo $dorm['dorm_type']; ?></p>
+                                    <p><strong>Rooms:</strong> <?php echo $dorm['rooms_count']; ?></p>
+                                    <p><strong>Capacity per Room:</strong> <?php echo $dorm['capacity_per_room']; ?></p>
+                                </div>
+                                <div class="col-md-6">
+                                    <p><strong>Total Capacity:</strong> <?php echo $dorm['total_capacity']; ?></p>
+                                    <p><strong>Current Occupancy:</strong> <?php echo $dorm['current_occupancy']; ?></p>
+                                    <p><strong>Available:</strong> 
+                                        <span class="badge bg-<?php echo ($available > 0) ? 'success' : 'danger'; ?>">
+                                            <?php echo $available; ?> beds
+                                        </span>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="progress mt-2">
+                                <div class="progress-bar" role="progressbar" 
+                                     style="width: <?php echo min($occupancy_rate, 100); ?>%; background-color: #007bff;" 
+                                     aria-valuenow="<?php echo $dorm['current_occupancy']; ?>" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="<?php echo $dorm['total_capacity']; ?>">
+                                    <?php echo $occupancy_rate; ?>%
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            <?php endforeach; ?>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
 
         <!-- Search and Filter Section -->
@@ -701,24 +644,10 @@ function getStudentDormitoryInfo($conn, $student_id) {
                         </select>
                     </div>
                     <div class="col-md-2">
-                        <select id="roomFilter" class="form-select">
-                            <option value="">All Rooms</option>
-                            <?php 
-                            $rooms_sql = "SELECT DISTINCT room_number FROM dormitory_rooms dr 
-                                        JOIN dormitories d ON dr.dormitory_id = d.id 
-                                        WHERE d.dorm_type = 'Male' 
-                                        ORDER BY room_number";
-                            $rooms_result = mysqli_query($conn, $rooms_sql);
-                            if ($rooms_result):
-                                while ($room = mysqli_fetch_assoc($rooms_result)): 
-                            ?>
-                            <option value="<?php echo htmlspecialchars($room['room_number']); ?>">
-                                <?php echo htmlspecialchars($room['room_number']); ?>
-                            </option>
-                            <?php 
-                                endwhile;
-                            endif; 
-                            ?>
+                        <select id="statusFilter" class="form-select">
+                            <option value="all">All Students</option>
+                            <option value="assigned">Assigned Only</option>
+                            <option value="unassigned">Unassigned Only</option>
                         </select>
                     </div>
                 </div>
@@ -727,8 +656,7 @@ function getStudentDormitoryInfo($conn, $student_id) {
 
         <!-- Assigned Students Table -->
         <div class="card">
-            <div class="card-header" style=" background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
-    color: var(--white);">
+            <div class="card-header" style="background: linear-gradient(135deg, var(--primary-color), var(--primary-dark)); color: var(--white);">
                 <h4 class="mb-0">
                     <i class="fas fa-list me-2"></i>
                     Male Dormitory Assignments
@@ -745,8 +673,8 @@ function getStudentDormitoryInfo($conn, $student_id) {
                                 <th>Full Name</th>
                                 <th>Class</th>
                                 <th>Dormitory</th>
-                                <th>Room Number</th>
-                                <th>Bed Number</th>
+                                <th>Room</th>
+                                <th>Bed</th>
                                 <th>Room Capacity</th>
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -755,7 +683,10 @@ function getStudentDormitoryInfo($conn, $student_id) {
                         <tbody>
                             <?php if (empty($assignments)): ?>
                                 <tr>
-                                    <td colspan="10" class="text-center">No dormitory assignments found.</td>
+                                    <td colspan="10" class="text-center py-4">
+                                        <i class="fas fa-bed fa-2x text-muted d-block mb-2"></i>
+                                        <p class="text-muted">No male dormitory assignments found.</p>
+                                    </td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($assignments as $index => $assignment): 
@@ -1260,13 +1191,13 @@ document.getElementById('searchInput').addEventListener('keyup', function() {
 document.getElementById('classFilter').addEventListener('change', filterTable);
 document.getElementById('combinationFilter').addEventListener('change', filterTable);
 document.getElementById('dormitoryFilter').addEventListener('change', filterTable);
-document.getElementById('roomFilter').addEventListener('change', filterTable);
+document.getElementById('statusFilter').addEventListener('change', filterTable);
 
 function filterTable() {
     const classFilter = document.getElementById('classFilter').value;
     const combinationFilter = document.getElementById('combinationFilter').value;
     const dormitoryFilter = document.getElementById('dormitoryFilter').value;
-    const roomFilter = document.getElementById('roomFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
     
     const rows = document.querySelectorAll('#assignmentsTable tbody tr');
     
@@ -1276,30 +1207,24 @@ function filterTable() {
         const rowClass = row.cells[3].querySelectorAll('.badge')[0]?.textContent.trim() || '';
         const rowCombination = row.cells[2].querySelector('.text-muted')?.textContent.trim() || '';
         const rowDormitory = row.cells[4].textContent.trim();
-        const rowRoom = row.cells[5].textContent.trim();
+        const rowStatus = row.cells[8].textContent.trim();
         
         const showClass = !classFilter || rowClass === classFilter;
         const showCombination = !combinationFilter || rowCombination === combinationFilter;
         const showDormitory = !dormitoryFilter || rowDormitory === dormitoryFilter;
-        const showRoom = !roomFilter || rowRoom === roomFilter;
         
-        row.style.display = (showClass && showCombination && showDormitory && showRoom) ? '' : 'none';
+        // Status filter
+        let showStatus = true;
+        if (statusFilter === 'assigned') {
+            showStatus = true;
+        } else if (statusFilter === 'unassigned') {
+            // This would show unassigned students - handled differently
+            showStatus = false;
+        }
+        
+        row.style.display = (showClass && showCombination && showDormitory && showStatus) ? '' : 'none';
     });
 }
-
-// Reset filters on page load
-document.addEventListener('DOMContentLoaded', function() {
-    // Clear filters
-    document.getElementById('classFilter').value = '';
-    document.getElementById('combinationFilter').value = '';
-    document.getElementById('dormitoryFilter').value = '';
-    document.getElementById('roomFilter').value = '';
-    
-    // Auto-refresh page every 5 minutes to update statistics
-    setTimeout(() => {
-        location.reload();
-    }, 300000); // 5 minutes
-});
 </script>
 
 <style>

@@ -418,6 +418,12 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
             </a>
             <ul class="sub-menu">
                 <li>
+                    <a href="../dormitory/add_dormitory" class="<?php echo ($current_page == 'add_dormitory.php') ? 'active' : ''; ?>">
+                        <i class="fas fa-bed"></i>
+                        <span>Add Dormitory</span>
+                    </a>
+                </li>
+                <li>
                     <a href="../dormitory/dormitory" class="<?php echo ($current_page == 'dormitory.php') ? 'active' : ''; ?>">
                         <i class="fas fa-bed"></i>
                         <span>Manage Dorms</span>

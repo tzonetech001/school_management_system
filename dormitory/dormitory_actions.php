@@ -3,6 +3,23 @@
 session_start();
 require_once '../controller/db_connect.php';
 
+// Enable error reporting for debugging
+error_reporting(E_ALL);
+ini_set('display_errors', 1);
+ini_set('log_errors', 1);
+
+// Debug log function
+function debug_log($message, $data = null) {
+    $log_entry = date('Y-m-d H:i:s') . " - " . $message;
+    if ($data !== null) {
+        $log_entry .= " - " . print_r($data, true);
+    }
+    error_log($log_entry);
+    file_put_contents('dormitory_debug.log', $log_entry . "\n", FILE_APPEND);
+}
+
+debug_log("=== DORMITORY ACTION STARTED ===");
+
 $admin_id = $_SESSION['admin_id'] ?? 0;
 $current_school_id = $_SESSION['school_id'] ?? 0;
 
@@ -20,7 +37,11 @@ if ($current_school_id == 0 && $admin_id > 0) {
     $school_stmt->close();
 }
 
-// Check if user has permission
+debug_log("Admin ID: " . $admin_id);
+debug_log("School ID: " . $current_school_id);
+debug_log("POST data: " . print_r($_POST, true));
+
+// Check user permissions
 $user_roles_sql = "SELECT role_id FROM admin_role_assignments WHERE admin_id = ?";
 $stmt = $conn->prepare($user_roles_sql);
 $stmt->bind_param("i", $admin_id);
@@ -30,37 +51,71 @@ $user_role_ids = [];
 while ($row = $user_roles_result->fetch_assoc()) {
     $user_role_ids[] = $row['role_id'];
 }
+$stmt->close();
 
 $has_permission = false;
 foreach ($user_role_ids as $role_id) {
-    if ($role_id == 1 || $role_id == 2 || $role_id == 7) { // Head Master, Second Master, Dormitory Teacher
+    if ($role_id == 1 || $role_id == 2 || $role_id == 7) {
         $has_permission = true;
         break;
     }
 }
 
-// Also check if user is super admin
 $is_super_admin = isset($_SESSION['super_admin_id']);
 
 if (!$has_permission && !$is_super_admin) {
+    debug_log("Permission denied for admin: " . $admin_id);
     $_SESSION['error'] = "You don't have permission to perform this action.";
     header("Location: ../404.php");
     exit();
 }
 
-// Get school_id from POST or use session
-$school_id = isset($_POST['school_id']) ? intval($_POST['school_id']) : $current_school_id;
-
 // ==================== ADD DORMITORY ====================
 if (isset($_POST['add_dormitory'])) {
+    debug_log("=== ADD DORMITORY REQUEST RECEIVED ===");
+    
+    $school_id = isset($_POST['school_id']) ? intval($_POST['school_id']) : $current_school_id;
+    
+    // If school_id is still 0, try to get from admin
+    if ($school_id == 0 && $admin_id > 0) {
+        $school_sql = "SELECT school_id FROM admins WHERE id = ?";
+        $school_stmt = $conn->prepare($school_sql);
+        $school_stmt->bind_param("i", $admin_id);
+        $school_stmt->execute();
+        $school_result = $school_stmt->get_result();
+        if ($school_row = $school_result->fetch_assoc()) {
+            $school_id = $school_row['school_id'];
+            $_SESSION['school_id'] = $school_id;
+        }
+        $school_stmt->close();
+    }
+    
+    debug_log("School ID to use: " . $school_id);
+    
+    if ($school_id <= 0) {
+        debug_log("ERROR: Invalid school_id: " . $school_id);
+        $_SESSION['error'] = "Invalid school ID. Please ensure you are logged in correctly.";
+        header("Location: dormitory.php");
+        exit();
+    }
+    
     $dorm_name = mysqli_real_escape_string($conn, trim($_POST['dorm_name']));
     $dorm_type = mysqli_real_escape_string($conn, $_POST['dorm_type']);
     $rooms_count = intval($_POST['rooms_count']);
     $capacity_per_room = intval($_POST['capacity_per_room']);
     $description = mysqli_real_escape_string($conn, trim($_POST['description'] ?? ''));
     
+    debug_log("Form Data:", [
+        'dorm_name' => $dorm_name,
+        'dorm_type' => $dorm_type,
+        'rooms_count' => $rooms_count,
+        'capacity_per_room' => $capacity_per_room,
+        'description' => $description
+    ]);
+    
     // Validate
     if (empty($dorm_name) || empty($dorm_type) || $rooms_count < 1 || $capacity_per_room < 1) {
+        debug_log("ERROR: Validation failed");
         $_SESSION['error'] = "All fields are required. Please fill all fields.";
         header("Location: dormitory.php");
         exit();
@@ -74,6 +129,7 @@ if (isset($_POST['add_dormitory'])) {
     $check_result = $check_stmt->get_result();
     
     if ($check_result->num_rows > 0) {
+        debug_log("ERROR: Dormitory already exists: " . $dorm_name);
         $_SESSION['error'] = "Dormitory '$dorm_name' already exists in this school.";
         header("Location: dormitory.php");
         exit();
@@ -82,47 +138,70 @@ if (isset($_POST['add_dormitory'])) {
     
     // Calculate total capacity
     $total_capacity = $rooms_count * $capacity_per_room;
+    $status = 'Active';
     
-    // Insert dormitory
-    $insert_sql = "INSERT INTO dormitories (dorm_name, dorm_type, rooms_count, capacity_per_room, total_capacity, description, status, school_id) 
-                   VALUES (?, ?, ?, ?, ?, ?, 'Active', ?)";
-    $insert_stmt = $conn->prepare($insert_sql);
-    $insert_stmt->bind_param("ssiiisi", $dorm_name, $dorm_type, $rooms_count, $capacity_per_room, $total_capacity, $description, $school_id);
+    debug_log("Inserting dormitory with data:", [
+        'dorm_name' => $dorm_name,
+        'dorm_type' => $dorm_type,
+        'rooms_count' => $rooms_count,
+        'capacity_per_room' => $capacity_per_room,
+        'total_capacity' => $total_capacity,
+        'description' => $description,
+        'status' => $status,
+        'school_id' => $school_id
+    ]);
     
-    if ($insert_stmt->execute()) {
-        $dormitory_id = $insert_stmt->insert_id;
+    // Start transaction
+    mysqli_begin_transaction($conn);
+    $success = false;
+    $dormitory_id = 0;
+    $rooms_created = 0;
+    
+    try {
+        // Insert dormitory
+        $insert_sql = "INSERT INTO dormitories (
+            dorm_name, dorm_type, rooms_count, capacity_per_room,
+            total_capacity, description, status, school_id,
+            current_occupancy, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, NOW(), NOW())";
         
-        // Create rooms for this dormitory
-        $rooms_created = 0;
-        $prefix = 'A';
-        $room_counter = 1;
-        
-        for ($i = 1; $i <= $rooms_count; $i++) {
-            // Generate room label (A1, A2, ... A10, B1, B2, ...)
-            if ($i > 10) {
-                $current_prefix = chr(ord($prefix) + floor(($i - 1) / 10));
-                $room_number = ($i - 1) % 10 + 1;
-                $room_label = $current_prefix . $room_number;
-            } else {
-                $room_label = $prefix . $i;
-            }
-            
-            $room_sql = "INSERT INTO dormitory_rooms (dormitory_id, room_number, room_label, capacity, current_occupancy, status, school_id) 
-                         VALUES (?, ?, ?, ?, 0, 'Available', ?)";
-            $room_stmt = $conn->prepare($room_sql);
-            $room_stmt->bind_param("issii", $dormitory_id, $room_label, $room_label, $capacity_per_room, $school_id);
-            
-            if ($room_stmt->execute()) {
-                $rooms_created++;
-            }
-            $room_stmt->close();
+        $insert_stmt = $conn->prepare($insert_sql);
+        if (!$insert_stmt) {
+            throw new Exception("Failed to prepare statement: " . $conn->error);
         }
         
-        $_SESSION['success'] = "Dormitory '$dorm_name' added successfully with $rooms_created rooms.";
-    } else {
-        $_SESSION['error'] = "Failed to add dormitory: " . $conn->error;
+        $insert_stmt->bind_param("ssiiissi", 
+            $dorm_name, $dorm_type, $rooms_count, $capacity_per_room,
+            $total_capacity, $description, $status, $school_id
+        );
+        
+        if (!$insert_stmt->execute()) {
+            throw new Exception("Failed to insert dormitory: " . $insert_stmt->error);
+        }
+        
+        $dormitory_id = $insert_stmt->insert_id;
+        $insert_stmt->close();
+        
+        debug_log("Dormitory inserted with ID: " . $dormitory_id);
+        
+        // Create rooms for this dormitory
+        $rooms_created = createRooms($conn, $dormitory_id, $rooms_count, $capacity_per_room, $school_id);
+        
+        debug_log("Rooms created: " . $rooms_created);
+        
+        if ($rooms_created > 0) {
+            mysqli_commit($conn);
+            $success = true;
+            $_SESSION['success'] = "Dormitory '$dorm_name' added successfully with $rooms_created rooms.";
+        } else {
+            throw new Exception("Failed to create rooms.");
+        }
+        
+    } catch (Exception $e) {
+        mysqli_rollback($conn);
+        debug_log("ERROR: " . $e->getMessage());
+        $_SESSION['error'] = "Failed to add dormitory: " . $e->getMessage();
     }
-    $insert_stmt->close();
     
     header("Location: dormitory.php");
     exit();
@@ -130,16 +209,42 @@ if (isset($_POST['add_dormitory'])) {
 
 // ==================== EDIT DORMITORY ====================
 if (isset($_POST['edit_dormitory'])) {
+    debug_log("=== EDIT DORMITORY REQUEST RECEIVED ===");
+    
     $dormitory_id = intval($_POST['dormitory_id']);
+    $school_id = isset($_POST['school_id']) ? intval($_POST['school_id']) : $current_school_id;
+    
+    if ($school_id == 0 && $admin_id > 0) {
+        $school_sql = "SELECT school_id FROM admins WHERE id = ?";
+        $school_stmt = $conn->prepare($school_sql);
+        $school_stmt->bind_param("i", $admin_id);
+        $school_stmt->execute();
+        $school_result = $school_stmt->get_result();
+        if ($school_row = $school_result->fetch_assoc()) {
+            $school_id = $school_row['school_id'];
+        }
+        $school_stmt->close();
+    }
+    
+    debug_log("Edit - Dormitory ID: " . $dormitory_id);
+    debug_log("Edit - School ID: " . $school_id);
+    
     $dorm_name = mysqli_real_escape_string($conn, trim($_POST['dorm_name']));
     $rooms_count = intval($_POST['rooms_count']);
     $capacity_per_room = intval($_POST['capacity_per_room']);
     $description = mysqli_real_escape_string($conn, trim($_POST['description'] ?? ''));
     $status = mysqli_real_escape_string($conn, $_POST['status'] ?? 'Active');
-    $school_id = intval($_POST['school_id'] ?? $current_school_id);
     
-    // Validate
+    debug_log("Edit Data:", [
+        'dorm_name' => $dorm_name,
+        'rooms_count' => $rooms_count,
+        'capacity_per_room' => $capacity_per_room,
+        'description' => $description,
+        'status' => $status
+    ]);
+    
     if (empty($dorm_name) || $rooms_count < 1 || $capacity_per_room < 1) {
+        debug_log("ERROR: Edit validation failed");
         $_SESSION['error'] = "All fields are required.";
         header("Location: dormitory.php");
         exit();
@@ -153,49 +258,75 @@ if (isset($_POST['edit_dormitory'])) {
     $check_result = $check_stmt->get_result();
     
     if ($check_result->num_rows > 0) {
+        debug_log("ERROR: Dormitory name already exists: " . $dorm_name);
         $_SESSION['error'] = "Dormitory '$dorm_name' already exists in this school.";
         header("Location: dormitory.php");
         exit();
     }
     $check_stmt->close();
     
-    // Calculate total capacity
     $total_capacity = $rooms_count * $capacity_per_room;
     
-    // Update dormitory
-    $update_sql = "UPDATE dormitories 
-                   SET dorm_name = ?, rooms_count = ?, capacity_per_room = ?, 
-                       total_capacity = ?, description = ?, status = ?
-                   WHERE id = ? AND school_id = ?";
-    $update_stmt = $conn->prepare($update_sql);
-    $update_stmt->bind_param("siiissii", $dorm_name, $rooms_count, $capacity_per_room, 
-                             $total_capacity, $description, $status, $dormitory_id, $school_id);
+    mysqli_begin_transaction($conn);
     
-    if ($update_stmt->execute()) {
-        // Update room capacities
-        $update_rooms_sql = "UPDATE dormitory_rooms SET capacity = ? WHERE dormitory_id = ? AND school_id = ?";
-        $update_rooms_stmt = $conn->prepare($update_rooms_sql);
-        $update_rooms_stmt->bind_param("iii", $capacity_per_room, $dormitory_id, $school_id);
-        $update_rooms_stmt->execute();
-        $update_rooms_stmt->close();
+    try {
+        $update_sql = "UPDATE dormitories 
+                       SET dorm_name = ?, rooms_count = ?, capacity_per_room = ?,
+                           total_capacity = ?, description = ?, status = ?,
+                           updated_at = NOW()
+                       WHERE id = ? AND school_id = ?";
         
-        // Ensure room statuses are correct
+        $update_stmt = $conn->prepare($update_sql);
+        if (!$update_stmt) {
+            throw new Exception("Failed to prepare update statement: " . $conn->error);
+        }
+        
+        $update_stmt->bind_param("siiissii", 
+            $dorm_name, $rooms_count, $capacity_per_room,
+            $total_capacity, $description, $status,
+            $dormitory_id, $school_id
+        );
+        
+        if (!$update_stmt->execute()) {
+            throw new Exception("Failed to update dormitory: " . $update_stmt->error);
+        }
+        $update_stmt->close();
+        
+        // Update room capacities
+        $update_rooms_sql = "UPDATE dormitory_rooms 
+                             SET capacity = ?, updated_at = NOW() 
+                             WHERE dormitory_id = ? AND school_id = ?";
+        $update_rooms_stmt = $conn->prepare($update_rooms_sql);
+        if ($update_rooms_stmt) {
+            $update_rooms_stmt->bind_param("iii", $capacity_per_room, $dormitory_id, $school_id);
+            $update_rooms_stmt->execute();
+            $update_rooms_stmt->close();
+        }
+        
+        // Update room statuses
         $update_status_sql = "UPDATE dormitory_rooms 
                               SET status = CASE 
                                   WHEN current_occupancy >= capacity THEN 'Full'
                                   ELSE 'Available'
-                              END
+                              END,
+                              updated_at = NOW()
                               WHERE dormitory_id = ? AND school_id = ?";
         $update_status_stmt = $conn->prepare($update_status_sql);
-        $update_status_stmt->bind_param("ii", $dormitory_id, $school_id);
-        $update_status_stmt->execute();
-        $update_status_stmt->close();
+        if ($update_status_stmt) {
+            $update_status_stmt->bind_param("ii", $dormitory_id, $school_id);
+            $update_status_stmt->execute();
+            $update_status_stmt->close();
+        }
         
+        mysqli_commit($conn);
+        debug_log("Dormitory updated successfully");
         $_SESSION['success'] = "Dormitory '$dorm_name' updated successfully.";
-    } else {
-        $_SESSION['error'] = "Failed to update dormitory: " . $conn->error;
+        
+    } catch (Exception $e) {
+        mysqli_rollback($conn);
+        debug_log("ERROR updating dormitory: " . $e->getMessage());
+        $_SESSION['error'] = "Failed to update dormitory: " . $e->getMessage();
     }
-    $update_stmt->close();
     
     header("Location: dormitory.php");
     exit();
@@ -203,8 +334,25 @@ if (isset($_POST['edit_dormitory'])) {
 
 // ==================== DELETE DORMITORY ====================
 if (isset($_GET['delete_dormitory'])) {
+    debug_log("=== DELETE DORMITORY REQUEST RECEIVED ===");
+    
     $dormitory_id = intval($_GET['delete_dormitory']);
-    $school_id = intval($_GET['school_id'] ?? $current_school_id);
+    $school_id = isset($_GET['school_id']) ? intval($_GET['school_id']) : $current_school_id;
+    
+    debug_log("Delete - Dormitory ID: " . $dormitory_id);
+    debug_log("Delete - School ID: " . $school_id);
+    
+    if ($school_id == 0 && $admin_id > 0) {
+        $school_sql = "SELECT school_id FROM admins WHERE id = ?";
+        $school_stmt = $conn->prepare($school_sql);
+        $school_stmt->bind_param("i", $admin_id);
+        $school_stmt->execute();
+        $school_result = $school_stmt->get_result();
+        if ($school_row = $school_result->fetch_assoc()) {
+            $school_id = $school_row['school_id'];
+        }
+        $school_stmt->close();
+    }
     
     // Check if dormitory has active students
     $check_sql = "SELECT COUNT(*) as count FROM student_dormitory 
@@ -217,56 +365,104 @@ if (isset($_GET['delete_dormitory'])) {
     $check_stmt->close();
     
     if ($check_row['count'] > 0) {
+        debug_log("ERROR: Dormitory has active students: " . $check_row['count']);
         $_SESSION['error'] = "Cannot delete dormitory. It has " . $check_row['count'] . " active students assigned.";
         header("Location: dormitory.php");
         exit();
     }
     
-    // Delete rooms first
-    $delete_rooms_sql = "DELETE FROM dormitory_rooms WHERE dormitory_id = ? AND school_id = ?";
-    $delete_rooms_stmt = $conn->prepare($delete_rooms_sql);
-    $delete_rooms_stmt->bind_param("ii", $dormitory_id, $school_id);
-    $delete_rooms_stmt->execute();
-    $delete_rooms_stmt->close();
+    mysqli_begin_transaction($conn);
     
-    // Delete dormitory
-    $delete_sql = "DELETE FROM dormitories WHERE id = ? AND school_id = ?";
-    $delete_stmt = $conn->prepare($delete_sql);
-    $delete_stmt->bind_param("ii", $dormitory_id, $school_id);
-    
-    if ($delete_stmt->execute()) {
+    try {
+        // Delete rooms
+        $delete_rooms_sql = "DELETE FROM dormitory_rooms WHERE dormitory_id = ? AND school_id = ?";
+        $delete_rooms_stmt = $conn->prepare($delete_rooms_sql);
+        if ($delete_rooms_stmt) {
+            $delete_rooms_stmt->bind_param("ii", $dormitory_id, $school_id);
+            $delete_rooms_stmt->execute();
+            $rooms_deleted = $delete_rooms_stmt->affected_rows;
+            debug_log("Rooms deleted: " . $rooms_deleted);
+            $delete_rooms_stmt->close();
+        }
+        
+        // Delete dormitory
+        $delete_sql = "DELETE FROM dormitories WHERE id = ? AND school_id = ?";
+        $delete_stmt = $conn->prepare($delete_sql);
+        if (!$delete_stmt) {
+            throw new Exception("Failed to prepare delete statement: " . $conn->error);
+        }
+        
+        $delete_stmt->bind_param("ii", $dormitory_id, $school_id);
+        
+        if (!$delete_stmt->execute()) {
+            throw new Exception("Failed to delete dormitory: " . $delete_stmt->error);
+        }
+        $delete_stmt->close();
+        
+        mysqli_commit($conn);
+        debug_log("Dormitory deleted successfully");
         $_SESSION['success'] = "Dormitory deleted successfully.";
-    } else {
-        $_SESSION['error'] = "Failed to delete dormitory: " . $conn->error;
+        
+    } catch (Exception $e) {
+        mysqli_rollback($conn);
+        debug_log("ERROR deleting dormitory: " . $e->getMessage());
+        $_SESSION['error'] = "Failed to delete dormitory: " . $e->getMessage();
     }
-    $delete_stmt->close();
     
     header("Location: dormitory.php");
     exit();
 }
 
-// ==================== UPDATE ROOM STATUS ====================
-if (isset($_POST['update_room_status'])) {
-    $room_id = intval($_POST['room_id']);
-    $status = mysqli_real_escape_string($conn, $_POST['status']);
-    $school_id = intval($_POST['school_id'] ?? $current_school_id);
+// ==================== HELPER FUNCTIONS ====================
+
+/**
+ * Create rooms for a dormitory
+ */
+function createRooms($conn, $dormitory_id, $rooms_count, $capacity_per_room, $school_id) {
+    $rooms_created = 0;
+    $prefix = 'A';
     
-    $update_sql = "UPDATE dormitory_rooms SET status = ? WHERE id = ? AND school_id = ?";
-    $update_stmt = $conn->prepare($update_sql);
-    $update_stmt->bind_param("sii", $status, $room_id, $school_id);
-    
-    if ($update_stmt->execute()) {
-        $_SESSION['success'] = "Room status updated successfully.";
-    } else {
-        $_SESSION['error'] = "Failed to update room status: " . $conn->error;
+    for ($i = 1; $i <= $rooms_count; $i++) {
+        // Generate room label (A1, A2, ... A10, B1, B2, ...)
+        if ($i > 10) {
+            $current_prefix = chr(ord($prefix) + floor(($i - 1) / 10));
+            $room_number = ($i - 1) % 10 + 1;
+            $room_label = $current_prefix . $room_number;
+        } else {
+            $room_label = $prefix . $i;
+        }
+        
+        $room_sql = "INSERT INTO dormitory_rooms (
+            dormitory_id, room_number, room_label, capacity,
+            current_occupancy, status, school_id,
+            created_at, updated_at
+        ) VALUES (?, ?, ?, ?, 0, 'Available', ?, NOW(), NOW())";
+        
+        $room_stmt = $conn->prepare($room_sql);
+        if (!$room_stmt) {
+            error_log("Failed to prepare room statement: " . $conn->error);
+            continue;
+        }
+        
+        $room_stmt->bind_param("issii", 
+            $dormitory_id, $room_label, $room_label, 
+            $capacity_per_room, $school_id
+        );
+        
+        if ($room_stmt->execute()) {
+            $rooms_created++;
+            error_log("Room created: " . $room_label . " for dormitory " . $dormitory_id);
+        } else {
+            error_log("Failed to create room $room_label: " . $room_stmt->error);
+        }
+        $room_stmt->close();
     }
-    $update_stmt->close();
     
-    header("Location: dormitory.php");
-    exit();
+    return $rooms_created;
 }
 
 // If no action specified, redirect back
+debug_log("No action specified, redirecting back");
 header("Location: dormitory.php");
 exit();
 ?>
