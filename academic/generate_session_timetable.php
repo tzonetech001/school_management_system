@@ -1,6 +1,8 @@
 <?php
 // generate_session_timetable.php - FIXED
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once '../controller/db_connect.php';
 
 if (!isset($_SESSION['admin_id'])) {
@@ -50,18 +52,21 @@ $days_joined = implode(', ', $selected_days);
 $generated_at_override = array_key_exists('generated_at_override', $_POST) ? $_POST['generated_at_override'] : null;
 $use_generated_at = null;
 if (array_key_exists('generated_at_override', $_POST)) {
-    if ($generated_at_override === null || $generated_at_override === '') {
-        $use_generated_at = null;
+    $raw_generated_at = trim((string) $generated_at_override);
+    if ($raw_generated_at === '') {
+        $use_generated_at = date('Y-m-d H:i:s');
     } else {
-        $use_generated_at = $generated_at_override;
+        $use_generated_at = $raw_generated_at;
     }
 } else {
     $use_generated_at = date('Y-m-d H:i:s');
 }
+$use_generated_at = $use_generated_at ?: date('Y-m-d H:i:s');
 
 $generated_by = array_key_exists('generated_by_override', $_POST) && intval($_POST['generated_by_override']) > 0 ? intval($_POST['generated_by_override']) : $admin_id;
 $last_updated_by = array_key_exists('last_updated_by_override', $_POST) && intval($_POST['last_updated_by_override']) > 0 ? intval($_POST['last_updated_by_override']) : $admin_id;
 $last_updated_at = array_key_exists('last_updated_at_override', $_POST) && !empty($_POST['last_updated_at_override']) ? $_POST['last_updated_at_override'] : date('Y-m-d H:i:s');
+$last_updated_at = $last_updated_at ?: date('Y-m-d H:i:s');
 
 // Get school_id
 $school_id_query = "SELECT school_id FROM admins WHERE id = $admin_id";
@@ -81,10 +86,29 @@ while ($row = mysqli_fetch_assoc($form6_result)) { $form6_combinations[] = $row[
 if (empty($form6_combinations)) { $form6_combinations = ['HGE', 'HGL', 'HGK', 'PCM', 'CBG', 'EGM', 'HGM']; }
 
 $subject_names = [
-    'ac' => 'Accountancy', 'htm' => 'Hotel Management', 'his' => 'History', 'geo' => 'Geography',
+    // Keep AC and HTM as short codes per request
+    'ac' => 'AC', 'htm' => 'HTM', 'his' => 'History', 'geo' => 'Geography',
     'kisw' => 'Kiswahili', 'eng' => 'English', 'b_math' => 'Basic Math', 'adv_m' => 'Advanced Math',
     'eco' => 'Economics', 'fren' => 'French', 'phy' => 'Physics', 'chem' => 'Chemistry',
     'bio' => 'Biology', 'civ' => 'Civics', 'lit' => 'Literature', 'comp' => 'Computer Science'
+];
+
+// Combination -> subject codes mapping for Form Five/Form Six
+$combination_subjects = [
+    'HGE' => ['ac', 'htm', 'his', 'geo', 'b_math', 'eco'],
+    'HGL' => ['ac', 'htm', 'his', 'geo', 'eng'],
+    'HGK' => ['ac', 'htm', 'his', 'geo', 'kisw'],
+    'HKL' => ['ac', 'htm', 'his', 'kisw', 'eng'],
+    'KLF' => ['ac', 'htm', 'kisw', 'eng', 'fren'],
+    'EGM' => ['ac', 'htm', 'geo', 'adv_m', 'eco'],
+    'HLF' => ['ac', 'htm', 'his', 'eng', 'fren'],
+    'HGF' => ['ac', 'htm', 'his', 'geo', 'fren']
+];
+
+// Subject short display labels
+$subject_display = [
+    'ac' => 'AC', 'htm' => 'HTM', 'his' => 'HIST', 'geo' => 'GEO', 'kisw' => 'KISW',
+    'eng' => 'ENG', 'b_math' => 'B/MATH', 'adv_m' => 'ADV/M', 'eco' => 'ECO', 'fren' => 'FREN'
 ];
 
 // Get teacher assignments
@@ -122,57 +146,161 @@ $school_name = "School Management System";
 $school_q = mysqli_query($conn, "SELECT s.school_name FROM admins a JOIN schools s ON a.school_id = s.id WHERE a.id = $admin_id");
 if ($row = mysqli_fetch_assoc($school_q)) { $school_name = $row['school_name']; }
 
-function generateClassTimetable($class_name, $selected_days, $schedule_rows, $subject_teachers, $subject_names) {
-    $available_subjects = array_keys($subject_teachers);
-    if (empty($available_subjects)) { $available_subjects = array_keys($subject_names); }
-    
-    $schedule = [];
-    $teacher_schedule = [];
+// ============================================================================
+// COORDINATED TIMETABLE SCHEDULER
+// All class timetables are built together so a teacher can NEVER be assigned to
+// two classes in the same day/session (hard constraint). For each slot we pick
+// a subject whose teacher is actually free, which both prevents clashes and
+// fills far more slots than the old "pick subject first, hope teacher is free"
+// approach. Randomisation makes each (re)generation differ from the last.
+// ============================================================================
+
+// Find a teacher for $subject who is not already teaching in the current
+// session. Prefers the class level's primary teacher, then any other level
+// teacher, then the shared cross-level pool. Returns null if none are free.
+function pickFreeTeacher($subject, $level_teachers, $global_pool, $busy_now) {
+    $candidates = [];
+    foreach (($level_teachers[$subject] ?? []) as $t) { $candidates[] = $t; }
+    foreach (($global_pool[$subject] ?? []) as $t) {
+        $dup = false;
+        foreach ($candidates as $c) { if ($c['teacher_id'] == $t['teacher_id']) { $dup = true; break; } }
+        if (!$dup) $candidates[] = $t;
+    }
+    usort($candidates, function($a, $b) { return ($b['is_primary'] ?? 0) <=> ($a['is_primary'] ?? 0); });
+    foreach ($candidates as $t) {
+        if (empty($busy_now[$t['teacher_id']])) return $t;
+    }
+    return null;
+}
+
+// Build the full schedule for every class. Returns [schedule, report, teacher_busy].
+function buildCoordinatedSchedule($classes, $selected_days, $schedule_rows, $subject_names, $global_pool) {
+    $schedule = [];      // [class_name][day][row_index] => cell
+    $report = ['unassigned' => [], 'skipped' => []];
+    $teacher_busy = [];  // [teacher_id][day][session_number] => true
+
     foreach ($selected_days as $day) {
-        $schedule[$day] = [];
-        $session_counter = 1;
+        // Per-class: subjects already used today (to avoid repeating within a day).
+        $used = [];
+        foreach ($classes as $c) {
+            $used[$c['name']] = [];
+            if (!isset($schedule[$c['name']])) $schedule[$c['name']] = [];
+            $schedule[$c['name']][$day] = [];
+        }
+
+        $session_number = 0;
         foreach ($schedule_rows as $row_index => $row) {
-            if ($row['type'] == 'session') {
-                $available_subjects_shuffled = $available_subjects;
-                shuffle($available_subjects_shuffled);
-                $assigned = false;
-                foreach ($available_subjects_shuffled as $subject) {
-                    $teachers = $subject_teachers[$subject] ?? [];
-                    if (empty($teachers)) continue;
-                    $teacher = null;
-                    foreach ($teachers as $t) { if ($t['is_primary'] == 1) { $teacher = $t; break; } }
-                    if (!$teacher && !empty($teachers)) { $teacher = $teachers[0]; }
-                    if ($teacher) {
-                        $teacher_key = $teacher['teacher_id'] . '_' . $day . '_' . $session_counter;
-                        if (!isset($teacher_schedule[$teacher_key])) {
-                            $schedule[$day][$row_index] = [
-                                'type' => 'session',
-                                'subject' => $subject,
-                                'subject_name' => $subject_names[$subject] ?? strtoupper($subject),
-                                'teacher_name' => $teacher['teacher_name']
-                            ];
-                            $teacher_schedule[$teacher_key] = true;
-                            $assigned = true;
-                            break;
-                        }
-                    }
+            if ($row['type'] !== 'session') {
+                foreach ($classes as $c) {
+                    $schedule[$c['name']][$day][$row_index] = ['type' => 'break', 'duration' => $row['duration']];
                 }
-                if (!$assigned) {
-                    $schedule[$day][$row_index] = [
+                continue;
+            }
+            $session_number++;
+
+            // Teachers already teaching in THIS day/session (across all classes).
+            $busy_now = [];
+
+            // Rotate which class picks first each session so no class is starved.
+            $order = array_keys($classes);
+            shuffle($order);
+
+            foreach ($order as $ci) {
+                $c = $classes[$ci];
+                $cname = $c['name'];
+
+                // Candidate subjects: those not used yet today; if all are used
+                // (more sessions than subjects) fall back to the full list.
+                $candidates = array_values(array_diff($c['subjects'], $used[$cname]));
+                if (empty($candidates)) $candidates = $c['subjects'];
+                shuffle($candidates);
+
+                $chosen_subject = null;
+                $chosen_teacher = null;
+
+                // Prefer a subject whose teacher is free right now.
+                foreach ($candidates as $subj) {
+                    $t = pickFreeTeacher($subj, $c['teachers'], $global_pool, $busy_now);
+                    if ($t !== null) { $chosen_subject = $subj; $chosen_teacher = $t; break; }
+                }
+
+                if ($chosen_subject === null) {
+                    // Every candidate's teacher is busy elsewhere this session.
+                    // Place a subject but leave it unassigned (never create a clash).
+                    $chosen_subject = $candidates[0];
+                    $schedule[$cname][$day][$row_index] = [
                         'type' => 'session',
-                        'subject' => 'TBA',
-                        'subject_name' => 'TBA',
+                        'subject' => $chosen_subject,
+                        'subject_name' => $subject_names[$chosen_subject] ?? strtoupper($chosen_subject),
                         'teacher_name' => 'Not Assigned'
                     ];
+                    $report['unassigned'][] = ['class' => $cname, 'day' => $day, 'session' => $session_number, 'subject' => $chosen_subject];
+                } else {
+                    $tid = $chosen_teacher['teacher_id'];
+                    $busy_now[$tid] = true;
+                    $teacher_busy[$tid][$day][$session_number] = true;
+                    $schedule[$cname][$day][$row_index] = [
+                        'type' => 'session',
+                        'subject' => $chosen_subject,
+                        'subject_name' => $subject_names[$chosen_subject] ?? strtoupper($chosen_subject),
+                        'teacher_name' => $chosen_teacher['teacher_name'],
+                        'teacher_id' => $tid
+                    ];
                 }
-                $session_counter++;
-            } else {
-                $schedule[$day][$row_index] = ['type' => 'break', 'duration' => $row['duration']];
+
+                if (!in_array($chosen_subject, $used[$cname])) $used[$cname][] = $chosen_subject;
             }
         }
     }
-    
-    $html = '<div class="timetable-section" style="margin-bottom: 30px;">';
+
+    return [$schedule, $report, $teacher_busy];
+}
+
+// Stable fingerprint of subject+teacher per class/day/slot, used to guarantee a
+// regenerated timetable is not identical to the previous one.
+function scheduleSignature($schedule) {
+    $parts = [];
+    ksort($schedule);
+    foreach ($schedule as $cname => $days) {
+        ksort($days);
+        foreach ($days as $day => $rows) {
+            ksort($rows);
+            foreach ($rows as $ri => $cell) {
+                if (($cell['type'] ?? '') !== 'session') continue;
+                $parts[] = $cname . '|' . $day . '|' . $ri . '|' . ($cell['subject'] ?? '') . '|' . ($cell['teacher_name'] ?? '');
+            }
+        }
+    }
+    return md5(implode("\n", $parts));
+}
+
+// Safety check: scan the finished schedule for any teacher assigned to two
+// classes in the same day/session. Should always return an empty array.
+function verifyNoClashes($schedule, $selected_days, $schedule_rows) {
+    $clashes = [];
+    foreach ($selected_days as $day) {
+        $seen = []; // [row_index][teacher_name] => class_name
+        foreach ($schedule as $cname => $days) {
+            foreach ($schedule_rows as $ri => $row) {
+                if ($row['type'] !== 'session') continue;
+                $cell = $days[$day][$ri] ?? null;
+                if (!$cell || ($cell['type'] ?? '') !== 'session') continue;
+                $tname = $cell['teacher_name'] ?? '';
+                if ($tname === '' || $tname === 'Not Assigned') continue;
+                if (isset($seen[$ri][$tname])) {
+                    $clashes[] = ['day' => $day, 'session_row' => $ri, 'teacher' => $tname, 'classes' => [$seen[$ri][$tname], $cname]];
+                } else {
+                    $seen[$ri][$tname] = $cname;
+                }
+            }
+        }
+    }
+    return $clashes;
+}
+
+// Render one class's timetable table from its computed day schedule.
+function renderClassTable($class_name, $selected_days, $schedule_rows, $day_schedule) {
+    $html  = '<div class="timetable-section" style="margin-bottom: 30px;">';
     $html .= '<table border="1" cellpadding="8" cellspacing="0" style="width: 100%; border-collapse: collapse;">';
     $html .= '<tr style="background-color: #2c7a8f; color: white;">';
     $html .= '<td colspan="' . (count($selected_days) + 1) . '" style="text-align: center; font-size: 14px; font-weight: bold; padding: 12px;">' . htmlspecialchars($class_name) . '</td>';
@@ -191,39 +319,16 @@ function generateClassTimetable($class_name, $selected_days, $schedule_rows, $su
         $html .= '<tr>';
         $html .= '<td style="background-color: #e8f4f8; font-weight: bold; padding: 10px;">' . htmlspecialchars($day) . '</td>';
         foreach ($schedule_rows as $row_index => $row) {
-            $cell = $schedule[$day][$row_index] ?? ['type' => 'session', 'subject_name' => 'TBA', 'teacher_name' => 'Not Assigned'];
-            if ($cell['type'] == 'break') {
-                $html .= '<td style="background-color: #ffffcc; text-align: center; vertical-align: middle;">';
-                $html .= '<strong>BREAK</strong><br><small>' . $cell['duration'] . ' min</small>';
-                $html .= '</td>';
+            $cell = $day_schedule[$day][$row_index] ?? ['type' => 'session', 'subject_name' => 'TBA', 'teacher_name' => 'Not Assigned'];
+            if (($cell['type'] ?? 'session') == 'break') {
+                $html .= '<td style="background-color: #ffffcc; text-align: center; vertical-align: middle;"><strong>BREAK</strong><br><small>' . ($cell['duration'] ?? '') . ' min</small></td>';
             } else {
-                $html .= '<td style="padding: 8px;">';
-                $html .= '<strong>' . htmlspecialchars($cell['subject_name']) . '</strong><br>';
-                $html .= '<small style="color: #666;">' . htmlspecialchars($cell['teacher_name']) . '</small>';
-                $html .= '</td>';
+                $html .= '<td style="padding: 8px;"><strong>' . htmlspecialchars($cell['subject_name']) . '</strong><br><small style="color: #666;">' . htmlspecialchars($cell['teacher_name']) . '</small></td>';
             }
         }
         $html .= '</tr>';
     }
-    $html .= '</table>';
-    
-    $displayed_teachers = [];
-    $html .= '<div style="margin-top: 8px; margin-bottom: 15px; padding: 8px; background-color: #f8f9fa; border-left: 4px solid #3B9DB3; border-radius: 4px;">';
-    $html .= '<strong><i class="fas fa-chalkboard-teacher"></i> Subject Teachers:</strong> ';
-    foreach ($schedule as $day => $day_data) {
-        foreach ($day_data as $cell) {
-            if (isset($cell['type']) && $cell['type'] == 'session' && isset($cell['teacher_name']) && $cell['teacher_name'] != 'Not Assigned' && $cell['teacher_name'] != '') {
-                $key = $cell['subject'] . '_' . $cell['teacher_name'];
-                if (!isset($displayed_teachers[$key])) {
-                    $displayed_teachers[$key] = true;
-                    $html .= '<span style="display: inline-block; margin: 2px 6px 2px 0; padding: 2px 8px; background-color: #e9ecef; border-radius: 12px; font-size: 11px;">';
-                    $html .= '<strong>' . htmlspecialchars($cell['subject_name']) . '</strong>: ' . htmlspecialchars($cell['teacher_name']);
-                    $html .= '</span>';
-                }
-            }
-        }
-    }
-    $html .= '</div></div>';
+    $html .= '</table></div>';
     return $html;
 }
 
@@ -250,13 +355,74 @@ $html = '<!DOCTYPE html>
         <div class="document-name">' . htmlspecialchars($document_name) . '</div>
     </div>';
 
+// Build the list of classes to schedule (Form 5 then Form 6 combinations).
+$classes = [];
 foreach ($form5_combinations as $combo) {
-    $html .= generateClassTimetable("Form 5 - {$combo}", $selected_days, $schedule_rows, $form5_teachers, $subject_names);
+    $classes[] = [
+        'name' => "Form 5 - {$combo}",
+        'subjects' => $combination_subjects[$combo] ?? array_keys($subject_names),
+        'teachers' => $form5_teachers
+    ];
+}
+foreach ($form6_combinations as $combo) {
+    $classes[] = [
+        'name' => "Form 6 - {$combo}",
+        'subjects' => $combination_subjects[$combo] ?? array_keys($subject_names),
+        'teachers' => $form6_teachers
+    ];
 }
 
-foreach ($form6_combinations as $combo) {
-    $html .= generateClassTimetable("Form 6 - {$combo}", $selected_days, $schedule_rows, $form6_teachers, $subject_names);
+// Merged fallback pool (teachers usable across form levels for the same subject).
+$global_teacher_pool = [];
+foreach ([$form5_teachers, $form6_teachers] as $pool) {
+    foreach ($pool as $subj => $tlist) {
+        if (!isset($global_teacher_pool[$subj])) $global_teacher_pool[$subj] = [];
+        foreach ($tlist as $t) $global_teacher_pool[$subj][] = $t;
+    }
 }
+
+// Determine the previous timetable's signature so we can guarantee that a
+// regeneration produces a different timetable.
+$previous_signature = '';
+if (isset($_POST['previous_signature']) && $_POST['previous_signature'] !== '') {
+    $previous_signature = (string) $_POST['previous_signature'];
+} else {
+    $prev_stmt = $conn->prepare("SELECT signature FROM generated_timetables WHERE term = ? AND year = ? AND school_id = ? ORDER BY id DESC LIMIT 1");
+    if ($prev_stmt) {
+        $prev_stmt->bind_param("sii", $term, $year, $school_id);
+        $prev_stmt->execute();
+        $prev_row = $prev_stmt->get_result()->fetch_assoc();
+        $previous_signature = $prev_row['signature'] ?? '';
+        $prev_stmt->close();
+    }
+}
+
+// Build the schedule, retrying with fresh randomisation until it differs from
+// the previous timetable (or we run out of attempts).
+$schedule = [];
+$report = ['unassigned' => [], 'skipped' => []];
+$teacher_busy = [];
+$signature = '';
+$max_attempts = 10;
+$attempt = 0;
+for ($attempt = 1; $attempt <= $max_attempts; $attempt++) {
+    list($schedule, $report, $teacher_busy) = buildCoordinatedSchedule($classes, $selected_days, $schedule_rows, $subject_names, $global_teacher_pool);
+    $signature = scheduleSignature($schedule);
+    if ($signature !== $previous_signature) break;
+}
+
+// Record verification data in the report for inspection.
+$report['clashes'] = verifyNoClashes($schedule, $selected_days, $schedule_rows);
+$report['attempts'] = $attempt;
+$report['signature'] = $signature;
+$report['previous_signature'] = $previous_signature;
+
+// Render each class table into the document.
+foreach ($classes as $c) {
+    $html .= renderClassTable($c['name'], $selected_days, $schedule_rows, $schedule[$c['name']]);
+}
+
+
 
 $html .= '<div class="footer">Generated on: ' . date('l, F d, Y g:i A') . '<br>© ' . date('Y') . ' ' . htmlspecialchars($school_name) . '</div>';
 $html .= '</body></html>';
@@ -268,18 +434,22 @@ if (!file_exists($timetable_dir)) { mkdir($timetable_dir, 0777, true); }
 $filename = $timetable_dir . $filename_base . '.html';
 file_put_contents($filename, $html);
 
+// Save scheduling report (skipped/unassigned) as JSON for inspection
+$report_filename = $timetable_dir . $filename_base . '_report.json';
+file_put_contents($report_filename, json_encode($report, JSON_PRETTY_PRINT));
+
 // ===== SAVE TO DATABASE =====
 $delete_sql = "DELETE FROM generated_timetables WHERE term = ? AND year = ? AND school_id = ?";
 $delete_stmt = $conn->prepare($delete_sql);
 $delete_stmt->bind_param("sii", $term, $year, $school_id);
 $delete_stmt->execute();
 
-$insert_sql = "INSERT INTO generated_timetables 
-               (term, year, filename, document_name, generated_by, generated_at, last_updated_by, last_updated_at, school_id, 
-                break_after, break_length, start_time, session_length, sessions_per_day, days) 
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+$insert_sql = "INSERT INTO generated_timetables
+               (term, year, filename, document_name, generated_by, generated_at, last_updated_by, last_updated_at, school_id,
+                break_after, break_length, start_time, session_length, sessions_per_day, days, signature)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 $insert_stmt = $conn->prepare($insert_sql);
-$insert_stmt->bind_param("sissisissiiisss", $term, $year, $filename_base, $document_name, $generated_by, $use_generated_at, $last_updated_by, $last_updated_at, $school_id, $break_after, $break_length, $start_time, $session_length, $sessions_per_day, $days_joined);
+$insert_stmt->bind_param("sissisissiiissss", $term, $year, $filename_base, $document_name, $generated_by, $use_generated_at, $last_updated_by, $last_updated_at, $school_id, $break_after, $break_length, $start_time, $session_length, $sessions_per_day, $days_joined, $signature);
 $insert_stmt->execute();
 
 // ===== OUTPUT =====

@@ -209,9 +209,9 @@ $animations_enabled = isset($preferences['animations']) ? $preferences['animatio
                     </a>
                 </li>
                 <li>
-                    <a href="../academic/timetable" class="<?php echo ($current_page == 'timetable.php') ? 'active' : ''; ?>">
+                    <a href="../academic/<?php echo ($is_head_master || $is_second_master || $is_academic_master) ? 'timetable' : 'teacher_timetable'; ?>" class="<?php echo in_array($current_page, ['timetable.php', 'teacher_timetable.php'], true) ? 'active' : ''; ?>">
                         <i class="fas fa-calendar-alt"></i>
-                        <span>Timetable</span>
+                        <span><?php echo ($is_head_master || $is_second_master || $is_academic_master) ? 'Manage Timetable' : 'Timetable'; ?></span>
                     </a>
                 </li>
 

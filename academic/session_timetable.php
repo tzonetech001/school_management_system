@@ -16,12 +16,49 @@ if (empty($_SESSION['csrf_token'])) {
 
 $current_year = date('Y');
 $admin_id = intval($_SESSION['admin_id']);
+$edit_mode = isset($_GET['edit']) && $_GET['edit'] == '1';
+$edit_timetable_id = isset($_GET['id']) ? intval($_GET['id']) : 0;
+$edit_timetable = null;
+$prefill_term = 'Term 02';
+$prefill_year = $current_year;
+$prefill_start_time = '08:00';
+$prefill_session_length = 40;
+$prefill_sessions_per_day = 6;
+$prefill_break_after = 0;
+$prefill_break_length = 30;
+$prefill_days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
-// Get school_id for the current admin
-$school_query = "SELECT school_id FROM admins WHERE id = $admin_id";
-$school_result = mysqli_query($conn, $school_query);
-$school_data = mysqli_fetch_assoc($school_result);
-$school_id = $school_data['school_id'];
+$school_id = 0;
+$school_query = $conn->prepare("SELECT school_id FROM admins WHERE id = ?");
+$school_query->bind_param("i", $admin_id);
+$school_query->execute();
+$school_result = $school_query->get_result();
+if ($school_result && $school_result->num_rows > 0) {
+    $school_data = $school_result->fetch_assoc();
+    $school_id = intval($school_data['school_id'] ?? 0);
+}
+
+if ($edit_mode && $edit_timetable_id > 0) {
+    $_SESSION['active_timetable_edit_id'] = $edit_timetable_id;
+    $edit_query = "SELECT * FROM generated_timetables WHERE id = ? AND school_id = ?";
+    $edit_stmt = $conn->prepare($edit_query);
+    $edit_stmt->bind_param("ii", $edit_timetable_id, $school_id);
+    $edit_stmt->execute();
+    $edit_result = $edit_stmt->get_result();
+    if ($edit_result && $edit_result->num_rows > 0) {
+        $edit_timetable = $edit_result->fetch_assoc();
+        $prefill_term = $edit_timetable['term'] ?? $prefill_term;
+        $prefill_year = $edit_timetable['year'] ?? $prefill_year;
+        $prefill_start_time = $edit_timetable['start_time'] ?? $prefill_start_time;
+        $prefill_session_length = $edit_timetable['session_length'] ?? $prefill_session_length;
+        $prefill_sessions_per_day = $edit_timetable['sessions_per_day'] ?? $prefill_sessions_per_day;
+        $prefill_break_after = $edit_timetable['break_after'] ?? $prefill_break_after;
+        $prefill_break_length = $edit_timetable['break_length'] ?? $prefill_break_length;
+        if (!empty($edit_timetable['days'])) {
+            $prefill_days = array_map('trim', explode(', ', $edit_timetable['days']));
+        }
+    }
+}
 
 // Get unique combinations for Form Five
 $form5_combinations_query = "SELECT DISTINCT combination FROM students WHERE class = 'Form Five' AND school_id = $school_id AND (is_leaver = 0 OR is_leaver IS NULL) AND combination IS NOT NULL AND combination != '' ORDER BY combination";
@@ -51,15 +88,20 @@ if (empty($form6_combinations)) {
     $form6_combinations = ['HGE', 'HGL', 'HGK', 'PCM', 'CBG', 'EGM', 'HGM'];
 }
 
-// Days of the week - Saturday unchecked by default
+// Days of the week - default to all weekdays unless editing an existing timetable
 $days_of_week = [
-    'Monday' => 'checked',
-    'Tuesday' => 'checked',
-    'Wednesday' => 'checked',
-    'Thursday' => 'checked',
-    'Friday' => 'checked',
+    'Monday' => '',
+    'Tuesday' => '',
+    'Wednesday' => '',
+    'Thursday' => '',
+    'Friday' => '',
     'Saturday' => ''
 ];
+foreach ($days_of_week as $day => $value) {
+    if (in_array($day, $prefill_days, true)) {
+        $days_of_week[$day] = 'checked';
+    }
+}
 
 // Load theme settings
 $theme_settings = [];
@@ -162,12 +204,16 @@ $csrf_token = isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
     <div class="container-fluid">
         <div class="card-custom">
             <div class="card-header-custom">
-                <h5><i class="fas fa-calendar-alt"></i> Create Session Timetable</h5>
-                <p class="mb-0 mt-2 small opacity-75">Configure your timetable parameters. Days on the left, Time at the top.</p>
+                <h5><i class="fas fa-calendar-alt"></i> <?php echo $edit_mode ? 'Edit and Regenerate Timetable' : 'Create Session Timetable'; ?></h5>
+                <p class="mb-0 mt-2 small opacity-75"><?php echo $edit_mode ? 'Update the timetable settings and regenerate it from here.' : 'Configure your timetable parameters. Days on the left, Time at the top.'; ?></p>
             </div>
             <div class="card-body p-4">
-                <form id="timetableForm" method="post" action="generate_session_timetable.php" target="_blank">
+                <form id="timetableForm" method="post" action="<?php echo $edit_mode ? 'regenerate_timetable.php' : 'generate_session_timetable.php'; ?>">
                     <input type="hidden" name="csrf_token" value="<?php echo htmlspecialchars($csrf_token); ?>">
+                    <?php if ($edit_mode && $edit_timetable_id > 0): ?>
+                        <input type="hidden" name="edit_timetable_id" value="<?php echo intval($edit_timetable_id); ?>">
+                        <input type="hidden" name="action" value="save">
+                    <?php endif; ?>
                     
                     <div class="form-section">
                         <div class="section-title"><i class="fas fa-users"></i> Class Combinations</div>
@@ -191,24 +237,24 @@ $csrf_token = isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
                             <div class="col-md-4">
                                 <label class="form-label">Term <span class="text-danger">*</span></label>
                                 <select name="term" class="form-select" id="termSelect" required>
-                                    <option value="Term 01">Term 01</option>
-                                    <option value="Term 02" selected>Term 02</option>
+                                    <option value="Term 01" <?php echo $prefill_term === 'Term 01' ? 'selected' : ''; ?>>Term 01</option>
+                                    <option value="Term 02" <?php echo $prefill_term === 'Term 02' ? 'selected' : ''; ?>>Term 02</option>
                                 </select>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Academic Year <span class="text-danger">*</span></label>
-                                <input type="number" name="year" class="form-control" id="yearInput" value="<?php echo $current_year; ?>" min="2020" max="2030" required>
+                                <input type="number" name="year" class="form-control" id="yearInput" value="<?php echo htmlspecialchars($prefill_year); ?>" min="2020" max="2030" required>
                             </div>
                             <div class="col-md-4">
                                 <label class="form-label">Start Time <span class="text-danger">*</span></label>
-                                <input type="time" name="start_time" class="form-control" value="08:00" required>
+                                <input type="time" name="start_time" class="form-control" value="<?php echo htmlspecialchars($prefill_start_time); ?>" required>
                             </div>
                         </div>
                         
                         <div class="document-preview mt-3">
                             <i class="fas fa-file-signature me-2"></i>
                             <strong>Document Name:</strong> 
-                            <span id="documentNameDisplay" style="font-weight:bold;color:var(--primary-dark);">Term 02 Timetable - <?php echo $current_year; ?></span>
+                            <span id="documentNameDisplay" style="font-weight:bold;color:var(--primary-dark);"><?php echo htmlspecialchars($prefill_term . ' Timetable - ' . $prefill_year); ?></span>
                         </div>
                     </div>
 
@@ -217,28 +263,28 @@ $csrf_token = isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
                         <div class="row g-3">
                             <div class="col-md-3">
                                 <label class="form-label">Session Length (minutes)</label>
-                                <input type="number" name="session_length" class="form-control" value="40" min="10" max="120" required>
+                                <input type="number" name="session_length" class="form-control" value="<?php echo intval($prefill_session_length); ?>" min="10" max="120" required>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Sessions per Day <span class="text-danger">*</span></label>
                                 <select name="sessions_per_day" class="form-select" id="sessionsPerDay" required>
                                     <?php for ($i = 1; $i <= 8; $i++): ?>
-                                        <option value="<?php echo $i; ?>" <?php echo $i == 6 ? 'selected' : ''; ?>><?php echo $i; ?> Session(s)</option>
+                                        <option value="<?php echo $i; ?>" <?php echo $i == intval($prefill_sessions_per_day) ? 'selected' : ''; ?>><?php echo $i; ?> Session(s)</option>
                                     <?php endfor; ?>
                                 </select>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Break After Session</label>
                                 <select name="break_after" class="form-select" id="breakAfterSelect">
-                                    <option value="0">No Break</option>
+                                    <option value="0" <?php echo intval($prefill_break_after) === 0 ? 'selected' : ''; ?>>No Break</option>
                                     <?php for ($i = 1; $i <= 8; $i++): ?>
-                                        <option value="<?php echo $i; ?>" <?php echo $i == 2 ? 'selected' : ''; ?>>After Session <?php echo $i; ?></option>
+                                        <option value="<?php echo $i; ?>" <?php echo intval($prefill_break_after) === $i ? 'selected' : ''; ?>>After Session <?php echo $i; ?></option>
                                     <?php endfor; ?>
                                 </select>
                             </div>
                             <div class="col-md-3">
                                 <label class="form-label">Break Length (minutes)</label>
-                                <input type="number" name="break_length" class="form-control" value="30" min="0" max="90">
+                                <input type="number" name="break_length" class="form-control" value="<?php echo intval($prefill_break_length); ?>" min="0" max="90">
                             </div>
                         </div>
                     </div>
@@ -279,7 +325,7 @@ $csrf_token = isset($_SESSION['csrf_token']) ? $_SESSION['csrf_token'] : '';
 
                     <div class="text-end mt-3">
                         <a href="timetable.php" class="btn btn-secondary-custom me-2"><i class="fas fa-arrow-left me-1"></i> Cancel</a>
-                        <button type="button" id="generateBtn" class="btn btn-primary-custom"><i class="fas fa-play me-1"></i> Generate Timetable</button>
+                        <button type="button" id="generateBtn" class="btn btn-primary-custom"><i class="fas fa-play me-1"></i> <?php echo $edit_mode ? 'Regenerate Timetable' : 'Generate Timetable'; ?></button>
                     </div>
 
                     <!-- Confirmation Modal -->

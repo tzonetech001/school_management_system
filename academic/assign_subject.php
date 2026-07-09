@@ -45,8 +45,8 @@ $current_year = isset($_GET['year']) ? intval($_GET['year']) : date('Y');
 
 // Valid subjects list
 $subjects_list = [
-    'ac' => 'Accountancy',
-    'htm' => 'Hotel Management',
+    'ac' => 'Academic Communication',
+    'htm' => 'Historia ya Tanzania na Maaadili',
     'his' => 'History',
     'geo' => 'Geography',
     'kisw' => 'Kiswahili',
@@ -68,6 +68,15 @@ $school_id_query = "SELECT school_id FROM admins WHERE id = $admin_id";
 $school_result = mysqli_query($conn, $school_id_query);
 $school_data = mysqli_fetch_assoc($school_result);
 $current_school_id = $school_data['school_id'] ?? 1;
+
+// Ensure the subject assignment table can auto-generate IDs for new assignments.
+$create_table_result = mysqli_query($conn, "SHOW CREATE TABLE subject_teacher_assignments");
+if ($create_table_result) {
+    $create_table = mysqli_fetch_assoc($create_table_result)['Create Table'] ?? '';
+    if (stripos($create_table, 'AUTO_INCREMENT') === false) {
+        mysqli_query($conn, "ALTER TABLE subject_teacher_assignments MODIFY id INT(11) NOT NULL AUTO_INCREMENT");
+    }
+}
 
 // Get all teachers
 $teachers_sql = "SELECT a.*, 
@@ -106,8 +115,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['error'] = "This teacher is already assigned to this subject for the selected form and year.";
         } else {
             $insert_sql = "INSERT INTO subject_teacher_assignments 
-                          (teacher_id, subject, form_level, academic_year, is_primary, can_enter_results, assigned_by, school_id) 
-                          VALUES ($teacher_id, '$subject', '$form_level', $academic_year, $is_primary, $can_enter_results, $admin_id, $current_school_id)";
+                          (id, teacher_id, subject, form_level, academic_year, is_primary, can_enter_results, assigned_by, school_id) 
+                          VALUES (NULL, $teacher_id, '$subject', '$form_level', $academic_year, $is_primary, $can_enter_results, $admin_id, $current_school_id)";
             
             if (mysqli_query($conn, $insert_sql)) {
                 $_SESSION['success'] = "Subject assigned successfully!";

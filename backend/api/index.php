@@ -35,6 +35,12 @@ switch ($uri) {
     case '/share/fee_payments':
         require __DIR__ . '/fee_payments.php';
         break;
+    case '/share/result_report':
+        require __DIR__ . '/result_report.php';
+        break;
+    case '/share/children_results':
+        require __DIR__ . '/children_results.php';
+        break;
     default:
         http_response_code(404);
         echo json_encode(['success' => false, 'message' => 'Endpoint not found', 'path' => $uri]);

@@ -100,7 +100,7 @@ if (isset($_GET['edit']) && isset($_GET['id'])) {
             exit();
         } else {
             $_SESSION['error'] = "You don't have permission to edit this timetable.";
-            header("Location: teacher_timetable.php");
+            header("Location: timetable.php");
             exit();
         }
     }
@@ -499,7 +499,7 @@ $compact_mode = isset($preferences['compact_mode']) && $preferences['compact_mod
                     });
                     
                     // Redirect to delete
-                    window.location.href = 'teacher_timetable.php?delete=1&id=' + id;
+                    window.location.href = 'timetable.php?delete=1&id=' + id;
                 }
             });
         }

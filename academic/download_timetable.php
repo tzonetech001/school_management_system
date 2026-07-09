@@ -10,7 +10,7 @@ if (!isset($_SESSION['admin_id'])) {
 
 $file = isset($_GET['file']) ? $_GET['file'] : '';
 if (empty($file)) {
-    header('Location: teacher_timetable.php');
+    header('Location: timetable.php');
     exit();
 }
 

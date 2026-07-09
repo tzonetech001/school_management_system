@@ -47,8 +47,8 @@ $teacher_name = $teacher['teacher_name'] ?? 'Teacher';
 
 // Subject display name
 $subject_display = [
-    'ac' => 'AC (Accountancy)',
-    'htm' => 'HTM (Hospitality)',
+    'ac' => 'AC (Academic Communication)',
+    'htm' => 'HTM (Historia ya Tanzania na Maaadili)',
     'his' => 'HIST (History)',
     'geo' => 'GEO (Geography)',
     'kisw' => 'KISW (Kiswahili)',

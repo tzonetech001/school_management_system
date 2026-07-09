@@ -1,9 +1,14 @@
 RewriteEngine On
 
-# Remove .php extension
+# Remove .php extension (internal rewrite - keeps original method/body)
 RewriteCond %{REQUEST_FILENAME} !-d
 RewriteCond %{REQUEST_FILENAME}.php -f
 RewriteRule ^(.+)$ $1.php [L]
 
+# Redirect .php URLs to extensionless.
+# GET requests ONLY - a 301 redirect drops the POST body and converts the
+# request to GET, which would break every AJAX/form POST endpoint
+# (e.g. fee/process_payment.php -> "Invalid request method").
+RewriteCond %{REQUEST_METHOD} =GET
 RewriteCond %{THE_REQUEST} \s/+(.*)\.php[\s?] [NC]
 RewriteRule ^ /%1 [R=301,L]

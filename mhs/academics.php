@@ -156,7 +156,7 @@ if ($selected_exam > 0) {
 // 3. Subject Performance (average scores per subject)
 $subjects = ['ac', 'htm', 'his', 'geo', 'kisw', 'eng', 'b_math', 'adv_m', 'eco', 'fren'];
 $subject_names = [
-    'ac' => 'Accountancy', 'htm' => 'Hotel Mgmt', 'his' => 'History', 'geo' => 'Geography',
+    'ac' => 'Academic Communication', 'htm' => 'Historia ya Tanzania na Maaadili', 'his' => 'History', 'geo' => 'Geography',
     'kisw' => 'Kiswahili', 'eng' => 'English', 'b_math' => 'Basic Math',
     'adv_m' => 'Adv Math', 'eco' => 'Economics', 'fren' => 'French'
 ];

@@ -9,13 +9,41 @@ if (!isset($_SESSION['admin_id'])) {
 }
 
 // Check if edit params exist
-if (!isset($_SESSION['edit_params'])) {
+$params = [];
+$session_params = [];
+if (isset($_SESSION['edit_params']) && is_array($_SESSION['edit_params'])) {
+    $session_params = $_SESSION['edit_params'];
+}
+
+if (!empty($_POST)) {
+    $posted_timetable_id = isset($_POST['edit_timetable_id']) ? intval($_POST['edit_timetable_id']) : 0;
+    $params = [
+        'timetable_id' => $posted_timetable_id > 0 ? $posted_timetable_id : ($session_params['timetable_id'] ?? 0),
+        'term' => isset($_POST['term']) ? trim($_POST['term']) : ($session_params['term'] ?? ''),
+        'year' => isset($_POST['year']) ? intval($_POST['year']) : ($session_params['year'] ?? date('Y')),
+        'start_time' => isset($_POST['start_time']) ? $_POST['start_time'] : ($session_params['start_time'] ?? '08:00'),
+        'session_length' => isset($_POST['session_length']) ? intval($_POST['session_length']) : ($session_params['session_length'] ?? 40),
+        'sessions_per_day' => isset($_POST['sessions_per_day']) ? intval($_POST['sessions_per_day']) : ($session_params['sessions_per_day'] ?? 6),
+        'break_after' => isset($_POST['break_after']) ? intval($_POST['break_after']) : ($session_params['break_after'] ?? 0),
+        'break_length' => isset($_POST['break_length']) ? intval($_POST['break_length']) : ($session_params['break_length'] ?? 30),
+        'days' => isset($_POST['days']) && is_array($_POST['days']) ? $_POST['days'] : ($session_params['days'] ?? []),
+        'generated_action' => isset($_POST['generated_action']) ? $_POST['generated_action'] : ($session_params['generated_action'] ?? 'keep'),
+        'custom_generated_at' => isset($_POST['custom_generated_at']) ? $_POST['custom_generated_at'] : ($session_params['custom_generated_at'] ?? ''),
+    ];
+} elseif (!empty($session_params)) {
+    $params = $session_params;
+}
+
+if (($params['timetable_id'] ?? 0) <= 0 && isset($_SESSION['active_timetable_edit_id'])) {
+    $params['timetable_id'] = intval($_SESSION['active_timetable_edit_id']);
+}
+
+if (empty($params) || (($params['timetable_id'] ?? 0) <= 0 && empty($params['term']) && empty($params['year']) && empty($params['start_time']))) {
     $_SESSION['error'] = "No parameters found for regeneration.";
     header('Location: timetable.php');
     exit();
 }
 
-$params = $_SESSION['edit_params'];
 $timetable_id = $params['timetable_id'] ?? 0;
 
 // Unset the session params
@@ -23,7 +51,7 @@ unset($_SESSION['edit_params']);
 
 // Get the original timetable to delete old file
 if ($timetable_id > 0) {
-    $original_query = "SELECT filename, generated_by, generated_at FROM generated_timetables WHERE id = ?";
+    $original_query = "SELECT filename, generated_by, generated_at, signature FROM generated_timetables WHERE id = ?";
     $stmt = $conn->prepare($original_query);
     $stmt->bind_param("i", $timetable_id);
     $stmt->execute();
@@ -95,13 +123,15 @@ $_POST = [
     'export_format' => 'excel',
     'action' => 'save',
     'generated_by_override' => $original_generated_by > 0 ? $original_generated_by : $_SESSION['admin_id'],
-    'generated_at_override' => $generated_at_override,
+    'generated_at_override' => $generated_at_override ?: date('Y-m-d H:i:s'),
     'last_updated_by_override' => $_SESSION['admin_id'],
     'last_updated_at_override' => date('Y-m-d H:i:s')
 ];
 
-// Include the generation file - this will create the new file
+// Include the generation file - this will create the new file without breaking the redirect
+ob_start();
 include 'generate_session_timetable.php';
+ob_end_clean();
 
 // After generation, redirect back
 if (!isset($_SESSION['error'])) {
@@ -122,7 +152,7 @@ if ($admin_roles_result && mysqli_num_rows($admin_roles_result) > 0) {
 if ($has_admin_role) {
     header('Location: timetable.php');
 } else {
-    header('Location: teacher_timetable.php');
+    header('Location: timetable.php');
 }
 exit();
 ?>
